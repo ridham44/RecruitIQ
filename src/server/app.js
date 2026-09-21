@@ -14,7 +14,16 @@ import screeningRoutes from './modules/screening/screening.routes.js';
 export function createApp() {
   const app = express();
 
-  app.use(cors({ origin: env.clientUrl, credentials: true }));
+  // Auth is a stateless Bearer JWT (Section 5/21) — no cookies are ever
+  // set or read, so `credentials: true` (which governs cross-origin
+  // cookie/credential sharing) is intentionally omitted. CLIENT_URL can be
+  // a comma-separated list to allow more than one origin (e.g. a staging
+  // domain alongside production). In this single-Vercel-project
+  // architecture the deployed frontend and API always share one origin, so
+  // this mainly matters for local development and any future external
+  // client calling the API directly.
+  const allowedOrigins = env.clientUrl.split(',').map((origin) => origin.trim());
+  app.use(cors({ origin: allowedOrigins }));
   app.use(express.json({ limit: '2mb' }));
   app.use(express.urlencoded({ extended: true }));
 

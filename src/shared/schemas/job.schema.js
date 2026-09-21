@@ -12,6 +12,11 @@ export const createJobSchema = z.object({
   location: z.string().optional(),
   employmentType: z.nativeEnum(EMPLOYMENT_TYPE).default(EMPLOYMENT_TYPE.FULL_TIME),
   status: z.nativeEnum(JOB_STATUS).default(JOB_STATUS.OPEN),
+  // Screening decision settings — see the comment on Job.minAcceptableScore
+  // in schema.prisma. autoRejectBelowMinScore only ever auto-rejects; it
+  // never auto-shortlists.
+  minAcceptableScore: z.coerce.number().min(0).max(100).default(75),
+  autoRejectBelowMinScore: z.boolean().default(false),
 });
 
 export const updateJobSchema = createJobSchema.partial();

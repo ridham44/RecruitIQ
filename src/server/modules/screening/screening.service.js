@@ -95,9 +95,20 @@ async function screenApplication(application) {
     },
   });
 
-  const newStatus =
-    overallScore >= env.screeningShortlistThreshold ? APPLICATION_STATUS.SHORTLISTED : APPLICATION_STATUS.REJECTED;
-  await prisma.application.update({ where: { id: application.id }, data: { status: newStatus } });
+  // Screening never auto-shortlists — only an optional auto-reject, gated by
+  // the job's own settings (Job.minAcceptableScore/autoRejectBelowMinScore).
+  // Everything else is left as SCREENING for the company to decide on
+  // manually or via the bulk Shortlist/Reject actions. A manual SHORTLISTED
+  // decision (only ever set via the bulk-status endpoint) is never
+  // overwritten by (re-)screening, so re-running screening after tweaking
+  // these settings can't silently undo a company's prior decision.
+  if (application.status !== APPLICATION_STATUS.SHORTLISTED) {
+    const newStatus =
+      job.autoRejectBelowMinScore && overallScore < job.minAcceptableScore
+        ? APPLICATION_STATUS.REJECTED
+        : APPLICATION_STATUS.SCREENING;
+    await prisma.application.update({ where: { id: application.id }, data: { status: newStatus } });
+  }
 
   return result;
 }
@@ -127,11 +138,27 @@ export async function runScreeningForApplication(userId, applicationId) {
 // (Section 14). Executed sequentially to stay well within a single
 // serverless function's execution time budget rather than firing dozens of
 // concurrent OpenRouter calls.
-export async function runScreeningForJob(userId, jobId) {
+//
+// "Not yet screened" is determined by the ScreeningResult itself (missing or
+// not COMPLETED), NOT by Application.status — since SCREENING is now also
+// the resting status for "scored, awaiting a manual decision" (see
+// screenApplication above), filtering on status here would re-screen
+// already-scored applications on every run.
+//
+// Pass `force: true` to instead re-screen EVERY application on the job
+// (e.g. after changing Job.minAcceptableScore/autoRejectBelowMinScore, so
+// the new settings actually take effect on already-scored candidates)
+// rather than only the pending ones. SHORTLISTED applications are always
+// excluded either way — that's a manual decision screening never revisits.
+export async function runScreeningForJob(userId, jobId, { force = false } = {}) {
   await getOwnedJob(userId, jobId);
 
   const applications = await prisma.application.findMany({
-    where: { jobId, status: { in: [APPLICATION_STATUS.APPLIED, APPLICATION_STATUS.SCREENING] } },
+    where: {
+      jobId,
+      status: { not: APPLICATION_STATUS.SHORTLISTED },
+      ...(force ? {} : { OR: [{ screeningResult: null }, { screeningResult: { status: { not: SCREENING_STATUS.COMPLETED } } }] }),
+    },
     include: { job: true, resume: true, candidate: true },
   });
 

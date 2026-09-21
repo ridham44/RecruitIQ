@@ -6,4 +6,6 @@ export const applicationsApi = {
   getMine: (id) => api.get(`/applications/mine/${id}`),
   listForJob: (jobId) => api.get(`/applications/job/${jobId}`),
   getCandidateDetail: (jobId, candidateId) => api.get(`/applications/job/${jobId}/candidates/${candidateId}`),
+  bulkUpdateStatus: (jobId, applicationIds, status) =>
+    api.patch(`/applications/job/${jobId}/bulk-status`, { applicationIds, status }),
 };

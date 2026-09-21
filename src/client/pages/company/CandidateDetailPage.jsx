@@ -55,7 +55,7 @@ export default function CandidateDetailPage() {
         <ArrowLeft className="h-4 w-4" /> Back
       </button>
 
-      <div className="mb-6 flex items-start justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-semibold text-slate-900">{candidate.fullName}</h2>
@@ -75,7 +75,7 @@ export default function CandidateDetailPage() {
           </div>
         </div>
         {result?.status !== 'COMPLETED' && (
-          <Button onClick={handleRunScreening} loading={running}>
+          <Button onClick={handleRunScreening} loading={running} className="w-full sm:w-auto">
             <Sparkles className="h-4 w-4" /> Run AI Screening
           </Button>
         )}

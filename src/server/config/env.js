@@ -1,5 +1,8 @@
 import 'dotenv/config';
 
+const nodeEnv = process.env.NODE_ENV || 'development';
+const isProd = nodeEnv === 'production';
+
 function required(name, fallback = undefined) {
   const value = process.env[name] ?? fallback;
   if (value === undefined) {
@@ -10,14 +13,34 @@ function required(name, fallback = undefined) {
   return value;
 }
 
+// Vercel injects VERCEL_URL (the deployment's own hostname, no protocol) —
+// used as a same-origin fallback so nothing ever defaults to a localhost
+// URL once actually deployed, without requiring every env var to be set
+// explicitly for a first deploy.
+const deployedOrigin = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null;
+
+function jwtSecret() {
+  const value = process.env.JWT_SECRET;
+  if (value) return value;
+
+  if (isProd) {
+    // Never fall back to a shared, guessable default in production — that
+    // would let anyone forge valid auth tokens.
+    throw new Error('JWT_SECRET must be set in production');
+  }
+
+  console.warn('[env] JWT_SECRET is not set — using an insecure development-only default.');
+  return 'dev-insecure-secret-change-me';
+}
+
 export const env = {
-  nodeEnv: process.env.NODE_ENV || 'development',
+  nodeEnv,
   port: Number(process.env.PORT || 3001),
-  clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
+  clientUrl: process.env.CLIENT_URL || deployedOrigin || 'http://localhost:5173',
 
   databaseUrl: required('DATABASE_URL'),
 
-  jwtSecret: required('JWT_SECRET', 'dev-insecure-secret-change-me'),
+  jwtSecret: jwtSecret(),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
 
   openRouterApiKey: process.env.OPENROUTER_API_KEY || '',
@@ -25,16 +48,15 @@ export const env = {
   // is accepted as an alias so alternate .env conventions still work — the
   // model is still never hard-coded anywhere in application code.
   openRouterModel: process.env.OPENROUTER_MODEL || process.env.OPENROUTER_CHAT_MODEL || 'openai/gpt-4o-mini',
-  openRouterSiteUrl: process.env.OPENROUTER_SITE_URL || 'http://localhost:5173',
+  openRouterSiteUrl: process.env.OPENROUTER_SITE_URL || deployedOrigin || 'http://localhost:5173',
   openRouterAppName: process.env.OPENROUTER_APP_NAME || 'RecruitIQ',
 
   uploadDir: process.env.UPLOAD_DIR || './uploads',
-  maxResumeSizeMb: Number(process.env.MAX_RESUME_SIZE_MB || 5),
-
-  // Score (0-100) at/above which a screened application is auto-marked
-  // SHORTLISTED rather than REJECTED (Section 13/14). Configurable so the
-  // scoring bar can be tuned per deployment without code changes.
-  screeningShortlistThreshold: Number(process.env.SCREENING_SHORTLIST_THRESHOLD || 60),
+  // Default kept safely under Vercel's ~4.5MB request body ceiling for
+  // Node.js serverless functions — a larger multer limit here wouldn't
+  // help, since Vercel's platform would reject the request before Express
+  // ever saw it.
+  maxResumeSizeMb: Number(process.env.MAX_RESUME_SIZE_MB || 4),
 
   // Phase 2 / Phase 3 — read for forward-compat, unused in Phase 1.
   brevoApiKey: process.env.BREVO_API_KEY || '',
@@ -51,4 +73,4 @@ export const env = {
   },
 };
 
-export const isProduction = env.nodeEnv === 'production';
+export const isProduction = isProd;

@@ -13,6 +13,7 @@ export default function DashboardLayout({ navItems }) {
 
   return (
     <div className="flex min-h-screen bg-slate-50">
+      {/* Desktop sidebar */}
       <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-white md:flex">
         <div className="flex items-center gap-2 border-b border-slate-200 px-6 py-5">
           <img src="/Logo.png" alt="RecruitIQ" className="h-9 w-9 object-contain" />
@@ -48,19 +49,42 @@ export default function DashboardLayout({ navItems }) {
       </aside>
 
       <div className="flex flex-1 flex-col">
+        {/* Mobile top bar */}
         <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-4 md:hidden">
           <div className="flex items-center gap-2">
             <img src="/Logo.png" alt="RecruitIQ" className="h-8 w-8 object-contain" />
             <span className="text-lg font-semibold text-slate-900">RecruitIQ</span>
           </div>
-          <button onClick={handleLogout} className="text-sm text-slate-600">
+          <button onClick={handleLogout} className="flex items-center gap-1 text-sm text-slate-600">
+            <LogOut className="h-4 w-4" />
             Log out
           </button>
         </header>
-        <main className="flex-1 px-4 py-6 md:px-8">
+
+        {/* Bottom padding reserves space for the fixed mobile tab bar below */}
+        <main className="flex-1 px-4 py-6 pb-24 md:px-8 md:pb-6">
           <Outlet />
         </main>
       </div>
+
+      {/* Mobile bottom tab bar — the only navigation on small screens */}
+      <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-slate-200 bg-white md:hidden">
+        {navItems.map(({ to, label, icon: Icon, end }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={end}
+            className={({ isActive }) =>
+              `flex flex-1 flex-col items-center gap-0.5 py-2.5 text-xs font-medium ${
+                isActive ? 'text-brand-600' : 'text-slate-500'
+              }`
+            }
+          >
+            <Icon className="h-5 w-5" />
+            {label}
+          </NavLink>
+        ))}
+      </nav>
     </div>
   );
 }

@@ -133,9 +133,20 @@ async function main() {
   console.log('  missingSkills:', candidateDetail.screeningResult?.missingSkills);
   console.log('  reasoning:', candidateDetail.screeningResult?.reasoning);
 
-  console.log('== Verify final application status updated by screening ==');
+  console.log('== Screening never auto-decides by default (job.autoRejectBelowMinScore is off) ==');
+  const { application: screenedApp } = await req(`/applications/mine/${application.id}`, { token: candidateToken });
+  assert(screenedApp.status === 'SCREENING', 'application stays SCREENING (scored, awaiting manual decision): ' + screenedApp.status);
+
+  console.log('== Company bulk-shortlists the application ==');
+  const bulkResult = await req(`/applications/job/${job.id}/bulk-status`, {
+    method: 'PATCH',
+    token: companyToken,
+    body: { applicationIds: [application.id], status: 'SHORTLISTED' },
+  });
+  assert(bulkResult.updatedCount === 1, 'bulk shortlist updated the application');
+
   const { application: finalApp } = await req(`/applications/mine/${application.id}`, { token: candidateToken });
-  assert(['SHORTLISTED', 'REJECTED'].includes(finalApp.status), 'application status moved to SHORTLISTED or REJECTED: ' + finalApp.status);
+  assert(finalApp.status === 'SHORTLISTED', 'application status is now SHORTLISTED: ' + finalApp.status);
 
   console.log('\nALL ACCEPTANCE CRITERIA PASSED ✔');
 }

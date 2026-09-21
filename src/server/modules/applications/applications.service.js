@@ -63,6 +63,21 @@ export async function listApplicationsForJob(userId, jobId) {
   });
 }
 
+// Bulk manual Shortlist/Reject action (scoped to a single job so an
+// applicationId from a different company's job can never be touched — the
+// `jobId` filter combined with getOwnedJob's ownership check is what
+// enforces that, not just the id list itself).
+export async function bulkUpdateApplicationStatus(userId, jobId, { applicationIds, status }) {
+  await getOwnedJob(userId, jobId);
+
+  const result = await prisma.application.updateMany({
+    where: { id: { in: applicationIds }, jobId },
+    data: { status },
+  });
+
+  return { updatedCount: result.count };
+}
+
 // Combined candidate detail for a company reviewing one applicant against a
 // specific job (resume, structured resume data, and screening result) —
 // backs the /company/jobs/:id/candidates/:candidateId page.

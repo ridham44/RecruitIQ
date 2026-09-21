@@ -98,7 +98,7 @@ export default function JobDetailPage() {
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
               />
             </FormField>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <FormField label="Minimum experience (years)">
                 <input
                   type="number"
@@ -149,7 +149,7 @@ export default function JobDetailPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <div className="mb-6 flex items-start justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-semibold text-slate-900">{job.title}</h2>
@@ -159,7 +159,7 @@ export default function JobDetailPage() {
             {job.location || 'Remote'} · {job.employmentType.replace('_', ' ')}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={startEdit}>
             <Pencil className="h-4 w-4" /> Edit
           </Button>

@@ -32,13 +32,13 @@ export default function CompanyDashboardPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-semibold text-slate-900">Welcome back{user?.company?.name ? `, ${user.company.name}` : ''}</h2>
           <p className="text-sm text-slate-500">Here's what's happening with your hiring.</p>
         </div>
-        <Link to="/company/jobs/new">
-          <Button>
+        <Link to="/company/jobs/new" className="w-full sm:w-auto">
+          <Button className="w-full sm:w-auto">
             <Plus className="h-4 w-4" /> New Job
           </Button>
         </Link>

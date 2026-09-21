@@ -180,16 +180,23 @@ code changes are required.
 ## Prisma setup & migrations
 
 ```bash
-npx prisma generate        # regenerate the Prisma client after schema changes
+npx prisma generate        # regenerate the Prisma client after schema changes (runs automatically
+                            # on `npm install` via the `postinstall` script — including on Vercel)
 npx prisma migrate dev     # create & apply a migration in development
-npx prisma migrate deploy  # apply pending migrations in production (e.g. in a CI/CD step)
+npx prisma migrate deploy  # apply pending migrations in production — run manually/in CI, never
+                            # automatically from the Vercel build step (see Vercel deployment)
 npx prisma studio          # browse the database with Prisma's GUI
 ```
 
 ## Demo / seed data
 
-A reproducible seed script (`prisma/seed.js`) creates a demo company, one job, and 10 realistic
-candidate profiles/applications for testing the AI screening pipeline end-to-end:
+`npm run db:seed` is a **demo/dev data script, not a production task** — it deletes and recreates a
+fixed set of demo accounts by email every time it runs. Only run it against a database you're happy to
+have that data written into (a fresh production database before real users sign up is fine; a
+production database with real users is not).
+
+The seed script (`prisma/seed.js`) creates a demo company, one job, and 10 realistic candidate
+profiles/applications for testing the AI screening pipeline end-to-end:
 
 ```bash
 npm run db:seed
@@ -237,13 +244,53 @@ rather than `src/server/dev-server.js`, which is development-only.
 
 1. Push this repository to GitHub/GitLab/Bitbucket and import it as a new Vercel project.
 2. Vercel picks up `vercel.json`, which sets the build command (`npm run build`), the output directory
-   (`dist`), and rewrites `/api/*` to the serverless function at `api/index.js`.
-3. Set the environment variables from `.env.example` in the Vercel project settings (at minimum
-   `DATABASE_URL`, `JWT_SECRET`, `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`).
-4. Point `DATABASE_URL` at your production PostgreSQL provider and run `npx prisma migrate deploy`
-   against it (e.g. from your machine or a CI step) before/after the first deploy.
-5. Deploy. The same Express app that runs locally in `src/server/dev-server.js` runs inside the
-   serverless function — no code changes between environments.
+   (`dist`), and two rewrites:
+   - `/api/*` → the serverless function at `api/index.js` (so every `/api/v1/...` route works — Express
+     itself does the actual routing once the request reaches the function).
+   - everything else → `/index.html`, so client-side routes (`/company/dashboard`, `/candidate/jobs/:id`,
+     etc.) work on a hard refresh or direct link instead of 404ing. Real static assets (JS/CSS bundles)
+     are matched and served directly first — this rewrite only applies when no built file matches.
+3. Set the environment variables below in the Vercel project settings (Project → Settings →
+   Environment Variables), not in any committed file:
+   - `DATABASE_URL` — **use your provider's pooled connection string.** Every serverless invocation can
+     open its own Postgres connection pool, and an unpooled URL exhausts small plans fast under any real
+     traffic. Neon, Supabase, and most managed providers expose a pooled URL variant (often via
+     PgBouncer) specifically for this. If your pooled URL can't run migrations, run
+     `npx prisma migrate deploy` from your machine or CI against the *direct* URL instead — the app
+     itself only ever needs the pooled one.
+   - `JWT_SECRET` — a long random string. **Required in production** — the app throws on startup rather
+     than falling back to an insecure default if this is missing (it only uses a dev fallback when
+     `NODE_ENV !== 'production'`).
+   - `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` — required for the AI features to work; screening/parsing
+     degrade gracefully (clear errors, nothing crashes) if omitted, but won't produce real results.
+   - `STORAGE_DRIVER` — safe to leave unset; it defaults to `database` (see
+     [Resume storage](#resume-storage-driver) below), which works on Vercel with no extra setup.
+   - `CLIENT_URL`, `OPENROUTER_SITE_URL` — safe to leave unset in production; both fall back to your
+     Vercel deployment URL automatically (via the `VERCEL_URL` env var Vercel injects) rather than
+     defaulting to `localhost`.
+4. Run `npx prisma migrate deploy` against your production database (from your machine or a CI step)
+   before or right after the first deploy, and after any future schema change. Vercel's build step runs
+   `prisma generate` automatically via the `postinstall` script, but it never runs migrations —
+   applying migrations against a live database from an automated build step is deliberately avoided.
+5. Deploy. The same Express app (`src/server/app.js`) that runs locally through
+   `src/server/dev-server.js` runs inside the serverless function via `api/index.js` — no code changes
+   between environments.
+
+### Resume storage driver
+
+Vercel serverless functions have no persistent, writable local filesystem, so resume uploads can't be
+written to disk in production. `STORAGE_DRIVER=database` (the default) stores each resume's raw bytes
+in Postgres via a small `ResumeBlob` table — it works with any provider, needs no extra credentials, and
+comfortably handles resumes at the app's size limit (`MAX_RESUME_SIZE_MB`, default 4MB). `STORAGE_DRIVER=local`
+writes to disk and must only ever be used for local development. `STORAGE_DRIVER=cloud` is a stub
+(`src/server/resume/storage/cloud.driver.js`) for a future S3/R2/Cloudinary implementation — swapping to
+it means implementing that one file; nothing in `resumes.service.js` needs to change, since every driver
+implements the same `save()`/`read()` interface (`src/server/resume/storage/index.js`).
+
+`MAX_RESUME_SIZE_MB` defaults to 4MB rather than a rounder number like 5 because Vercel's Node.js
+serverless functions reject request bodies above roughly 4.5MB at the platform level, before Express
+(and multer's own size-limit check) ever sees the request — raising this above that ceiling wouldn't
+actually allow bigger uploads in production, it would just make the failure less clear.
 
 ## API structure
 
@@ -275,6 +322,25 @@ Future (Phase 2/3), mounted the same way without touching Phase 1 routes:
 /api/v1/reports
 ```
 
+## Screening decisions: settings, filters, and bulk actions
+
+Each job has two decision settings (`Job.minAcceptableScore`, `Job.autoRejectBelowMinScore`, editable
+from the job's Applications page):
+
+- **Screening never auto-shortlists.** A screened application's resting status is `SCREENING`
+  (scored, awaiting a decision) regardless of how high its score is.
+- **Auto-reject is opt-in.** When `autoRejectBelowMinScore` is enabled, screening automatically marks
+  anything scoring below `minAcceptableScore` as `REJECTED`. When disabled (the default), every screened
+  application — high or low score — stays `SCREENING` until the company acts on it.
+- The company moves candidates to `SHORTLISTED`/`REJECTED` manually, including in bulk, via
+  `PATCH /api/v1/applications/job/:jobId/bulk-status` (checkbox selection + "Shortlist selected" /
+  "Reject selected" in the UI).
+- The Applications page's filters (AI score range, experience, skills, education, status, sort) run
+  entirely client-side over the already-fetched application list — there's no separate filtered-query
+  endpoint, since a single job's applicant list is small enough that this is simpler and just as fast.
+- As always, none of this reads gender or other demographic data — see the guard rails documented in
+  `src/server/ai/candidate-matcher.service.js`.
+
 ## Testing the acceptance flow
 
 Manual smoke-test scripts exercise the full Phase 1 flow described in the project brief (company
@@ -297,6 +363,9 @@ node scripts/test-profile-autofill.mjs path/to/resume.docx
 # run real AI screening against the 10 seeded candidates and print the ranking
 # (run `npm run db:seed` first):
 node scripts/test-seed-screening.mjs
+
+# job screening-decision settings + bulk Shortlist/Reject (run `npm run db:seed` first):
+node scripts/test-filters-and-bulk.mjs
 ```
 
 All of these require `OPENROUTER_API_KEY` to be set for the AI-dependent assertions to pass; if it's

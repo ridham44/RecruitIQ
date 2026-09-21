@@ -3,7 +3,8 @@ import { ok } from '../../utils/apiResponse.js';
 import * as screeningService from './screening.service.js';
 
 export const runForJob = asyncHandler(async (req, res) => {
-  const result = await screeningService.runScreeningForJob(req.user.id, req.params.jobId);
+  const force = req.body?.force === true;
+  const result = await screeningService.runScreeningForJob(req.user.id, req.params.jobId, { force });
   ok(res, result);
 });
 

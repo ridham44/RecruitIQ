@@ -30,3 +30,8 @@ export const getCandidateDetail = asyncHandler(async (req, res) => {
   );
   ok(res, { application });
 });
+
+export const bulkUpdateStatus = asyncHandler(async (req, res) => {
+  const result = await applicationsService.bulkUpdateApplicationStatus(req.user.id, req.params.jobId, req.body);
+  ok(res, result);
+});

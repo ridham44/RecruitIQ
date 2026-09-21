@@ -8,7 +8,13 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // In production, DATABASE_URL should be your provider's POOLED connection
+  // string — serverless functions open a fresh connection pool per
+  // instance, and an unpooled URL exhausts small Postgres plans fast. If
+  // your provider's pooled URL can't run migrations (common with
+  // PgBouncer-style poolers), run `prisma migrate deploy` locally/in CI
+  // against the direct (non-pooled) URL instead — see README.
+  url = env("DATABASE_URL")
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -160,6 +166,17 @@ model Job {
   // AI-extracted structured requirements kept alongside the raw description
   // (see Section 12) — stored as JSON so the shape can evolve freely.
   structuredRequirements Json?
+
+  // Per-job screening decision settings. minAcceptableScore is the bar a
+  // screened application's overallScore is compared against; when
+  // autoRejectBelowMinScore is true, screening.service.js automatically
+  // marks anything below it REJECTED. When false (the default), screened
+  // applications are left as SCREENING regardless of score — the company
+  // decides via the manual/bulk Shortlist/Reject actions instead. Screening
+  // NEVER auto-shortlists; only auto-reject is opt-in.
+  minAcceptableScore      Float   @default(75)
+  autoRejectBelowMinScore Boolean @default(false)
+
   createdBy              String
   createdAt              DateTime       @default(now())
   updatedAt              DateTime       @updatedAt
@@ -199,6 +216,19 @@ model Resume {
 
   @@index([candidateId])
   @@map("resumes")
+}
+
+// Backs the "database" storage driver (src/server/resume/storage/database.driver.js)
+// — the production-safe default, since Vercel serverless functions have no
+// writable persistent filesystem. A Resume's storageKey is this row's id;
+// swapping to S3/R2/Cloudinary later means implementing cloud.driver.js and
+// setting STORAGE_DRIVER=cloud — no schema or resumes.service.js changes.
+model ResumeBlob {
+  id        String   @id @default(cuid())
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  @@map("resume_blobs")
 }
 
 // ─────────────────────────────────────────────────────────────

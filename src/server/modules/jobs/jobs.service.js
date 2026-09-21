@@ -29,6 +29,8 @@ export async function createJob(userId, jobData) {
       location: jobData.location || null,
       employmentType: jobData.employmentType,
       status: jobData.status,
+      minAcceptableScore: jobData.minAcceptableScore,
+      autoRejectBelowMinScore: jobData.autoRejectBelowMinScore,
     },
   });
 
@@ -64,6 +66,8 @@ export async function updateJob(userId, jobId, jobData) {
       location: jobData.location ?? job.location,
       employmentType: jobData.employmentType ?? job.employmentType,
       status: jobData.status ?? job.status,
+      minAcceptableScore: jobData.minAcceptableScore ?? job.minAcceptableScore,
+      autoRejectBelowMinScore: jobData.autoRejectBelowMinScore ?? job.autoRejectBelowMinScore,
     },
   });
 }
