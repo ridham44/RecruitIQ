@@ -177,6 +177,13 @@ DATABASE_URL="postgresql://postgres:recruitiq@localhost:5432/recruitiq?schema=pu
 For production, point `DATABASE_URL` at a hosted provider (Neon, Supabase, Railway, Render, etc.) — no
 code changes are required.
 
+This project currently uses **Neon**. To connect to it: install the Neon Claude Code skills with
+`npx neon@latest skills -s neon -s neon-postgres -y`, or just copy the **pooled connection string** from
+your Neon project dashboard (Connection Details → Pooled connection) into `DATABASE_URL` — it already
+includes `sslmode=require&channel_binding=require`, which Neon requires. After changing `DATABASE_URL`,
+run `npx prisma migrate deploy` to bring the new database up to date, and `npm run db:seed` if you want
+the demo data on it too.
+
 ## Prisma setup & migrations
 
 ```bash
