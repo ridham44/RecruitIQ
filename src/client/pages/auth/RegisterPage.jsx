@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import AuthShell from './AuthShell.jsx';
 import { useAuth } from '../../hooks/useAuth.jsx';
 import FormField, { inputClass } from '../../components/ui/FormField.jsx';
+import PasswordInput from '../../components/ui/PasswordInput.jsx';
 import Button from '../../components/ui/Button.jsx';
 
 export default function RegisterPage() {
@@ -70,11 +71,9 @@ export default function RegisterPage() {
           />
         </FormField>
         <FormField label="Password" error="Must be at least 8 characters">
-          <input
-            type="password"
+          <PasswordInput
             required
             minLength={8}
-            className={inputClass}
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
           />

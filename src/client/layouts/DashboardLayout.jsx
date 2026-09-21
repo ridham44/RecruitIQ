@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Sparkles, LogOut } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth.jsx';
 
 export default function DashboardLayout({ navItems }) {
@@ -15,7 +15,7 @@ export default function DashboardLayout({ navItems }) {
     <div className="flex min-h-screen bg-slate-50">
       <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-white md:flex">
         <div className="flex items-center gap-2 border-b border-slate-200 px-6 py-5">
-          <Sparkles className="h-5 w-5 text-brand-600" />
+          <img src="/Logo.png" alt="RecruitIQ" className="h-9 w-9 object-contain" />
           <span className="text-lg font-semibold text-slate-900">RecruitIQ</span>
         </div>
         <nav className="flex-1 space-y-1 px-3 py-4">
@@ -50,7 +50,7 @@ export default function DashboardLayout({ navItems }) {
       <div className="flex flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-4 md:hidden">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-brand-600" />
+            <img src="/Logo.png" alt="RecruitIQ" className="h-8 w-8 object-contain" />
             <span className="text-lg font-semibold text-slate-900">RecruitIQ</span>
           </div>
           <button onClick={handleLogout} className="text-sm text-slate-600">
