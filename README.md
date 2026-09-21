@@ -186,6 +186,33 @@ npx prisma migrate deploy  # apply pending migrations in production (e.g. in a C
 npx prisma studio          # browse the database with Prisma's GUI
 ```
 
+## Demo / seed data
+
+A reproducible seed script (`prisma/seed.js`) creates a demo company, one job, and 10 realistic
+candidate profiles/applications for testing the AI screening pipeline end-to-end:
+
+```bash
+npm run db:seed
+```
+
+This creates **Ravantra Technologies** (demo company) with an open **React.js Developer** job in
+Ahmedabad, and 10 candidates who already applied with resumes — including two candidates who are
+intentionally a stronger technical match than a mid-level candidate named Ridham Patel, plus a mix of
+strong/weak-fit profiles across different educational backgrounds (B.Tech, BCA, Diploma, MBA, etc.).
+All demo accounts share the password `Demo@1234` (printed in full, with every email, at the end of the
+seed run).
+
+The seed script is intentionally deterministic and makes **no AI calls** — resume text and parsed data
+are hand-authored so `npm run db:seed` works offline and produces identical data every run. The actual
+AI ranking only happens when you log in as the demo company, open the job's Applications tab, and click
+**Run AI Screening** — that's the real screening/matching engine running against real seeded resumes.
+
+Gender is included in the seed data (7 female / 3 male candidates) specifically to verify the AI
+screening pipeline ranks candidates purely on job-relevant qualifications — it is deliberately never
+sent to the LLM (see the guard rails in `src/server/ai/candidate-matcher.service.js`).
+
+Re-running `npm run db:seed` is safe — it deletes and recreates the demo users first.
+
 ## Development commands
 
 ```bash
@@ -193,7 +220,7 @@ npm install                # install dependencies
 npm run dev                # run client + server together (recommended)
 npm run dev:client         # Vite dev server only
 npm run dev:server         # Express dev server only (node --watch)
-npm run lint                # lint src/
+npm run db:seed            # seed demo/test data (see above)
 ```
 
 ## Production build
@@ -250,7 +277,7 @@ Future (Phase 2/3), mounted the same way without touching Phase 1 routes:
 
 ## Testing the acceptance flow
 
-Two manual smoke-test scripts exercise the full Phase 1 flow described in the project brief (company
+Manual smoke-test scripts exercise the full Phase 1 flow described in the project brief (company
 registers → creates a job → candidate registers → applies with a resume → AI screening → ranked
 candidates → candidate detail) directly against the running API:
 
@@ -262,11 +289,19 @@ node scripts/e2e-test.mjs path/to/resume.docx
 
 # negative-path checks (invalid file type, wrong password, RBAC, etc.):
 node scripts/test-negative.mjs
+
+# resume-upload profile auto-fill review flow (Section 6/7), with a resume file
+# that mentions a university/degree/SPI:
+node scripts/test-profile-autofill.mjs path/to/resume.docx
+
+# run real AI screening against the 10 seeded candidates and print the ranking
+# (run `npm run db:seed` first):
+node scripts/test-seed-screening.mjs
 ```
 
-Both require `OPENROUTER_API_KEY` to be set for the AI-dependent assertions to pass; if it's missing,
-AI calls fail gracefully (jobs/resumes/applications still save; screening is marked `FAILED` with a
-clear error) rather than blocking the rest of the flow.
+All of these require `OPENROUTER_API_KEY` to be set for the AI-dependent assertions to pass; if it's
+missing, AI calls fail gracefully (jobs/resumes/applications still save; screening is marked `FAILED`
+with a clear error) rather than blocking the rest of the flow.
 
 ## Future Phases
 

@@ -173,6 +173,43 @@ export default function CandidateDetailPage() {
       </div>
 
       <Card className="mt-6 p-6">
+        <h3 className="mb-3 font-semibold text-slate-900">Education</h3>
+        {candidate.degree || candidate.university || candidate.college || candidate.latestSpi ? (
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+            {candidate.degree && (
+              <div>
+                <dt className="text-xs text-slate-400">Degree</dt>
+                <dd className="text-slate-800">{candidate.degree}</dd>
+              </div>
+            )}
+            {candidate.university && (
+              <div>
+                <dt className="text-xs text-slate-400">University</dt>
+                <dd className="text-slate-800">{candidate.university}</dd>
+              </div>
+            )}
+            {candidate.college && (
+              <div>
+                <dt className="text-xs text-slate-400">College / Institute</dt>
+                <dd className="text-slate-800">{candidate.college}</dd>
+              </div>
+            )}
+            {candidate.latestSpi != null && (
+              <div>
+                <dt className="text-xs text-slate-400">{candidate.academicStatus === 'ONGOING' ? 'Latest SPI' : 'Final SPI'}</dt>
+                <dd className="text-slate-800">
+                  {candidate.latestSpi}
+                  {candidate.academicStatus === 'ONGOING' && candidate.currentSemester ? ` (Semester ${candidate.currentSemester})` : ''}
+                </dd>
+              </div>
+            )}
+          </dl>
+        ) : (
+          <p className="text-sm text-slate-400">No academic information provided</p>
+        )}
+      </Card>
+
+      <Card className="mt-6 p-6">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="font-semibold text-slate-900">Resume</h3>
           <span className="text-xs text-slate-400">{resume?.fileName}</span>

@@ -13,12 +13,24 @@ text and return ONLY a JSON object with this exact shape:
   "education": [{ "degree": string, "field": string }],
   "projects": string[],
   "certifications": string[],
-  "totalExperienceYears": number
+  "totalExperienceYears": number,
+  "university": string,
+  "college": string,
+  "degree": string,
+  "spi": number | null,
+  "gender": string
 }
 
 Rules:
-- If a field cannot be found, use an empty string, empty array, or 0.
+- If a field cannot be found, use an empty string, empty array, 0, or null as appropriate.
 - "totalExperienceYears" is your best-effort estimate of total professional experience in years.
+- "university"/"college"/"degree" are the candidate's most recent/highest academic institution and
+  exact degree name (e.g. "BCA", "B.Tech in Computer Science and Technology", "MBA") — do not
+  normalize to a generic value.
+- "spi" is the candidate's latest or final SPI/CGPA on a 0-10 scale if explicitly stated; otherwise null.
+- "gender" must be an EMPTY STRING unless the resume explicitly states it (e.g. a "Gender:" field).
+  NEVER infer gender from the candidate's name, pronouns, photo, or any other indirect signal — only
+  extract it if it is written verbatim in the document. This field is for profile display only.
 - Do not invent information that is not present in the text.
 - Respond with JSON only, no prose.`;
 

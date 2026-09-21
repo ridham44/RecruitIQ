@@ -4,10 +4,50 @@ import { extractResumeText } from '../../resume/extract.service.js';
 import { storage } from '../../resume/storage/index.js';
 import { analyzeResume } from '../../ai/resume-analyzer.service.js';
 
-async function getCandidateIdForUser(userId) {
+async function getCandidateForUser(userId) {
   const candidate = await prisma.candidate.findUnique({ where: { userId } });
   if (!candidate) throw ApiError.notFound('Candidate profile not found');
-  return candidate.id;
+  return candidate;
+}
+
+function normalizeGender(value) {
+  const normalized = (value || '').trim().toLowerCase();
+  if (['male', 'm'].includes(normalized)) return 'MALE';
+  if (['female', 'f'].includes(normalized)) return 'FEMALE';
+  if (normalized) return 'OTHER';
+  return null;
+}
+
+// Diffs AI-parsed resume data against the candidate's CURRENT profile and
+// returns only what's worth suggesting (Section 6/7). Nothing here is
+// persisted — it's handed back to the client so the candidate can review
+// and edit before anything is saved, and a field that's already filled in
+// is never suggested for overwrite.
+function buildProfileSuggestions(candidate, parsedData) {
+  if (!parsedData) return null;
+
+  const suggestions = {};
+
+  const suggestIfEmpty = (field, value) => {
+    const hasValue = typeof value === 'string' ? value.trim().length > 0 : value != null;
+    if (hasValue && !candidate[field]) suggestions[field] = value;
+  };
+
+  suggestIfEmpty('university', parsedData.university);
+  suggestIfEmpty('college', parsedData.college);
+  suggestIfEmpty('degree', parsedData.degree);
+  suggestIfEmpty('phone', parsedData.phone);
+  if (parsedData.spi != null && !candidate.latestSpi) suggestions.latestSpi = parsedData.spi;
+
+  const normalizedGender = normalizeGender(parsedData.gender);
+  if (normalizedGender && !candidate.gender) suggestions.gender = normalizedGender;
+
+  const newSkills = (parsedData.skills || []).filter(
+    (skill) => !candidate.skills.some((existing) => existing.toLowerCase() === skill.toLowerCase())
+  );
+  if (newSkills.length > 0) suggestions.skills = newSkills;
+
+  return Object.keys(suggestions).length > 0 ? suggestions : null;
 }
 
 // resume.pdf/docx -> text extraction -> storage -> AI analysis -> persisted
@@ -15,13 +55,13 @@ async function getCandidateIdForUser(userId) {
 // resume is saved with rawText and empty parsedData so screening can be
 // retried later.
 export async function uploadResume(userId, file) {
-  const candidateId = await getCandidateIdForUser(userId);
+  const candidate = await getCandidateForUser(userId);
 
   const { text } = await extractResumeText(file.buffer);
   const { storageKey, storageUrl } = await storage.save(file.buffer, {
     fileName: file.originalname,
     mimeType: file.mimetype,
-    candidateId,
+    candidateId: candidate.id,
   });
 
   let parsedData = null;
@@ -31,11 +71,11 @@ export async function uploadResume(userId, file) {
     console.error('[resumes] AI analysis failed, saving raw text only:', err.message);
   }
 
-  await prisma.resume.updateMany({ where: { candidateId }, data: { isPrimary: false } });
+  await prisma.resume.updateMany({ where: { candidateId: candidate.id }, data: { isPrimary: false } });
 
-  return prisma.resume.create({
+  const resume = await prisma.resume.create({
     data: {
-      candidateId,
+      candidateId: candidate.id,
       fileName: file.originalname,
       fileType: file.mimetype,
       fileSize: file.size,
@@ -46,11 +86,13 @@ export async function uploadResume(userId, file) {
       isPrimary: true,
     },
   });
+
+  return { resume, profileSuggestions: buildProfileSuggestions(candidate, parsedData) };
 }
 
 export async function listMyResumes(userId) {
-  const candidateId = await getCandidateIdForUser(userId);
-  return prisma.resume.findMany({ where: { candidateId }, orderBy: { createdAt: 'desc' } });
+  const candidate = await getCandidateForUser(userId);
+  return prisma.resume.findMany({ where: { candidateId: candidate.id }, orderBy: { createdAt: 'desc' } });
 }
 
 export async function getResumeById(resumeId) {

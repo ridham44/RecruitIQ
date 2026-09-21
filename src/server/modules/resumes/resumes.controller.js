@@ -5,8 +5,8 @@ import * as resumesService from './resumes.service.js';
 
 export const uploadResume = asyncHandler(async (req, res) => {
   if (!req.file) throw ApiError.badRequest('No resume file provided', 'FILE_REQUIRED');
-  const resume = await resumesService.uploadResume(req.user.id, req.file);
-  created(res, { resume });
+  const { resume, profileSuggestions } = await resumesService.uploadResume(req.user.id, req.file);
+  created(res, { resume, profileSuggestions });
 });
 
 export const listMyResumes = asyncHandler(async (req, res) => {

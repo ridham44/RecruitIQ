@@ -17,6 +17,13 @@ export async function updateCandidateProfile(userId, data) {
       location: data.location ?? candidate.location,
       headline: data.headline ?? candidate.headline,
       skills: data.skills ?? candidate.skills,
+      gender: data.gender ?? candidate.gender,
+      university: data.university ?? candidate.university,
+      college: data.college ?? candidate.college,
+      degree: data.degree ?? candidate.degree,
+      academicStatus: data.academicStatus ?? candidate.academicStatus,
+      currentSemester: data.academicStatus === 'COMPLETED' ? null : data.currentSemester ?? candidate.currentSemester,
+      latestSpi: data.latestSpi ?? candidate.latestSpi,
     },
   });
 }

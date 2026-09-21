@@ -28,4 +28,16 @@ export const resumeAnalysisSchema = z.object({
   projects: z.array(z.string()).default([]),
   certifications: z.array(z.string()).default([]),
   totalExperienceYears: z.coerce.number().min(0).default(0),
+
+  // Academic profile fields (Section 6), used ONLY to suggest values for
+  // currently-empty Candidate profile fields (resumes.service.js). Never
+  // read by AI screening/matching — see candidate-matcher.service.js.
+  university: z.string().default(''),
+  college: z.string().default(''),
+  degree: z.string().default(''),
+  spi: z.coerce.number().min(0).max(10).nullable().default(null),
+  // Extracted ONLY if explicitly stated in the resume text, and ONLY ever
+  // used to prefill the profile's optional gender field — never sent to the
+  // AI matcher/screening prompt.
+  gender: z.string().default(''),
 });
