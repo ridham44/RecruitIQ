@@ -1,0 +1,28 @@
+export const JOB_STATUS = {
+  DRAFT: 'DRAFT',
+  OPEN: 'OPEN',
+  CLOSED: 'CLOSED',
+};
+
+export const EMPLOYMENT_TYPE = {
+  FULL_TIME: 'FULL_TIME',
+  PART_TIME: 'PART_TIME',
+  CONTRACT: 'CONTRACT',
+  INTERNSHIP: 'INTERNSHIP',
+  FREELANCE: 'FREELANCE',
+};
+
+// Phase 1 statuses only. Future phases may append (e.g. INTERVIEW_SCHEDULED,
+// INTERVIEWED, OFFERED, HIRED) — never repurpose existing values.
+export const APPLICATION_STATUS = {
+  APPLIED: 'APPLIED',
+  SCREENING: 'SCREENING',
+  SHORTLISTED: 'SHORTLISTED',
+  REJECTED: 'REJECTED',
+};
+
+export const SCREENING_STATUS = {
+  PENDING: 'PENDING',
+  COMPLETED: 'COMPLETED',
+  FAILED: 'FAILED',
+};

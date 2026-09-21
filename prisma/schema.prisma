@@ -1,0 +1,231 @@
+// Prisma schema for RecruitIQ — Phase 1
+// Designed so Phase 2 (notifications, scheduling) and Phase 3 (interviews)
+// can be added as new models/relations without altering these tables.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  COMPANY
+  CANDIDATE
+  RECRUITER
+  INTERVIEWER
+}
+
+enum JobStatus {
+  DRAFT
+  OPEN
+  CLOSED
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+  FREELANCE
+}
+
+enum ApplicationStatus {
+  APPLIED
+  SCREENING
+  SHORTLISTED
+  REJECTED
+  // Phase 2/3 statuses (INTERVIEW_SCHEDULED, INTERVIEWED, OFFERED, HIRED, etc.)
+  // can be appended here later without breaking existing rows.
+}
+
+enum ScreeningStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+// ─────────────────────────────────────────────────────────────
+// Core identity
+// ─────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         Role
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company   Company?
+  candidate Candidate?
+
+  @@map("users")
+}
+
+model Company {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  name        String
+  website     String?
+  industry    String?
+  size        String?
+  location    String?
+  description String?
+  logoUrl     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobs Job[]
+
+  @@map("companies")
+}
+
+model Candidate {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  fullName  String
+  phone     String?
+  location  String?
+  headline  String?
+  skills    String[] @default([])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resumes      Resume[]
+  applications Application[]
+
+  @@map("candidates")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Jobs
+// ─────────────────────────────────────────────────────────────
+
+model Job {
+  id                     String         @id @default(cuid())
+  companyId              String
+  title                  String
+  description            String
+  minimumExperience      Float          @default(0)
+  maximumExperience      Float?
+  requiredSkills         String[]       @default([])
+  preferredSkills        String[]       @default([])
+  educationRequirements  String[]       @default([])
+  location               String?
+  employmentType         EmploymentType @default(FULL_TIME)
+  status                 JobStatus      @default(OPEN)
+  // AI-extracted structured requirements kept alongside the raw description
+  // (see Section 12) — stored as JSON so the shape can evolve freely.
+  structuredRequirements Json?
+  createdBy              String
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  applications Application[]
+
+  @@index([companyId])
+  @@index([status])
+  @@map("jobs")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Resumes
+// ─────────────────────────────────────────────────────────────
+
+model Resume {
+  id          String   @id @default(cuid())
+  candidateId String
+  fileName    String
+  fileType    String
+  fileSize    Int
+  // Storage is abstracted behind a key/url pair so the implementation can
+  // move from local disk (dev) to S3/R2/Cloudinary (prod) without schema
+  // changes. See src/server/resume/storage.
+  storageKey  String
+  storageUrl  String?
+  rawText     String?
+  // AI-extracted structured resume data (see Section 11), validated before save.
+  parsedData  Json?
+  isPrimary   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  candidate    Candidate     @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  applications Application[]
+
+  @@index([candidateId])
+  @@map("resumes")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Applications & Screening
+// ─────────────────────────────────────────────────────────────
+
+model Application {
+  id          String            @id @default(cuid())
+  candidateId String
+  jobId       String
+  resumeId    String
+  status      ApplicationStatus @default(APPLIED)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  candidate       Candidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  job             Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  resume          Resume           @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  screeningResult ScreeningResult?
+
+  @@unique([candidateId, jobId])
+  @@index([jobId])
+  @@index([candidateId])
+  @@map("applications")
+}
+
+model ScreeningResult {
+  id                    String          @id @default(cuid())
+  applicationId         String          @unique
+  status                ScreeningStatus @default(PENDING)
+  overallScore          Float?
+  skillMatchScore       Float?
+  experienceMatchScore  Float?
+  educationMatchScore   Float?
+  matchedSkills         String[]        @default([])
+  missingSkills         String[]        @default([])
+  strengths             String[]        @default([])
+  concerns              String[]        @default([])
+  reasoning             String?
+  // Deterministic sub-checks computed outside the LLM (Section 13), kept for
+  // transparency/auditability alongside the AI-derived scores.
+  deterministicChecks   Json?
+  aiModel               String?
+  errorMessage          String?
+  screenedAt            DateTime?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@map("screening_results")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Phase 2 / Phase 3 — NOT implemented yet.
+// Models intentionally omitted from Phase 1. When those phases begin,
+// add (without touching the models above):
+//   Interview, InterviewQuestion, InterviewAnswer, InterviewReport,
+//   InterviewSchedule, Notification, EmailLog, CallLog
+// each referencing Application/Candidate/Job by id, following the same
+// cuid + createdAt/updatedAt conventions used here.
+// ─────────────────────────────────────────────────────────────
