@@ -87,8 +87,63 @@ enum InterviewSlotStatus {
 
 enum InterviewStatus {
   SCHEDULED
+  // Phase 3: the candidate has joined the LiveKit room and the AI interview
+  // question/answer loop is actively running.
+  IN_PROGRESS
   COMPLETED
   CANCELLED
+}
+
+// Deterministic, backend-controlled stage order for the AI interview state
+// machine (Section 5) — the LLM chooses QUESTION TEXT within a stage and
+// whether a follow-up is warranted, but never which stage comes next or how
+// many stages there are; that's fixed here so "the AI does not freely
+// control the entire interview."
+enum InterviewStage {
+  NOT_STARTED
+  INTRODUCTION
+  RESUME_QUESTIONS
+  BASIC_TECHNICAL
+  JOB_SPECIFIC
+  SCENARIO
+  BEHAVIORAL
+  CANDIDATE_QUESTIONS
+  END
+}
+
+enum InterviewQuestionType {
+  INTRODUCTION
+  CUSTOM
+  RESUME_BASED
+  TECHNICAL
+  JOB_SPECIFIC
+  SCENARIO
+  FOLLOW_UP
+  BEHAVIORAL
+  CANDIDATE_QUESTION
+}
+
+// Section 4: browser-observed security/monitoring events during an AI
+// interview. Never used for facial/emotion/lie-detection scoring — purely
+// a presence/attention/connection audit trail.
+enum InterviewEventType {
+  CAMERA_ON
+  CAMERA_OFF
+  MIC_ON
+  MIC_OFF
+  TAB_SWITCH
+  PAGE_LEFT
+  FULLSCREEN_EXIT
+  CONNECTION_LOST
+  CONNECTION_RESTORED
+  INTERVIEW_STARTED
+  INTERVIEW_ENDED
+}
+
+enum InterviewReportStatus {
+  PENDING
+  COMPLETED
+  FAILED
 }
 
 enum EmailType {
@@ -210,9 +265,10 @@ model Job {
   createdAt              DateTime       @default(now())
   updatedAt              DateTime       @updatedAt
 
-  company        Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  applications   Application[]
-  interviewSlots InterviewSlot[]
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  applications       Application[]
+  interviewSlots     InterviewSlot[]
+  aiInterviewConfig  AiInterviewConfig?
 
   @@index([companyId])
   @@index([status])
@@ -362,12 +418,130 @@ model Interview {
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
-  application Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  slot        InterviewSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  // Phase 3 — AI voice interview session state. Company/Job/Candidate are
+  // reached via application (Application -> Job -> Company,
+  // Application -> Candidate), not duplicated here.
+  stage               InterviewStage @default(NOT_STARTED)
+  liveKitRoomName     String?
+  plannedQuestionIndex Int           @default(0)
+  startedAt           DateTime?
+  endedAt             DateTime?
+
+  application Application         @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  slot        InterviewSlot       @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  questions   InterviewQuestion[]
+  events      InterviewEvent[]
+  report      InterviewReport?
 
   @@index([applicationId])
   @@index([slotId])
   @@map("interviews")
+}
+
+// Company-configured AI interviewer settings, one per job (Section 1) — all
+// interviews booked against a job's slots share the same interviewer
+// persona/question budget. Falls back to sane defaults (see
+// interviewConfig.service.js) when a company hasn't configured one yet, so
+// AI slot generation/booking never depends on this existing first.
+model AiInterviewConfig {
+  id                String   @id @default(cuid())
+  jobId             String   @unique
+  aiName            String   @default("Priya")
+  aiTitle           String   @default("Virtual HR")
+  questionCount     Int      @default(10)
+  answerTimeSeconds Int      @default(30)
+  customQuestions   String[] @default([])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@map("ai_interview_configs")
+}
+
+// One row per question actually asked (planned or follow-up). `index` is
+// the question's position among PLANNED questions only (follow-ups share
+// their parent's index) — this is what interviewEngine.service.js checks
+// against AiInterviewConfig.questionCount to decide when the interview is
+// done, kept separate from the LLM's own judgement (Section 8).
+model InterviewQuestion {
+  id                     String                @id @default(cuid())
+  interviewId            String
+  index                  Int
+  stage                  InterviewStage
+  type                   InterviewQuestionType
+  text                   String
+  parentQuestionId       String?
+  answerTimeLimitSeconds Int
+  askedAt                DateTime              @default(now())
+
+  interview      Interview           @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  parentQuestion InterviewQuestion?  @relation("FollowUps", fields: [parentQuestionId], references: [id])
+  followUps      InterviewQuestion[] @relation("FollowUps")
+  answer         InterviewAnswer?
+
+  @@index([interviewId])
+  @@map("interview_questions")
+}
+
+model InterviewAnswer {
+  id              String   @id @default(cuid())
+  questionId      String   @unique
+  transcript      String
+  durationSeconds Int?
+  timedOut        Boolean  @default(false)
+  // Lightweight in-the-moment evaluation used only to decide the next
+  // question/follow-up (Section 8) — the deep, final evaluation lives on
+  // InterviewReport instead, generated once after the interview ends.
+  evaluation      Json?
+  answeredAt      DateTime @default(now())
+
+  question InterviewQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@map("interview_answers")
+}
+
+model InterviewEvent {
+  id          String             @id @default(cuid())
+  interviewId String
+  type        InterviewEventType
+  metadata    Json?
+  occurredAt  DateTime           @default(now())
+
+  interview Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  @@index([interviewId])
+  @@map("interview_events")
+}
+
+// Final post-interview evaluation (Section 8) — generated once, after
+// status moves to COMPLETED. questionAnalysis/resumeAlignment are
+// structured JSON (question-by-question breakdown, deterministic
+// skill-overlap reused from screening's deterministic.util.js blended with
+// the LLM's qualitative read) rather than free text, mirroring
+// ScreeningResult's pattern of never trusting the LLM as the sole source of
+// truth for facts that can be computed directly.
+model InterviewReport {
+  id                  String                 @id @default(cuid())
+  interviewId         String                 @unique
+  status              InterviewReportStatus  @default(PENDING)
+  overallScore        Float?
+  technicalScore      Float?
+  communicationScore  Float?
+  strengths           String[]               @default([])
+  areasForImprovement String[]               @default([])
+  questionAnalysis    Json?
+  resumeAlignment     Json?
+  reasoning           String?
+  aiModel             String?
+  errorMessage        String?
+  generatedAt         DateTime?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  interview Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  @@map("interview_reports")
 }
 
 // Audit trail for every notification email the app has attempted to send
@@ -389,9 +563,8 @@ model EmailLog {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Phase 3 — NOT implemented yet.
-// Models intentionally omitted. When Phase 3 begins, add (without touching
-// the models above): InterviewQuestion, InterviewAnswer, InterviewReport,
-// CallLog — each referencing Interview/Application by id, following the
-// same cuid + createdAt/updatedAt conventions used here.
+// Phase 3 remainder — NOT implemented yet: CallLog (Twilio scheduling
+// calls, actually a Phase 2 leftover) is the only model still deliberately
+// omitted. AI voice interview models (AiInterviewConfig, InterviewQuestion,
+// InterviewAnswer, InterviewEvent, InterviewReport) are implemented above.
 // ─────────────────────────────────────────────────────────────

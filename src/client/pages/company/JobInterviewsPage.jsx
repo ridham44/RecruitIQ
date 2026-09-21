@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { Plus, Calendar, Trash2, CheckCircle2, Sparkles, X } from 'lucide-react';
+import { Link, useParams } from 'react-router-dom';
+import { Plus, Calendar, Trash2, CheckCircle2, Sparkles, X, Bot, Eye, Save } from 'lucide-react';
 import { schedulingApi } from '../../services/scheduling.js';
 import { jobsApi } from '../../services/jobs.js';
+import { interviewsApi } from '../../services/interviews.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import FormField, { inputClass } from '../../components/ui/FormField.jsx';
@@ -13,6 +14,57 @@ import StatusBadge from '../../components/ui/StatusBadge.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 
 const GENERATE_DEFAULTS = { date: '', startTime: '', endTime: '', durationMinutes: 15, bufferMinutes: 0 };
+
+// A custom question is a full sentence, not a short tag — a dedicated
+// add/remove list reads better here than the chip-style TagInput used for
+// skills elsewhere.
+function CustomQuestionList({ questions, onChange }) {
+  const [draft, setDraft] = useState('');
+
+  const add = () => {
+    const q = draft.trim();
+    if (q) onChange([...questions, q]);
+    setDraft('');
+  };
+
+  return (
+    <div>
+      {questions.length > 0 && (
+        <ul className="mb-2 space-y-2">
+          {questions.map((q, idx) => (
+            <li key={idx} className="flex items-start gap-2 rounded-lg border border-slate-200 p-2 text-sm">
+              <span className="flex-1 text-slate-700">{q}</span>
+              <button
+                type="button"
+                onClick={() => onChange(questions.filter((_, i) => i !== idx))}
+                className="text-slate-400 hover:text-red-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex gap-2">
+        <input
+          className={inputClass}
+          placeholder="Type a question the AI must ask, then press Add"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              add();
+            }
+          }}
+        />
+        <Button type="button" variant="secondary" onClick={add}>
+          Add
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 function formatDate(iso) {
   return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
@@ -38,17 +90,48 @@ export default function JobInterviewsPage() {
   const [generateError, setGenerateError] = useState('');
   const [generateResult, setGenerateResult] = useState(null);
 
+  const [showConfig, setShowConfig] = useState(false);
+  const [configForm, setConfigForm] = useState(null);
+  const [configSaving, setConfigSaving] = useState(false);
+  const [configSaved, setConfigSaved] = useState(false);
+
   const load = () => {
     setError('');
-    Promise.all([jobsApi.get(jobId), schedulingApi.listSlotsForJob(jobId)])
-      .then(([jobRes, slotsRes]) => {
+    Promise.all([jobsApi.get(jobId), schedulingApi.listSlotsForJob(jobId), interviewsApi.getConfig(jobId)])
+      .then(([jobRes, slotsRes, configRes]) => {
         setJob(jobRes.job);
         setSlots(slotsRes.slots);
+        setConfigForm({
+          aiName: configRes.config.aiName,
+          aiTitle: configRes.config.aiTitle,
+          questionCount: configRes.config.questionCount,
+          answerTimeSeconds: configRes.config.answerTimeSeconds,
+          customQuestions: configRes.config.customQuestions,
+        });
       })
       .catch((err) => setError(err.message));
   };
 
   useEffect(load, [jobId]);
+
+  const handleSaveConfig = async (e) => {
+    e.preventDefault();
+    setConfigSaving(true);
+    setConfigSaved(false);
+    setError('');
+    try {
+      await interviewsApi.upsertConfig(jobId, {
+        ...configForm,
+        questionCount: Number(configForm.questionCount),
+        answerTimeSeconds: Number(configForm.answerTimeSeconds),
+      });
+      setConfigSaved(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setConfigSaving(false);
+    }
+  };
 
   const handleCreateSlot = async (e) => {
     e.preventDefault();
@@ -124,14 +207,104 @@ export default function JobInterviewsPage() {
   const sortedSlots = useMemo(() => (slots ? [...slots].sort((a, b) => new Date(a.startTime) - new Date(b.startTime)) : []), [slots]);
 
   if (error && !slots) return <ErrorState message={error} onRetry={load} />;
-  if (!slots || !job) return <LoadingState />;
+  if (!slots || !job || !configForm) return <LoadingState />;
 
   return (
     <div>
       <h2 className="mb-1 text-xl font-semibold text-slate-900">Interviews — {job.title}</h2>
-      <p className="mb-6 text-sm text-slate-500">Create available interview slots; candidates book them once shortlisted.</p>
+      <p className="mb-6 text-sm text-slate-500">Configure the AI interviewer, publish slots, and review completed interviews.</p>
 
       {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+
+      <Card className="mb-6 p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="flex items-center gap-2 font-semibold text-slate-900">
+              <Bot className="h-4 w-4 text-brand-600" /> AI Interviewer Configuration
+            </h3>
+            <p className="text-sm text-slate-500">
+              {configForm.aiName} – {configForm.aiTitle} · {configForm.questionCount} questions · {configForm.answerTimeSeconds}s per answer
+            </p>
+          </div>
+          <Button variant={showConfig ? 'secondary' : 'primary'} onClick={() => setShowConfig((v) => !v)} className="w-full sm:w-auto">
+            {showConfig ? (
+              <>
+                <X className="h-4 w-4" /> Close
+              </>
+            ) : (
+              <>
+                <Bot className="h-4 w-4" /> Configure AI Interviewer
+              </>
+            )}
+          </Button>
+        </div>
+
+        {showConfig && (
+          <form onSubmit={handleSaveConfig} className="mt-5 border-t border-slate-100 pt-5">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <FormField label="AI interviewer name">
+                <input
+                  required
+                  className={inputClass}
+                  value={configForm.aiName}
+                  onChange={(e) => setConfigForm({ ...configForm, aiName: e.target.value })}
+                  placeholder="e.g. Priya"
+                />
+              </FormField>
+              <FormField label="AI role / title">
+                <input
+                  required
+                  className={inputClass}
+                  value={configForm.aiTitle}
+                  onChange={(e) => setConfigForm({ ...configForm, aiTitle: e.target.value })}
+                  placeholder="e.g. Virtual HR"
+                />
+              </FormField>
+              <FormField label="Number of questions">
+                <input
+                  type="number"
+                  min={3}
+                  max={30}
+                  required
+                  className={inputClass}
+                  value={configForm.questionCount}
+                  onChange={(e) => setConfigForm({ ...configForm, questionCount: e.target.value })}
+                />
+              </FormField>
+              <FormField label="Answer time per question (seconds)">
+                <input
+                  type="number"
+                  min={10}
+                  max={300}
+                  required
+                  className={inputClass}
+                  value={configForm.answerTimeSeconds}
+                  onChange={(e) => setConfigForm({ ...configForm, answerTimeSeconds: e.target.value })}
+                />
+              </FormField>
+            </div>
+
+            <div className="mt-4">
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Custom questions the AI must ask
+              </label>
+              <CustomQuestionList
+                questions={configForm.customQuestions}
+                onChange={(customQuestions) => setConfigForm({ ...configForm, customQuestions })}
+              />
+              <p className="mt-1 text-xs text-slate-400">
+                The AI also generates its own questions from the job requirements, the candidate's resume, and their
+                previous answers — these are asked in addition to that.
+              </p>
+            </div>
+
+            {configSaved && <p className="mt-3 text-sm text-emerald-600">AI interviewer settings saved.</p>}
+            <Button type="submit" loading={configSaving} className="mt-4 w-full sm:w-auto">
+              <Save className="h-4 w-4" /> Save AI interviewer settings
+            </Button>
+          </form>
+        )}
+      </Card>
 
       <Card className="mb-6 p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -294,11 +467,20 @@ export default function JobInterviewsPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-3">
+                        {interview && ['IN_PROGRESS', 'COMPLETED'].includes(interview.status) && (
+                          <Link
+                            to={`/company/jobs/${jobId}/interviews/${interview.id}`}
+                            className="inline-flex items-center gap-1 text-brand-600 hover:text-brand-700"
+                          >
+                            <Eye className="h-4 w-4" /> View
+                          </Link>
+                        )}
                         {interview?.status === 'SCHEDULED' && (
                           <button
                             onClick={() => handleMarkCompleted(interview.id)}
                             disabled={completingId === interview.id}
                             className="inline-flex items-center gap-1 text-emerald-600 hover:text-emerald-700 disabled:opacity-50"
+                            title="For a human-conducted interview — the AI interview marks itself complete automatically."
                           >
                             <CheckCircle2 className="h-4 w-4" /> Mark completed
                           </button>

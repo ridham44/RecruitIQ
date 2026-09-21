@@ -1,4 +1,5 @@
 import { callOpenRouter } from './openrouter.service.js';
+import { sanitizePersonalText } from './sanitize.util.js';
 import { screeningAnalysisSchema } from '../../shared/schemas/screening.schema.js';
 
 const SYSTEM_PROMPT = `You are a candidate-screening engine performing semantic/contextual matching
@@ -25,26 +26,6 @@ Return ONLY a JSON object with this exact shape:
 }
 
 Respond with JSON only, no prose.`;
-
-// Strips demographic/PII lines (gender, DOB, age, marital status, etc.) and
-// the candidate's own name out of raw resume text before it ever reaches
-// the LLM prompt. This is a deliberate second layer of defense alongside
-// the system prompt above: bias-relevant fields must never even be visible
-// to the model, not just "ignored" by instruction.
-const DEMOGRAPHIC_LINE_PATTERN =
-  /^.*\b(gender|sex|date of birth|dob|age|marital status|religion|nationality|caste)\b\s*[:\-].*$/gim;
-
-function sanitizeResumeExcerpt(resumeText, candidateName) {
-  if (!resumeText) return '';
-  let sanitized = resumeText.replace(DEMOGRAPHIC_LINE_PATTERN, '');
-
-  if (candidateName?.trim()) {
-    const escapedName = candidateName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    sanitized = sanitized.replace(new RegExp(escapedName, 'gi'), '[Candidate]');
-  }
-
-  return sanitized;
-}
 
 // Job requirements + candidate resume -> AI semantic match scores
 // (Section 13). This is combined with deterministic checks in
@@ -74,7 +55,7 @@ export async function matchCandidateToJob({ job, resumeData, resumeText }) {
         totalExperienceYears: resumeData?.totalExperienceYears || 0,
         projects: resumeData?.projects || [],
         certifications: resumeData?.certifications || [],
-        resumeExcerpt: sanitizeResumeExcerpt(resumeText, resumeData?.name).slice(0, 4000),
+        resumeExcerpt: sanitizePersonalText(resumeText, resumeData?.name).slice(0, 4000),
       },
     },
     null,

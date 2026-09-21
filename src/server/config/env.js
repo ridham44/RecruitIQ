@@ -65,13 +65,20 @@ export const env = {
   brevoFromEmail: process.env.BREVO_FROM_EMAIL || '',
   brevoFromName: process.env.BREVO_FROM_NAME || 'RecruitIQ',
 
-  // Phase 3 — read for forward-compat, unused in Phase 1/2.
+  // Phase 3 — AI voice interviews. This Vercel app only ever generates
+  // LiveKit access tokens (livekit.service.js) — it never joins a room or
+  // touches audio itself; that's the separate livekit-worker/ service's
+  // job (see its own .env). apiSecret must never reach the frontend.
   liveKit: {
     url: process.env.LIVEKIT_URL || '',
     apiKey: process.env.LIVEKIT_API_KEY || '',
     apiSecret: process.env.LIVEKIT_API_SECRET || '',
   },
-  deepgramApiKey: process.env.DEEPGRAM_API_KEY || '',
+  // Shared secret the livekit-worker authenticates its calls back to this
+  // app's /interviews/*/worker/* endpoints with (no candidate JWT exists on
+  // the worker side — it acts on behalf of the system, not a specific
+  // user). Required in production once Phase 3 is actually used.
+  interviewWorkerSecret: process.env.INTERVIEW_WORKER_SECRET || '',
   twilio: {
     accountSid: process.env.TWILIO_ACCOUNT_SID || '',
     authToken: process.env.TWILIO_AUTH_TOKEN || '',

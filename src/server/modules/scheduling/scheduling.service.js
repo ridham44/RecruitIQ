@@ -85,11 +85,12 @@ export async function listSlotsForJob(userId, jobId) {
   return prisma.interviewSlot.findMany({
     where: { jobId },
     include: {
-      // SCHEDULED and COMPLETED both mean "this slot's current occupant" —
+      // SCHEDULED, IN_PROGRESS (Phase 3: candidate is actively in the AI
+      // interview), and COMPLETED all mean "this slot's current occupant" —
       // only CANCELLED is excluded, since a cancelled interview frees the
       // slot for someone else to book (whose row would then show instead).
       interviews: {
-        where: { status: { in: [INTERVIEW_STATUS.SCHEDULED, INTERVIEW_STATUS.COMPLETED] } },
+        where: { status: { in: [INTERVIEW_STATUS.SCHEDULED, INTERVIEW_STATUS.IN_PROGRESS, INTERVIEW_STATUS.COMPLETED] } },
         include: { application: { include: { candidate: true } } },
       },
     },
@@ -106,7 +107,11 @@ export async function cancelSlot(userId, jobId, slotId) {
 
   const slot = await prisma.interviewSlot.findUnique({
     where: { id: slotId },
-    include: { interviews: { where: { status: INTERVIEW_STATUS.SCHEDULED } } },
+    // Includes IN_PROGRESS so a company can still cancel a slot whose AI
+    // interview is actively running (e.g. something went wrong) — this
+    // correctly cascades to cancelling that interview too, not just
+    // silently leaving it dangling.
+    include: { interviews: { where: { status: { in: [INTERVIEW_STATUS.SCHEDULED, INTERVIEW_STATUS.IN_PROGRESS] } } } },
   });
   if (!slot || slot.jobId !== jobId) throw ApiError.notFound('Slot not found');
 
@@ -212,8 +217,15 @@ export async function getInterviewForApplication(userId, applicationId, { asComp
     await getOwnApplication(userId, applicationId);
   }
 
+  // IN_PROGRESS (Phase 3: the candidate has joined and the AI interview is
+  // actively running) must be included here too, or this stops finding the
+  // interview the moment it starts — see interviewEngine.service.js's
+  // startInterview, which is the only place that status is ever set.
   return prisma.interview.findFirst({
-    where: { applicationId, status: { in: [INTERVIEW_STATUS.SCHEDULED, INTERVIEW_STATUS.COMPLETED] } },
+    where: {
+      applicationId,
+      status: { in: [INTERVIEW_STATUS.SCHEDULED, INTERVIEW_STATUS.IN_PROGRESS, INTERVIEW_STATUS.COMPLETED] },
+    },
     include: { slot: true },
     orderBy: { createdAt: 'desc' },
   });

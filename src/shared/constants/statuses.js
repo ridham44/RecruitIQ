@@ -39,6 +39,59 @@ export const INTERVIEW_SLOT_STATUS = {
 
 export const INTERVIEW_STATUS = {
   SCHEDULED: 'SCHEDULED',
+  // Phase 3
+  IN_PROGRESS: 'IN_PROGRESS',
   COMPLETED: 'COMPLETED',
   CANCELLED: 'CANCELLED',
+};
+
+// Phase 3 — fixed stage order for the AI interview state machine. The LLM
+// picks question text within a stage and whether a follow-up is warranted;
+// it never controls stage order or count (interviewEngine.service.js).
+export const INTERVIEW_STAGES = [
+  'NOT_STARTED',
+  'INTRODUCTION',
+  'RESUME_QUESTIONS',
+  'BASIC_TECHNICAL',
+  'JOB_SPECIFIC',
+  'SCENARIO',
+  'BEHAVIORAL',
+  'CANDIDATE_QUESTIONS',
+  'END',
+];
+
+// Stages that count toward AiInterviewConfig.questionCount (NOT_STARTED/END
+// ask no questions of their own).
+export const PLANNED_QUESTION_STAGES = INTERVIEW_STAGES.filter((s) => s !== 'NOT_STARTED' && s !== 'END');
+
+export const INTERVIEW_QUESTION_TYPE = {
+  INTRODUCTION: 'INTRODUCTION',
+  CUSTOM: 'CUSTOM',
+  RESUME_BASED: 'RESUME_BASED',
+  TECHNICAL: 'TECHNICAL',
+  JOB_SPECIFIC: 'JOB_SPECIFIC',
+  SCENARIO: 'SCENARIO',
+  FOLLOW_UP: 'FOLLOW_UP',
+  BEHAVIORAL: 'BEHAVIORAL',
+  CANDIDATE_QUESTION: 'CANDIDATE_QUESTION',
+};
+
+export const INTERVIEW_EVENT_TYPE = {
+  CAMERA_ON: 'CAMERA_ON',
+  CAMERA_OFF: 'CAMERA_OFF',
+  MIC_ON: 'MIC_ON',
+  MIC_OFF: 'MIC_OFF',
+  TAB_SWITCH: 'TAB_SWITCH',
+  PAGE_LEFT: 'PAGE_LEFT',
+  FULLSCREEN_EXIT: 'FULLSCREEN_EXIT',
+  CONNECTION_LOST: 'CONNECTION_LOST',
+  CONNECTION_RESTORED: 'CONNECTION_RESTORED',
+  INTERVIEW_STARTED: 'INTERVIEW_STARTED',
+  INTERVIEW_ENDED: 'INTERVIEW_ENDED',
+};
+
+export const INTERVIEW_REPORT_STATUS = {
+  PENDING: 'PENDING',
+  COMPLETED: 'COMPLETED',
+  FAILED: 'FAILED',
 };

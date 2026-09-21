@@ -11,6 +11,7 @@ import resumesRoutes from './modules/resumes/resumes.routes.js';
 import applicationsRoutes from './modules/applications/applications.routes.js';
 import screeningRoutes from './modules/screening/screening.routes.js';
 import schedulingRoutes from './modules/scheduling/scheduling.routes.js';
+import interviewsRoutes from './modules/interviews/interviews.routes.js';
 
 export function createApp() {
   const app = express();
@@ -32,9 +33,7 @@ export function createApp() {
     res.json({ success: true, data: { status: 'ok', timestamp: new Date().toISOString() } });
   });
 
-  // Versioned API (Section 15) — Phase 3 modules (interviews, reports) will
-  // be mounted the same way, at /api/v1/interviews etc., without touching
-  // the routes below.
+  // Versioned API (Section 15).
   const v1 = express.Router();
   v1.use('/auth', authRoutes);
   v1.use('/companies', companiesRoutes);
@@ -44,6 +43,7 @@ export function createApp() {
   v1.use('/applications', applicationsRoutes);
   v1.use('/screening', screeningRoutes);
   v1.use('/scheduling', schedulingRoutes);
+  v1.use('/interviews', interviewsRoutes);
 
   app.use('/api/v1', v1);
 

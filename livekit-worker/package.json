@@ -1,0 +1,21 @@
+{
+  "name": "recruitiq-livekit-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Separate long-running realtime voice agent for RecruitIQ's AI interviews (Phase 3) — joins the LiveKit room, runs STT, calls the Vercel backend's interview engine, and speaks the response back via TTS. Deployed independently from the Vercel app (Section 6).",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "@livekit/rtc-node": "^1.1.0",
+    "@deepgram/sdk": "^5.12.0",
+    "livekit-server-sdk": "^2.19.1",
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

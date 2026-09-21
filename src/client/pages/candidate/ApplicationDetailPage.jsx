@@ -85,7 +85,6 @@ export default function ApplicationDetailPage() {
   const [bookingSlotId, setBookingSlotId] = useState(null);
   const [confirmReschedule, setConfirmReschedule] = useState(false);
   const [rescheduling, setRescheduling] = useState(false);
-  const [showJoinInfo, setShowJoinInfo] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
   const load = () => {
@@ -256,7 +255,11 @@ export default function ApplicationDetailPage() {
             </div>
             <div>
               <h3 className="font-semibold text-slate-900">
-                {interview.status === 'COMPLETED' ? 'Interview completed' : 'Interview scheduled'}
+                {interview.status === 'COMPLETED'
+                  ? 'Interview completed'
+                  : interview.status === 'IN_PROGRESS'
+                    ? 'Interview in progress'
+                    : 'Interview scheduled'}
               </h3>
               <p className="text-sm text-slate-500">
                 {formatDate(interview.slot.startTime)} · {formatTime(interview.slot.startTime)} – {formatTime(interview.slot.endTime)}
@@ -264,25 +267,25 @@ export default function ApplicationDetailPage() {
             </div>
           </div>
 
-          {interview.status === 'SCHEDULED' && (
+          {(interview.status === 'SCHEDULED' || interview.status === 'IN_PROGRESS') && (
             <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-              <Button disabled={!joinable} onClick={() => setShowJoinInfo(true)} className="w-full sm:w-auto">
-                <Video className="h-4 w-4" /> Join Interview
+              <Button
+                disabled={interview.status === 'SCHEDULED' && !joinable}
+                onClick={() => navigate(`/candidate/interviews/${interview.id}/room`)}
+                className="w-full sm:w-auto"
+              >
+                <Video className="h-4 w-4" /> {interview.status === 'IN_PROGRESS' ? 'Resume Interview' : 'Join Interview'}
               </Button>
-              <Button variant="secondary" onClick={() => setConfirmReschedule(true)} className="w-full sm:w-auto">
-                Reschedule
-              </Button>
+              {interview.status === 'SCHEDULED' && (
+                <Button variant="secondary" onClick={() => setConfirmReschedule(true)} className="w-full sm:w-auto">
+                  Reschedule
+                </Button>
+              )}
             </div>
           )}
           {interview.status === 'SCHEDULED' && !joinable && (
             <p className="mt-2 text-xs text-slate-400">
               The join button unlocks at {formatTime(interview.slot.startTime)} on {formatDate(interview.slot.startTime)}.
-            </p>
-          )}
-          {showJoinInfo && (
-            <p className="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
-              The AI voice interview experience isn't built yet — that's a Phase 3 feature. Your interview is
-              confirmed for this slot; the company will follow up on how it will be conducted.
             </p>
           )}
 
