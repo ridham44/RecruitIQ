@@ -5,6 +5,7 @@ import { APPLICATION_STATUS, SCREENING_STATUS } from '../../../shared/constants/
 import { matchCandidateToJob } from '../../ai/candidate-matcher.service.js';
 import { computeSkillOverlap, computeExperienceScore, computeEducationScore } from './deterministic.util.js';
 import { getOwnedJob } from '../jobs/jobs.service.js';
+import { sendApplicationStatusEmail } from '../notifications/email.service.js';
 
 function blend(deterministicScore, aiScore, deterministicWeight = 0.6) {
   return Math.round(deterministicScore * deterministicWeight + aiScore * (1 - deterministicWeight));
@@ -108,6 +109,12 @@ async function screenApplication(application) {
         ? APPLICATION_STATUS.REJECTED
         : APPLICATION_STATUS.SCREENING;
     await prisma.application.update({ where: { id: application.id }, data: { status: newStatus } });
+
+    // Auto-reject is a real status change from the candidate's point of
+    // view, same as a manual bulk reject — notify them the same way.
+    if (newStatus === APPLICATION_STATUS.REJECTED) {
+      await sendApplicationStatusEmail({ ...application, status: newStatus });
+    }
   }
 
   return result;
@@ -116,7 +123,7 @@ async function screenApplication(application) {
 async function fetchApplicationForScreening(applicationId) {
   const application = await prisma.application.findUnique({
     where: { id: applicationId },
-    include: { job: true, resume: true, candidate: true },
+    include: { job: { include: { company: true } }, resume: true, candidate: { include: { user: true } } },
   });
   if (!application) throw ApiError.notFound('Application not found');
   return application;
@@ -159,7 +166,7 @@ export async function runScreeningForJob(userId, jobId, { force = false } = {}) 
       status: { not: APPLICATION_STATUS.SHORTLISTED },
       ...(force ? {} : { OR: [{ screeningResult: null }, { screeningResult: { status: { not: SCREENING_STATUS.COMPLETED } } }] }),
     },
-    include: { job: true, resume: true, candidate: true },
+    include: { job: { include: { company: true } }, resume: true, candidate: { include: { user: true } } },
   });
 
   const results = [];

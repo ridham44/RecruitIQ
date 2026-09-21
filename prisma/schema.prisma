@@ -48,8 +48,12 @@ enum ApplicationStatus {
   SCREENING
   SHORTLISTED
   REJECTED
-  // Phase 2/3 statuses (INTERVIEW_SCHEDULED, INTERVIEWED, OFFERED, HIRED, etc.)
-  // can be appended here later without breaking existing rows.
+  // Phase 2: set when a candidate books an InterviewSlot (scheduling.service.js).
+  INTERVIEW_SCHEDULED
+  // Phase 2: set by the company once the interview has taken place.
+  INTERVIEW_COMPLETED
+  // Future statuses (OFFERED, HIRED, etc.) can be appended here later
+  // without breaking existing rows.
 }
 
 enum ScreeningStatus {
@@ -71,6 +75,31 @@ enum Gender {
 enum AcademicStatus {
   ONGOING
   COMPLETED
+}
+
+enum InterviewSlotStatus {
+  AVAILABLE
+  BOOKED
+  // A company can cancel a slot it created before it's booked, or after
+  // (which also cancels the Interview — see scheduling.service.js).
+  CANCELLED
+}
+
+enum InterviewStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum EmailType {
+  APPLICATION_SHORTLISTED
+  APPLICATION_REJECTED
+  INTERVIEW_CONFIRMATION
+}
+
+enum EmailStatus {
+  SENT
+  FAILED
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -181,8 +210,9 @@ model Job {
   createdAt              DateTime       @default(now())
   updatedAt              DateTime       @updatedAt
 
-  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  applications Application[]
+  company        Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  applications   Application[]
+  interviewSlots InterviewSlot[]
 
   @@index([companyId])
   @@index([status])
@@ -248,6 +278,7 @@ model Application {
   job             Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
   resume          Resume           @relation(fields: [resumeId], references: [id], onDelete: Cascade)
   screeningResult ScreeningResult?
+  interviews      Interview[]
 
   @@unique([candidateId, jobId])
   @@index([jobId])
@@ -283,11 +314,84 @@ model ScreeningResult {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Phase 2 / Phase 3 — NOT implemented yet.
-// Models intentionally omitted from Phase 1. When those phases begin,
-// add (without touching the models above):
-//   Interview, InterviewQuestion, InterviewAnswer, InterviewReport,
-//   InterviewSchedule, Notification, EmailLog, CallLog
-// each referencing Application/Candidate/Job by id, following the same
-// cuid + createdAt/updatedAt conventions used here.
+// Phase 2 — Notifications & interview scheduling
+// (no Google Calendar / Twilio / LiveKit yet — see src/server/modules/scheduling
+// and src/server/notifications)
+// ─────────────────────────────────────────────────────────────
+
+// A company-created, bookable time slot for a job's interviews. Company
+// creates these ahead of time (Section: "Create available interview
+// slots"); a candidate books one, which atomically flips it to BOOKED and
+// creates an Interview row below (see scheduling.service.js's bookSlot,
+// which uses a conditional update to prevent two candidates racing for the
+// same slot). `interviews` is plural (not 1:1) because a slot cancelled
+// after booking goes back to AVAILABLE and can be booked again by a
+// different application later — each booking is its own Interview row, and
+// InterviewSlot.status (not a DB constraint on Interview) is what actually
+// decides bookability at any given moment.
+model InterviewSlot {
+  id        String              @id @default(cuid())
+  jobId     String
+  startTime DateTime
+  endTime   DateTime
+  status    InterviewSlotStatus @default(AVAILABLE)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  job        Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  interviews Interview[]
+
+  @@index([jobId])
+  @@index([status])
+  @@map("interview_slots")
+}
+
+// A booking linking one Application to one InterviewSlot at the time it was
+// made. Not @unique on applicationId/slotId — rescheduling creates a new
+// row rather than mutating the old one, so a cancelled interview's history
+// is preserved. At most one row per application should be SCHEDULED at a
+// time; that's enforced by application-status gating in
+// scheduling.service.js, not a DB constraint (the DB constraint that
+// matters — preventing two candidates booking the same slot — is the
+// AVAILABLE->BOOKED conditional update on InterviewSlot itself).
+model Interview {
+  id            String          @id @default(cuid())
+  applicationId String
+  slotId        String
+  status        InterviewStatus @default(SCHEDULED)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  application Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  slot        InterviewSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@index([slotId])
+  @@map("interviews")
+}
+
+// Audit trail for every notification email the app has attempted to send
+// (Section: status-change + interview confirmation emails). Kept even when
+// sending fails, so failures are visible/debuggable rather than silent —
+// see src/server/notifications/email/index.js.
+model EmailLog {
+  id             String      @id @default(cuid())
+  applicationId  String?
+  recipientEmail String
+  type           EmailType
+  subject        String
+  status         EmailStatus
+  errorMessage   String?
+  sentAt         DateTime    @default(now())
+
+  @@index([applicationId])
+  @@map("email_logs")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Phase 3 — NOT implemented yet.
+// Models intentionally omitted. When Phase 3 begins, add (without touching
+// the models above): InterviewQuestion, InterviewAnswer, InterviewReport,
+// CallLog — each referencing Interview/Application by id, following the
+// same cuid + createdAt/updatedAt conventions used here.
 // ─────────────────────────────────────────────────────────────

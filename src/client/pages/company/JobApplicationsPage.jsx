@@ -31,7 +31,7 @@ const EXPERIENCE_PRESETS = [
   { key: '3', label: '3+ yrs' },
 ];
 
-const STATUS_OPTIONS = ['APPLIED', 'SCREENING', 'SHORTLISTED', 'REJECTED'];
+const STATUS_OPTIONS = ['APPLIED', 'SCREENING', 'SHORTLISTED', 'REJECTED', 'INTERVIEW_SCHEDULED', 'INTERVIEW_COMPLETED'];
 
 const SORT_OPTIONS = [
   { key: 'score', label: 'AI Score' },
@@ -423,7 +423,13 @@ export default function JobApplicationsPage() {
                 options={STATUS_OPTIONS}
                 selected={filters.statuses}
                 onToggle={(v) => toggleMulti('statuses', v)}
-                formatLabel={(v) => v.charAt(0) + v.slice(1).toLowerCase()}
+                formatLabel={(v) =>
+                  v
+                    .toLowerCase()
+                    .split('_')
+                    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                    .join(' ')
+                }
               />
             </FilterGroup>
 

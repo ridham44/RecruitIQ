@@ -12,6 +12,7 @@ import CompanyJobNewPage from './pages/company/JobNewPage.jsx';
 import CompanyJobDetailPage from './pages/company/JobDetailPage.jsx';
 import CompanyJobApplicationsPage from './pages/company/JobApplicationsPage.jsx';
 import CompanyCandidateDetailPage from './pages/company/CandidateDetailPage.jsx';
+import CompanyJobInterviewsPage from './pages/company/JobInterviewsPage.jsx';
 
 import CandidateLayout from './layouts/CandidateLayout.jsx';
 import CandidateDashboardPage from './pages/candidate/DashboardPage.jsx';
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="jobs/new" element={<CompanyJobNewPage />} />
         <Route path="jobs/:id" element={<CompanyJobDetailPage />} />
         <Route path="jobs/:id/applications" element={<CompanyJobApplicationsPage />} />
+        <Route path="jobs/:id/interviews" element={<CompanyJobInterviewsPage />} />
         <Route path="jobs/:id/candidates/:candidateId" element={<CompanyCandidateDetailPage />} />
       </Route>
 

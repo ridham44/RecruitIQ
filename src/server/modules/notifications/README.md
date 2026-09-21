@@ -1,12 +1,20 @@
-# notifications (Phase 2 — not implemented)
+# notifications (Phase 2)
 
-Will handle emailing shortlisted candidates via Brevo (`BREVO_API_KEY`).
-Planned files, following the same pattern as other modules:
+Sends status-change and interview-confirmation emails. No routes/controller —
+there's no user-facing "notifications" endpoint; other modules (applications,
+screening, scheduling) call `email.service.js` directly when a candidate's
+`Application.status` changes or an interview is booked.
 
-- `notifications.routes.js` — mounted at `/api/v1/notifications`
-- `notifications.controller.js`
-- `notifications.service.js`
-- `brevo.client.js` — wraps the Brevo SDK/API, analogous to `src/server/ai/openrouter.service.js`
+- `email.service.js` — templates (shortlisted/rejected/interview confirmation)
+  and `EmailLog` persistence. Never throws: a broken email provider must
+  never fail the request that triggered the notification.
+- `drivers/` — the same seam pattern as `src/server/resume/storage/`:
+  `brevo.driver.js` sends via Brevo's transactional email REST API,
+  `console.driver.js` logs instead of sending (the fallback when
+  `BREVO_API_KEY` isn't set, so the app never crashes for lack of email
+  config), `drivers/index.js` picks one. Adding a second provider later
+  means adding a driver file — nothing in `email.service.js` changes.
 
-Will read `Application`/`Candidate` records but must not require changes to
-the Phase 1 schema — an `EmailLog` model will be added to track sends.
+Every send attempt (success or failure) is recorded in `EmailLog` for
+auditability, keyed loosely to `applicationId` (not a hard foreign key —
+audit rows should outlive the application they're about).

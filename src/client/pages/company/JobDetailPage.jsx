@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Pencil, Users, XCircle, Save, X } from 'lucide-react';
+import { Pencil, Users, Calendar, XCircle, Save, X } from 'lucide-react';
 import { jobsApi } from '../../services/jobs.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
@@ -166,6 +166,11 @@ export default function JobDetailPage() {
           <Link to={`/company/jobs/${id}/applications`}>
             <Button variant="secondary">
               <Users className="h-4 w-4" /> Applications
+            </Button>
+          </Link>
+          <Link to={`/company/jobs/${id}/interviews`}>
+            <Button variant="secondary">
+              <Calendar className="h-4 w-4" /> Interviews
             </Button>
           </Link>
           {job.status !== 'CLOSED' && (

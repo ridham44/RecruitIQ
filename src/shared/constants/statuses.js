@@ -12,17 +12,33 @@ export const EMPLOYMENT_TYPE = {
   FREELANCE: 'FREELANCE',
 };
 
-// Phase 1 statuses only. Future phases may append (e.g. INTERVIEW_SCHEDULED,
-// INTERVIEWED, OFFERED, HIRED) — never repurpose existing values.
+// Future phases may append further values (e.g. OFFERED, HIRED) — never
+// repurpose existing ones.
 export const APPLICATION_STATUS = {
   APPLIED: 'APPLIED',
   SCREENING: 'SCREENING',
   SHORTLISTED: 'SHORTLISTED',
   REJECTED: 'REJECTED',
+  // Phase 2
+  INTERVIEW_SCHEDULED: 'INTERVIEW_SCHEDULED',
+  INTERVIEW_COMPLETED: 'INTERVIEW_COMPLETED',
 };
 
 export const SCREENING_STATUS = {
   PENDING: 'PENDING',
   COMPLETED: 'COMPLETED',
   FAILED: 'FAILED',
+};
+
+// Phase 2
+export const INTERVIEW_SLOT_STATUS = {
+  AVAILABLE: 'AVAILABLE',
+  BOOKED: 'BOOKED',
+  CANCELLED: 'CANCELLED',
+};
+
+export const INTERVIEW_STATUS = {
+  SCHEDULED: 'SCHEDULED',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
 };

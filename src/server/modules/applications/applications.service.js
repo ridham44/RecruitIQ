@@ -2,6 +2,7 @@ import { prisma } from '../../config/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { APPLICATION_STATUS, JOB_STATUS } from '../../../shared/constants/statuses.js';
 import { getOwnedJob } from '../jobs/jobs.service.js';
+import { sendApplicationStatusEmail } from '../notifications/email.service.js';
 
 async function getCandidateIdForUser(userId) {
   const candidate = await prisma.candidate.findUnique({ where: { userId } });
@@ -66,7 +67,9 @@ export async function listApplicationsForJob(userId, jobId) {
 // Bulk manual Shortlist/Reject action (scoped to a single job so an
 // applicationId from a different company's job can never be touched — the
 // `jobId` filter combined with getOwnedJob's ownership check is what
-// enforces that, not just the id list itself).
+// enforces that, not just the id list itself). Sends a status-change email
+// to every affected candidate (Section: Phase 2 candidate flow) — a failed
+// send never fails this request, see email.service.js.
 export async function bulkUpdateApplicationStatus(userId, jobId, { applicationIds, status }) {
   await getOwnedJob(userId, jobId);
 
@@ -74,6 +77,12 @@ export async function bulkUpdateApplicationStatus(userId, jobId, { applicationId
     where: { id: { in: applicationIds }, jobId },
     data: { status },
   });
+
+  const updatedApplications = await prisma.application.findMany({
+    where: { id: { in: applicationIds }, jobId, status },
+    include: { candidate: { include: { user: true } }, job: { include: { company: true } } },
+  });
+  await Promise.all(updatedApplications.map(sendApplicationStatusEmail));
 
   return { updatedCount: result.count };
 }

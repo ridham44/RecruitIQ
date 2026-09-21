@@ -58,8 +58,14 @@ export const env = {
   // ever saw it.
   maxResumeSizeMb: Number(process.env.MAX_RESUME_SIZE_MB || 4),
 
-  // Phase 2 / Phase 3 — read for forward-compat, unused in Phase 1.
+  // Phase 2 — email notifications (src/server/notifications/email). Not
+  // required: the email driver falls back to logging instead of sending
+  // when BREVO_API_KEY is unset, so nothing crashes without it configured.
   brevoApiKey: process.env.BREVO_API_KEY || '',
+  brevoFromEmail: process.env.BREVO_FROM_EMAIL || '',
+  brevoFromName: process.env.BREVO_FROM_NAME || 'RecruitIQ',
+
+  // Phase 3 — read for forward-compat, unused in Phase 1/2.
   liveKit: {
     url: process.env.LIVEKIT_URL || '',
     apiKey: process.env.LIVEKIT_API_KEY || '',
