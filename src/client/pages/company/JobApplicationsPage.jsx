@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { Sparkles, Eye, Users, SlidersHorizontal, X, Save, RefreshCw, ArrowLeft, CalendarCheck, XCircle } from 'lucide-react';
+import { Sparkles, Eye, Users, SlidersHorizontal, X, Save, RefreshCw, ArrowLeft, CalendarCheck, XCircle, UserCheck } from 'lucide-react';
 import { screeningApi } from '../../services/screening.js';
 import { jobsApi } from '../../services/jobs.js';
 import { applicationsApi } from '../../services/applications.js';
@@ -159,6 +159,14 @@ export default function JobApplicationsPage() {
     [applications]
   );
 
+  const screenedNotShortlistedIds = useMemo(
+    () =>
+      (applications || [])
+        .filter((a) => a.screeningResult?.status === 'COMPLETED' && !['SHORTLISTED', 'REJECTED', 'INTERVIEW_SCHEDULED', 'INTERVIEW_COMPLETED'].includes(a.status))
+        .map((a) => a.id),
+    [applications]
+  );
+
   const skillOptions = useMemo(
     () => Array.from(new Set([...(job?.requiredSkills || []), ...(job?.preferredSkills || [])])),
     [job]
@@ -203,6 +211,20 @@ export default function JobApplicationsPage() {
       setError(err.message);
     } finally {
       setRerunning(false);
+    }
+  };
+
+  const handleShortlistAllScreened = async () => {
+    if (screenedNotShortlistedIds.length === 0) return;
+    setBulkLoading(true);
+    setError('');
+    try {
+      await applicationsApi.bulkUpdateStatus(jobId, screenedNotShortlistedIds, 'SHORTLISTED');
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBulkLoading(false);
     }
   };
 
@@ -299,7 +321,7 @@ export default function JobApplicationsPage() {
             {applications.length} total · {pendingCount} pending screening
           </p>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="flex flex-col gap-2 sm:flex-row flex-wrap">
           <Button onClick={handleRunScreening} loading={running} disabled={pendingCount === 0} className="w-full sm:w-auto">
             <Sparkles className="h-4 w-4" />
             {pendingCount === 0 ? 'All screened' : `Run AI Screening (${pendingCount})`}
@@ -309,6 +331,9 @@ export default function JobApplicationsPage() {
               <RefreshCw className="h-4 w-4" /> Re-run Screening ({rerunnableCount})
             </Button>
           )}
+          <Button variant="secondary" onClick={handleShortlistAllScreened} disabled={screenedNotShortlistedIds.length === 0} loading={bulkLoading} className="w-full sm:w-auto">
+            <UserCheck className="h-4 w-4" /> Shortlist All Screened
+          </Button>
           <Link to={`/company/jobs/${jobId}/interviews`} className="w-full sm:w-auto">
             <Button variant="secondary" className="w-full sm:w-auto">
               <CalendarCheck className="h-4 w-4" /> Interview Scheduling
