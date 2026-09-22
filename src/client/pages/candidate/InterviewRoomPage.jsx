@@ -57,9 +57,13 @@ function logEventSafely(interviewId, type, metadata) {
 // what keeps the mic from ever picking up the AI's own voice. `voice` is the
 // company-configured voice, best-effort matched from the browser's
 // available speechSynthesis voices (Section 8) — omitted silently if none.
-function speak(text, voice) {
+// `isEndedRef` is passed in so a speak() call that was already queued
+// before cleanup runs returns immediately rather than starting a new
+// utterance after the interview has ended.
+function speak(text, voice, isEndedRef) {
   return new Promise((resolve) => {
     if (!window.speechSynthesis || !text) return resolve();
+    if (isEndedRef?.current) return resolve();
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     if (voice) utterance.voice = voice;
@@ -78,6 +82,10 @@ export default function InterviewRoomPage() {
   const transcriptRef = useRef(''); // effective (corrected ?? raw) — what actually gets submitted
   const rawTranscriptRef = useRef(''); // always the unedited STT output
   const manuallyCorrectedRef = useRef(false);
+  // Set to true the moment cleanup starts so every in-flight async path
+  // (speak, askQuestion, handleSend) can bail out immediately rather than
+  // racing to play audio or re-enable UI after the interview has ended.
+  const isEndedRef = useRef(false);
 
   const [phase, setPhase] = useState('preview'); // preview | connecting | live | ended | error
   const [error, setError] = useState('');
@@ -175,16 +183,51 @@ export default function InterviewRoomPage() {
   }, []);
 
   const cleanupAll = useCallback(() => {
+    // Mark as ended immediately so any in-flight async path (speak,
+    // askQuestion, handleSend) sees the flag before it does any more work.
+    isEndedRef.current = true;
+
+    // Stop speech synthesis first — must happen before stopRecording so
+    // the mic isn't still open while the browser is mid-utterance.
     window.speechSynthesis?.cancel();
+
+    // Stop STT recording.
     stopRecording();
-    roomRef.current?.disconnect();
+
+    // Unpublish camera and mic tracks explicitly before disconnecting.
+    // Calling disconnect() without first disabling tracks can leave the
+    // browser holding a live MediaStreamTrack that the room hasn't cleanly
+    // unpublished, which is the primary source of the post-end echo.
+    const room = roomRef.current;
+    if (room) {
+      // Fire-and-forget the async unpublish — we still null roomRef
+      // synchronously so no further code can use the room, and we let
+      // the SDK finish the teardown in the background.
+      Promise.resolve()
+        .then(() => room.localParticipant?.setCameraEnabled(false))
+        .catch(() => {})
+        .then(() => room.localParticipant?.setMicrophoneEnabled(false))
+        .catch(() => {})
+        .then(() => room.disconnect())
+        .catch(() => {});
+    }
     roomRef.current = null;
+
+    // Clear the video element's srcObject so the browser releases its
+    // reference to the MediaStream and the camera indicator light turns off.
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
   }, [stopRecording]);
 
   useEffect(() => cleanupAll, [cleanupAll]);
 
   const askQuestion = useCallback(
     async (nextStage, nextQuestion, progress) => {
+      // If the interview ended while we were waiting for a network response
+      // (e.g. the user clicked End while submitAnswer was in flight), don't
+      // update UI state or speak — just bail out silently.
+      if (isEndedRef.current) return;
       setStage(nextStage);
       setQuestion(nextQuestion);
       setFinalTranscript('');
@@ -198,13 +241,19 @@ export default function InterviewRoomPage() {
       if (!nextQuestion) return;
       setAiSpeaking(true);
       const voice = pickVoiceForGender(voices, voiceGender);
-      await speak(nextQuestion.text, voice);
+      await speak(nextQuestion.text, voice, isEndedRef);
+      // Guard again after the await — cleanupAll may have run while the
+      // utterance was playing.
+      if (isEndedRef.current) return;
       setAiSpeaking(false);
     },
     [voices, voiceGender]
   );
 
   const handleJoin = async () => {
+    // Reset the ended flag so a retry after an error (same component
+    // instance, phase reset to 'preview') doesn't inherit a stale flag.
+    isEndedRef.current = false;
     setPhase('connecting');
     setError('');
     try {
@@ -329,6 +378,9 @@ export default function InterviewRoomPage() {
           durationSeconds,
           timedOut,
         });
+        // Guard: if the user clicked "End Interview" while submitAnswer was
+        // in flight, cleanupAll has already run — don't try to advance UI.
+        if (isEndedRef.current) return;
         if (result.done) {
           cleanupAll();
           setPhase('ended');
@@ -339,7 +391,7 @@ export default function InterviewRoomPage() {
           });
         }
       } catch (err) {
-        setError(err.message);
+        if (!isEndedRef.current) setError(err.message);
       } finally {
         setSending(false);
       }

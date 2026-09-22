@@ -57,9 +57,11 @@ export async function startInterviewSession(interviewId) {
     await room.localParticipant.publishTrack(agentTrack, new TrackPublishOptions({ source: TrackSource.SOURCE_MICROPHONE }));
 
     const speak = async (text) => {
-      if (!text) return;
+      if (ended || !text) return;
       const pcm = await synthesizeSpeech(text, ttsVoiceId);
-      await playPcmBuffer(audioSource, pcm);
+      // Pass a shouldStop callback so playPcmBuffer can break mid-buffer if
+      // the interview ends while TTS audio is being streamed into the room.
+      await playPcmBuffer(audioSource, pcm, () => ended);
     };
 
     const armQuestionTimer = (question) => {
@@ -79,13 +81,19 @@ export async function startInterviewSession(interviewId) {
       clearQuestionTimer();
       try {
         const result = await backendClient.submitAnswer(interviewId, { questionId, transcript, timedOut });
+        // Re-check ended after the network round-trip — cleanup() may have
+        // fired while submitAnswer was awaiting a response.
+        if (ended) return;
         if (result.done) {
           await speak("That's the end of the interview. Thank you for your time — the team will follow up on next steps.");
-          await cleanup();
+          // Don't call cleanup() if speak() was interrupted — cleanup already ran.
+          if (!ended) await cleanup();
           return;
         }
         currentQuestion = result.question;
         await speak(currentQuestion.text);
+        // Re-check after speaking — cleanup() may have fired mid-utterance.
+        if (ended) return;
         armQuestionTimer(currentQuestion);
       } catch (err) {
         console.error(`[session ${interviewId}] failed to advance interview:`, err.message);
@@ -116,11 +124,12 @@ export async function startInterviewSession(interviewId) {
 
       // Candidate's track just subscribed — safe to start the interview now.
       const { state } = await backendClient.getContext(interviewId);
+      if (ended) return;
       currentQuestion = state.question;
       ttsVoiceId = state.ttsVoiceId || null;
       if (currentQuestion) {
         await speak(currentQuestion.text);
-        armQuestionTimer(currentQuestion);
+        if (!ended) armQuestionTimer(currentQuestion);
       }
     });
 
@@ -133,6 +142,7 @@ export async function startInterviewSession(interviewId) {
     console.error(`[session ${interviewId}] failed to start:`, err.message);
     await cleanup();
   }
+
 }
 
 export function isSessionActive(interviewId) {
