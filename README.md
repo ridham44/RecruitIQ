@@ -2,19 +2,20 @@
 
 An AI-powered recruitment platform. Companies post jobs, candidates apply with a resume, and an AI
 pipeline parses resumes, extracts structured job requirements, and scores/ranks candidates against each
-job. Once shortlisted, candidates are emailed and book their own interview from company-published slots
-— including a fully automated AI voice interview conducted inside the app over LiveKit.
+job. Applicants can book their own interview from company-published slots immediately after applying (or
+wait to be shortlisted and notified) — including a fully automated AI voice interview conducted inside
+the app over LiveKit.
 
 ## What it does
 
 **Company:** register → post a job (AI extracts structured requirements from the description) → review
 applicants → run AI screening → filter/sort candidates by score, experience, skills, education, status →
-shortlist or reject (in bulk) → candidates are emailed automatically → publish interview slots → see
-bookings and mark interviews complete.
+shortlist (including a single-click "Shortlist All Screened") or reject (in bulk) → candidates are
+emailed automatically → publish interview slots → see bookings and mark interviews complete.
 
 **Candidate:** register → build a profile (resume upload auto-fills academic fields, reviewed before
-saving) → browse jobs → apply with a resume → track application status → once shortlisted, get an email,
-pick an interview slot, reschedule if needed.
+saving) → browse jobs → apply with a resume → track application status → immediately pick an available
+interview slot (or wait to be shortlisted and notified), reschedule if needed.
 
 **Screening engine:** deterministic checks (skill overlap, experience range, education match) blended
 with an LLM's semantic read of the resume — the LLM is never the sole source of truth, and gender/name/
@@ -108,11 +109,11 @@ No Google Calendar / Twilio / LiveKit yet — RecruitIQ is its own scheduler for
   logged to `EmailLog`.
 - A company creates `InterviewSlot`s for a job — one at a time, or via **Create AI Interview Slots**
   (a time range + interview duration + optional buffer, e.g. 10:00–13:00 at 15 minutes → 12 slots
-  generated automatically, skipping any that would overlap existing ones). A shortlisted candidate books
-  one; booking is an atomic conditional update (`AVAILABLE` → `BOOKED`), so two candidates racing for the
-  same slot can't both win it — the loser gets a clean `409`, not a crash. Booking moves the application
-  to `INTERVIEW_SCHEDULED`, links the slot to the candidate's `Interview` record, and emails a
-  confirmation.
+  generated automatically, skipping any that would overlap existing ones). Any active applicant
+  (`APPLIED`, `SCREENING`, or `SHORTLISTED`) books one; booking is an atomic conditional update
+  (`AVAILABLE` → `BOOKED`), so two candidates racing for the same slot can't both win it — the loser
+  gets a clean `409`, not a crash. Booking moves the application to `INTERVIEW_SCHEDULED`, links the
+  slot to the candidate's `Interview` record, and emails a confirmation.
 - Either side cancelling frees the slot back to `AVAILABLE` and reverts the application to `SHORTLISTED`
   — that's the candidate's "Reschedule". The company marks a completed interview `INTERVIEW_COMPLETED`.
 
