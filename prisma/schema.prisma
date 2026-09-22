@@ -14,7 +14,7 @@ datasource db {
   // your provider's pooled URL can't run migrations (common with
   // PgBouncer-style poolers), run `prisma migrate deploy` locally/in CI
   // against the direct (non-pooled) URL instead — see README.
-  url = env("DATABASE_URL")
+  url      = env("DATABASE_URL")
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -146,6 +146,30 @@ enum InterviewReportStatus {
   FAILED
 }
 
+// Adaptive-difficulty axis for a planned question (Section 5). Null for
+// INTRODUCTION, CANDIDATE_QUESTION, and CUSTOM-type questions, which aren't
+// part of the difficulty ladder.
+enum InterviewQuestionDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+// Company-configured AI interviewer voice (Section 8) — explicit, never
+// inferred from the AI's name.
+enum AiVoiceGender {
+  FEMALE
+  MALE
+  NEUTRAL
+}
+
+// Whether question difficulty adapts to the candidate's answers, or stays
+// fixed at MEDIUM throughout (Section 5).
+enum DifficultyStrategy {
+  FIXED
+  ADAPTIVE
+}
+
 enum EmailType {
   APPLICATION_SHORTLISTED
   APPLICATION_REJECTED
@@ -261,14 +285,14 @@ model Job {
   minAcceptableScore      Float   @default(75)
   autoRejectBelowMinScore Boolean @default(false)
 
-  createdBy              String
-  createdAt              DateTime       @default(now())
-  updatedAt              DateTime       @updatedAt
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  applications       Application[]
-  interviewSlots     InterviewSlot[]
-  aiInterviewConfig  AiInterviewConfig?
+  company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  applications      Application[]
+  interviewSlots    InterviewSlot[]
+  aiInterviewConfig AiInterviewConfig?
 
   @@index([companyId])
   @@index([status])
@@ -343,26 +367,26 @@ model Application {
 }
 
 model ScreeningResult {
-  id                    String          @id @default(cuid())
-  applicationId         String          @unique
-  status                ScreeningStatus @default(PENDING)
-  overallScore          Float?
-  skillMatchScore       Float?
-  experienceMatchScore  Float?
-  educationMatchScore   Float?
-  matchedSkills         String[]        @default([])
-  missingSkills         String[]        @default([])
-  strengths             String[]        @default([])
-  concerns              String[]        @default([])
-  reasoning             String?
+  id                   String          @id @default(cuid())
+  applicationId        String          @unique
+  status               ScreeningStatus @default(PENDING)
+  overallScore         Float?
+  skillMatchScore      Float?
+  experienceMatchScore Float?
+  educationMatchScore  Float?
+  matchedSkills        String[]        @default([])
+  missingSkills        String[]        @default([])
+  strengths            String[]        @default([])
+  concerns             String[]        @default([])
+  reasoning            String?
   // Deterministic sub-checks computed outside the LLM (Section 13), kept for
   // transparency/auditability alongside the AI-derived scores.
-  deterministicChecks   Json?
-  aiModel               String?
-  errorMessage          String?
-  screenedAt            DateTime?
-  createdAt             DateTime        @default(now())
-  updatedAt             DateTime        @updatedAt
+  deterministicChecks  Json?
+  aiModel              String?
+  errorMessage         String?
+  screenedAt           DateTime?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
 
   application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
@@ -421,11 +445,11 @@ model Interview {
   // Phase 3 — AI voice interview session state. Company/Job/Candidate are
   // reached via application (Application -> Job -> Company,
   // Application -> Candidate), not duplicated here.
-  stage               InterviewStage @default(NOT_STARTED)
-  liveKitRoomName     String?
-  plannedQuestionIndex Int           @default(0)
-  startedAt           DateTime?
-  endedAt             DateTime?
+  stage                InterviewStage @default(NOT_STARTED)
+  liveKitRoomName      String?
+  plannedQuestionIndex Int            @default(0)
+  startedAt            DateTime?
+  endedAt              DateTime?
 
   application Application         @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   slot        InterviewSlot       @relation(fields: [slotId], references: [id], onDelete: Cascade)
@@ -444,15 +468,20 @@ model Interview {
 // interviewConfig.service.js) when a company hasn't configured one yet, so
 // AI slot generation/booking never depends on this existing first.
 model AiInterviewConfig {
-  id                String   @id @default(cuid())
-  jobId             String   @unique
-  aiName            String   @default("Priya")
-  aiTitle           String   @default("Virtual HR")
-  questionCount     Int      @default(10)
-  answerTimeSeconds Int      @default(30)
-  customQuestions   String[] @default([])
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id                 String             @id @default(cuid())
+  jobId              String             @unique
+  aiName             String             @default("Priya")
+  aiTitle            String             @default("Virtual HR")
+  questionCount      Int                @default(10)
+  answerTimeSeconds  Int                @default(30)
+  customQuestions    String[]           @default([])
+  // Section 8: explicit voice config, never inferred from aiName.
+  voiceGender        AiVoiceGender      @default(FEMALE)
+  ttsVoiceId         String?
+  // Section 5: adaptive by default; FIXED keeps every question at MEDIUM.
+  difficultyStrategy DifficultyStrategy @default(ADAPTIVE)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
   job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
@@ -465,7 +494,7 @@ model AiInterviewConfig {
 // against AiInterviewConfig.questionCount to decide when the interview is
 // done, kept separate from the LLM's own judgement (Section 8).
 model InterviewQuestion {
-  id                     String                @id @default(cuid())
+  id                     String                       @id @default(cuid())
   interviewId            String
   index                  Int
   stage                  InterviewStage
@@ -473,7 +502,10 @@ model InterviewQuestion {
   text                   String
   parentQuestionId       String?
   answerTimeLimitSeconds Int
-  askedAt                DateTime              @default(now())
+  // Section 5: null for INTRODUCTION/CANDIDATE_QUESTION/CUSTOM questions,
+  // which aren't part of the adaptive-difficulty ladder.
+  difficulty             InterviewQuestionDifficulty?
+  askedAt                DateTime                     @default(now())
 
   interview      Interview           @relation(fields: [interviewId], references: [id], onDelete: Cascade)
   parentQuestion InterviewQuestion?  @relation("FollowUps", fields: [parentQuestionId], references: [id])
@@ -485,16 +517,26 @@ model InterviewQuestion {
 }
 
 model InterviewAnswer {
-  id              String   @id @default(cuid())
-  questionId      String   @unique
-  transcript      String
-  durationSeconds Int?
-  timedOut        Boolean  @default(false)
+  id                   String   @id @default(cuid())
+  questionId           String   @unique
+  // Raw STT output, unmodified — kept for back-compat and as the input to
+  // normalization; always equal to rawTranscript going forward.
+  transcript           String
+  // Section 2: normalization pipeline (STT -> raw -> normalized -> eval).
+  rawTranscript        String   @default("")
+  normalizedTranscript String   @default("")
+  manuallyCorrected    Boolean  @default(false)
+  correctedTranscript  String?
+  // 0-1 confidence from the browser's SpeechRecognition result, when the
+  // browser provides one (not all do) — informational only, never blocks.
+  sttConfidence        Float?
+  durationSeconds      Int?
+  timedOut             Boolean  @default(false)
   // Lightweight in-the-moment evaluation used only to decide the next
   // question/follow-up (Section 8) — the deep, final evaluation lives on
   // InterviewReport instead, generated once after the interview ends.
-  evaluation      Json?
-  answeredAt      DateTime @default(now())
+  evaluation           Json?
+  answeredAt           DateTime @default(now())
 
   question InterviewQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
@@ -522,22 +564,22 @@ model InterviewEvent {
 // ScreeningResult's pattern of never trusting the LLM as the sole source of
 // truth for facts that can be computed directly.
 model InterviewReport {
-  id                  String                 @id @default(cuid())
-  interviewId         String                 @unique
-  status              InterviewReportStatus  @default(PENDING)
+  id                  String                @id @default(cuid())
+  interviewId         String                @unique
+  status              InterviewReportStatus @default(PENDING)
   overallScore        Float?
   technicalScore      Float?
   communicationScore  Float?
-  strengths           String[]               @default([])
-  areasForImprovement String[]               @default([])
+  strengths           String[]              @default([])
+  areasForImprovement String[]              @default([])
   questionAnalysis    Json?
   resumeAlignment     Json?
   reasoning           String?
   aiModel             String?
   errorMessage        String?
   generatedAt         DateTime?
-  createdAt           DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
 
   interview Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
 

@@ -59,8 +59,11 @@ export async function openSttSession({ onFinalTranscript, onUtteranceEnd }) {
 // sentences (a full question) at a time, not incremental speech, so the
 // simpler request/response endpoint is a better fit and has far less to
 // get wrong than framing a WebSocket stream.
-export async function synthesizeSpeech(text) {
-  const model = process.env.DEEPGRAM_TTS_MODEL || 'aura-2-thalia-en';
+// `voiceId` is the backend-resolved Deepgram Aura voice for this interview's
+// configured aiInterviewConfig.voiceGender (Section 8); falls back to the
+// worker's own env default when the backend doesn't provide one.
+export async function synthesizeSpeech(text, voiceId) {
+  const model = voiceId || process.env.DEEPGRAM_TTS_MODEL || 'aura-2-thalia-en';
   const res = await fetch(`https://api.deepgram.com/v1/speak?model=${model}&encoding=linear16&sample_rate=${SAMPLE_RATE}`, {
     method: 'POST',
     headers: {

@@ -3,6 +3,7 @@ import { ApiError } from '../../utils/ApiError.js';
 import { APPLICATION_STATUS, JOB_STATUS } from '../../../shared/constants/statuses.js';
 import { getOwnedJob } from '../jobs/jobs.service.js';
 import { sendApplicationStatusEmail } from '../notifications/email.service.js';
+import { getEffectiveConfig } from '../interviews/interviewConfig.service.js';
 
 async function getCandidateIdForUser(userId) {
   const candidate = await prisma.candidate.findUnique({ where: { userId } });
@@ -43,6 +44,10 @@ export async function listMyApplications(userId) {
   });
 }
 
+// Candidate-facing AI interviewer persona (Section 4: "AI Interview —
+// Priya, Virtual HR") — a subset of the company's AiInterviewConfig safe to
+// show before any interview exists, so the candidate knows who they're
+// scheduling with before picking a slot.
 export async function getMyApplicationById(userId, applicationId) {
   const candidateId = await getCandidateIdForUser(userId);
   const application = await prisma.application.findUnique({
@@ -52,7 +57,8 @@ export async function getMyApplicationById(userId, applicationId) {
   if (!application || application.candidateId !== candidateId) {
     throw ApiError.notFound('Application not found');
   }
-  return application;
+  const { aiName, aiTitle } = await getEffectiveConfig(application.jobId);
+  return { ...application, aiInterviewConfig: { aiName, aiTitle } };
 }
 
 export async function listApplicationsForJob(userId, jobId) {
@@ -85,6 +91,36 @@ export async function bulkUpdateApplicationStatus(userId, jobId, { applicationId
   await Promise.all(updatedApplications.map(sendApplicationStatusEmail));
 
   return { updatedCount: result.count };
+}
+
+async function fetchOwnedApplication(userId, applicationId) {
+  const application = await prisma.application.findUnique({
+    where: { id: applicationId },
+    include: { candidate: { include: { user: true } }, job: { include: { company: true } } },
+  });
+  if (!application) throw ApiError.notFound('Application not found');
+  await getOwnedJob(userId, application.jobId); // authorization: company must own the job
+  return application;
+}
+
+// Single-candidate reject action (per-row "Reject" button). Kept separate
+// from bulkUpdateApplicationStatus so a direct API call can be rejected
+// with a real 409 instead of silently no-op'ing like updateMany would.
+export async function rejectApplication(userId, applicationId) {
+  const application = await fetchOwnedApplication(userId, applicationId);
+
+  if (application.status === APPLICATION_STATUS.REJECTED) {
+    throw ApiError.conflict('This application has already been rejected', 'ALREADY_REJECTED');
+  }
+
+  const updated = await prisma.application.update({
+    where: { id: applicationId },
+    data: { status: APPLICATION_STATUS.REJECTED },
+  });
+
+  await sendApplicationStatusEmail({ ...application, status: APPLICATION_STATUS.REJECTED });
+
+  return updated;
 }
 
 // Combined candidate detail for a company reviewing one applicant against a

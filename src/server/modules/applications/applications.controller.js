@@ -35,3 +35,8 @@ export const bulkUpdateStatus = asyncHandler(async (req, res) => {
   const result = await applicationsService.bulkUpdateApplicationStatus(req.user.id, req.params.jobId, req.body);
   ok(res, result);
 });
+
+export const reject = asyncHandler(async (req, res) => {
+  const application = await applicationsService.rejectApplication(req.user.id, req.params.applicationId);
+  ok(res, { application });
+});

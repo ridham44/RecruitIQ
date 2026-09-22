@@ -25,6 +25,7 @@ export async function startInterviewSession(interviewId) {
   let timeoutTimer = null;
   let sttSession = null;
   let ended = false;
+  let ttsVoiceId = null;
 
   const clearQuestionTimer = () => {
     if (timeoutTimer) clearTimeout(timeoutTimer);
@@ -57,7 +58,7 @@ export async function startInterviewSession(interviewId) {
 
     const speak = async (text) => {
       if (!text) return;
-      const pcm = await synthesizeSpeech(text);
+      const pcm = await synthesizeSpeech(text, ttsVoiceId);
       await playPcmBuffer(audioSource, pcm);
     };
 
@@ -116,6 +117,7 @@ export async function startInterviewSession(interviewId) {
       // Candidate's track just subscribed — safe to start the interview now.
       const { state } = await backendClient.getContext(interviewId);
       currentQuestion = state.question;
+      ttsVoiceId = state.ttsVoiceId || null;
       if (currentQuestion) {
         await speak(currentQuestion.text);
         armQuestionTimer(currentQuestion);

@@ -8,6 +8,15 @@ export const upsertInterviewConfigSchema = z.object({
   questionCount: z.coerce.number().int().min(3).max(30).default(10),
   answerTimeSeconds: z.coerce.number().int().min(10).max(300).default(30),
   customQuestions: z.array(z.string().min(1).max(500)).max(20).default([]),
+  // Section 8: explicit voice config, never inferred from aiName.
+  voiceGender: z.enum(['FEMALE', 'MALE', 'NEUTRAL']).default('FEMALE'),
+  // Nullable (not just optional): the API itself returns `ttsVoiceId: null`
+  // when unset, so a client that reads the config and writes it straight
+  // back (e.g. the company's save form, or any round-trip) must be able to
+  // send that same null through, not just omit the field entirely.
+  ttsVoiceId: z.string().max(100).nullable().optional(),
+  // Section 5: adaptive by default; FIXED holds every question at MEDIUM.
+  difficultyStrategy: z.enum(['FIXED', 'ADAPTIVE']).default('ADAPTIVE'),
 });
 
 // Browser -> backend: a security/monitoring event observed during the
@@ -23,7 +32,13 @@ export const logInterviewEventSchema = z.object({
 // the legacy livekit-worker route.
 export const submitAnswerSchema = z.object({
   questionId: z.string().min(1),
+  // Legacy/fallback raw-text field — the livekit-worker route only ever
+  // sends this. The browser sends both this and rawTranscript (Section 2).
   transcript: z.string().default(''),
+  rawTranscript: z.string().optional(),
+  correctedTranscript: z.string().max(6000).optional(),
+  manuallyCorrected: z.boolean().default(false),
+  sttConfidence: z.coerce.number().min(0).max(1).optional(),
   durationSeconds: z.coerce.number().min(0).optional(),
   timedOut: z.boolean().default(false),
 });

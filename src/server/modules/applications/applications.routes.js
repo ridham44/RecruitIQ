@@ -23,5 +23,6 @@ router.patch(
   validate(bulkUpdateApplicationStatusSchema),
   applicationsController.bulkUpdateStatus
 );
+router.patch('/:applicationId/reject', authorize(ROLES.COMPANY), applicationsController.reject);
 
 export default router;

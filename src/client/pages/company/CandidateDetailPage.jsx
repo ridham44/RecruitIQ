@@ -1,21 +1,23 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Sparkles, Mail, Phone, MapPin, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, MapPin, ThumbsUp, ThumbsDown, XCircle } from 'lucide-react';
 import { applicationsApi } from '../../services/applications.js';
-import { screeningApi } from '../../services/screening.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import LoadingState from '../../components/ui/LoadingState.jsx';
 import ErrorState from '../../components/ui/ErrorState.jsx';
 import StatusBadge from '../../components/ui/StatusBadge.jsx';
 import ScoreRing from '../../components/ui/ScoreRing.jsx';
+import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
+import { getApplicationActionState } from '../../utils/applicationActions.js';
 
 export default function CandidateDetailPage() {
   const { id: jobId, candidateId } = useParams();
   const navigate = useNavigate();
   const [application, setApplication] = useState(null);
   const [error, setError] = useState('');
-  const [running, setRunning] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [confirmReject, setConfirmReject] = useState(false);
 
   const load = () => {
     setError('');
@@ -27,21 +29,25 @@ export default function CandidateDetailPage() {
 
   useEffect(load, [jobId, candidateId]);
 
-  const handleRunScreening = async () => {
-    setRunning(true);
+  const handleReject = async () => {
+    setRejecting(true);
     setError('');
     try {
-      await screeningApi.runForApplication(application.id);
+      await applicationsApi.reject(application.id);
+      setConfirmReject(false);
       load();
     } catch (err) {
       setError(err.message);
+      setConfirmReject(false);
     } finally {
-      setRunning(false);
+      setRejecting(false);
     }
   };
 
   if (error && !application) return <ErrorState message={error} onRetry={load} />;
   if (!application) return <LoadingState />;
+
+  const actions = getApplicationActionState(application);
 
   const { candidate, resume, screeningResult: result } = application;
   const parsed = resume?.parsedData;
@@ -74,11 +80,17 @@ export default function CandidateDetailPage() {
             )}
           </div>
         </div>
-        {result?.status !== 'COMPLETED' && (
-          <Button onClick={handleRunScreening} loading={running} className="w-full sm:w-auto">
-            <Sparkles className="h-4 w-4" /> Run AI Screening
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button
+            variant="danger"
+            disabled={actions.reject.disabled}
+            title={actions.reject.title}
+            onClick={() => setConfirmReject(true)}
+            className="w-full sm:w-auto"
+          >
+            <XCircle className="h-4 w-4" /> {actions.reject.label}
           </Button>
-        )}
+        </div>
       </div>
 
       {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
@@ -218,6 +230,16 @@ export default function CandidateDetailPage() {
           {resume?.rawText || 'No resume text available'}
         </pre>
       </Card>
+
+      <ConfirmDialog
+        open={confirmReject}
+        title="Reject this candidate?"
+        description="This marks the application as rejected and notifies the candidate. This cannot be undone."
+        confirmLabel="Reject"
+        onConfirm={handleReject}
+        onCancel={() => setConfirmReject(false)}
+        loading={rejecting}
+      />
     </div>
   );
 }

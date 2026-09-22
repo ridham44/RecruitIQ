@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { Plus, Calendar, Trash2, CheckCircle2, Sparkles, X, Bot, Eye, Save } from 'lucide-react';
+import { Link, useParams, useNavigate } from 'react-router-dom';
+import { Plus, Calendar, Trash2, CheckCircle2, Sparkles, X, Bot, Eye, Save, ArrowLeft } from 'lucide-react';
 import { schedulingApi } from '../../services/scheduling.js';
 import { jobsApi } from '../../services/jobs.js';
 import { interviewsApi } from '../../services/interviews.js';
@@ -14,6 +14,7 @@ import StatusBadge from '../../components/ui/StatusBadge.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 
 const GENERATE_DEFAULTS = { date: '', startTime: '', endTime: '', durationMinutes: 15, bufferMinutes: 0 };
+const VOICE_LABELS = { FEMALE: 'Female', MALE: 'Male', NEUTRAL: 'Neutral' };
 
 // A custom question is a full sentence, not a short tag — a dedicated
 // add/remove list reads better here than the chip-style TagInput used for
@@ -73,8 +74,21 @@ function formatTime(iso) {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
+// The form only has one date field shared by both start and end time, so
+// typing an end time that reads as "until midnight" (00:00) — or any other
+// overnight range — is naturally earlier than the start time on that same
+// calendar date. Roll the end time onto the next day whenever that happens,
+// rather than making the user split it across two range submissions.
+function resolveTimeRange(date, startTime, endTime) {
+  const start = new Date(`${date}T${startTime}`);
+  let end = new Date(`${date}T${endTime}`);
+  if (end <= start) end = new Date(end.getTime() + 24 * 60 * 60 * 1000);
+  return { start, end };
+}
+
 export default function JobInterviewsPage() {
   const { id: jobId } = useParams();
+  const navigate = useNavigate();
   const [job, setJob] = useState(null);
   const [slots, setSlots] = useState(null);
   const [error, setError] = useState('');
@@ -107,6 +121,7 @@ export default function JobInterviewsPage() {
           questionCount: configRes.config.questionCount,
           answerTimeSeconds: configRes.config.answerTimeSeconds,
           customQuestions: configRes.config.customQuestions,
+          voiceGender: configRes.config.voiceGender || 'FEMALE',
         });
       })
       .catch((err) => setError(err.message));
@@ -139,9 +154,8 @@ export default function JobInterviewsPage() {
     setCreating(true);
     setError('');
     try {
-      const startTime = new Date(`${form.date}T${form.startTime}`).toISOString();
-      const endTime = new Date(`${form.date}T${form.endTime}`).toISOString();
-      await schedulingApi.createSlots(jobId, [{ startTime, endTime }]);
+      const { start, end } = resolveTimeRange(form.date, form.startTime, form.endTime);
+      await schedulingApi.createSlots(jobId, [{ startTime: start.toISOString(), endTime: end.toISOString() }]);
       setForm({ date: '', startTime: '', endTime: '' });
       load();
     } catch (err) {
@@ -159,11 +173,10 @@ export default function JobInterviewsPage() {
     setGenerateError('');
     setGenerateResult(null);
     try {
-      const rangeStart = new Date(`${date}T${startTime}`).toISOString();
-      const rangeEnd = new Date(`${date}T${endTime}`).toISOString();
+      const { start, end } = resolveTimeRange(date, startTime, endTime);
       const result = await schedulingApi.generateSlots(jobId, {
-        rangeStart,
-        rangeEnd,
+        rangeStart: start.toISOString(),
+        rangeEnd: end.toISOString(),
         durationMinutes: Number(durationMinutes),
         bufferMinutes: Number(bufferMinutes) || 0,
       });
@@ -211,6 +224,13 @@ export default function JobInterviewsPage() {
 
   return (
     <div>
+      <button
+        onClick={() => navigate(-1)}
+        className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"
+      >
+        <ArrowLeft className="h-4 w-4" /> Back
+      </button>
+
       <h2 className="mb-1 text-xl font-semibold text-slate-900">Interviews — {job.title}</h2>
       <p className="mb-6 text-sm text-slate-500">Configure the AI interviewer, publish slots, and review completed interviews.</p>
 
@@ -223,7 +243,8 @@ export default function JobInterviewsPage() {
               <Bot className="h-4 w-4 text-brand-600" /> AI Interviewer Configuration
             </h3>
             <p className="text-sm text-slate-500">
-              {configForm.aiName} – {configForm.aiTitle} · {configForm.questionCount} questions · {configForm.answerTimeSeconds}s per answer
+              {configForm.aiName} – {configForm.aiTitle} · {configForm.questionCount} questions · {configForm.answerTimeSeconds}s per answer ·{' '}
+              {VOICE_LABELS[configForm.voiceGender] || 'Default'} voice
             </p>
           </div>
           <Button variant={showConfig ? 'secondary' : 'primary'} onClick={() => setShowConfig((v) => !v)} className="w-full sm:w-auto">
@@ -282,6 +303,34 @@ export default function JobInterviewsPage() {
                   onChange={(e) => setConfigForm({ ...configForm, answerTimeSeconds: e.target.value })}
                 />
               </FormField>
+            </div>
+
+            <div className="mt-4">
+              <label className="mb-1 block text-sm font-medium text-slate-700">AI interviewer voice</label>
+              <div className="flex gap-2">
+                {[
+                  { value: 'FEMALE', label: 'Female voice' },
+                  { value: 'MALE', label: 'Male voice' },
+                  { value: 'NEUTRAL', label: 'Neutral / default' },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setConfigForm({ ...configForm, voiceGender: opt.value })}
+                    className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                      configForm.voiceGender === opt.value
+                        ? 'border-brand-600 bg-brand-50 text-brand-700'
+                        : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-slate-400">
+                Best-effort — the candidate's browser picks the closest matching voice it has installed; exact voice
+                availability varies by device.
+              </p>
             </div>
 
             <div className="mt-4">
@@ -381,6 +430,9 @@ export default function JobInterviewsPage() {
                 />
               </FormField>
             </div>
+            <p className="mt-1 text-xs text-slate-400">
+              An end time at or before the start time (e.g. midnight, 00:00) is treated as the next day.
+            </p>
 
             {generateError && <p className="mt-3 text-sm text-red-600">{generateError}</p>}
             {generateResult && (
@@ -438,6 +490,7 @@ export default function JobInterviewsPage() {
         </form>
       </Card>
 
+      <h3 className="mb-3 font-semibold text-slate-900">Available Slots</h3>
       {sortedSlots.length === 0 ? (
         <EmptyState icon={Calendar} title="No interview slots yet" description="Add a slot above to let shortlisted candidates book an interview." />
       ) : (

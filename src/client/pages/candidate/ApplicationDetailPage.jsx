@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, CalendarCheck, CalendarClock, Clock, Video, Info } from 'lucide-react';
+import { ArrowLeft, CalendarCheck, Clock, Video, Info, Bot } from 'lucide-react';
 import { applicationsApi } from '../../services/applications.js';
 import { schedulingApi } from '../../services/scheduling.js';
 import Card from '../../components/ui/Card.jsx';
@@ -14,12 +14,13 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 
 const STEPS = ['APPLIED', 'SCREENING', 'SHORTLISTED', 'INTERVIEW_SCHEDULED', 'INTERVIEW_COMPLETED'];
 
-// A candidate can join once the slot's start time arrives, up until its end
-// time — matches "enabled on that time only".
+// TEMP (testing): always joinable regardless of slot window. Restore the
+// startTime/endTime check below before shipping.
 function canJoinNow(slot) {
   if (!slot) return false;
-  const now = Date.now();
-  return now >= new Date(slot.startTime).getTime() && now <= new Date(slot.endTime).getTime();
+  return true;
+  // const now = Date.now();
+  // return now >= new Date(slot.startTime).getTime() && now <= new Date(slot.endTime).getTime();
 }
 
 function formatDate(iso) {
@@ -60,7 +61,7 @@ function SlotGrid({ slots, bookingSlotId, onSelect }) {
                 loading={bookingSlotId === slot.id}
                 className="w-full sm:w-auto"
               >
-                Select
+                Book Interview
               </Button>
             ) : (
               <span className="text-xs font-medium uppercase tracking-wide text-slate-400">Booked</span>
@@ -98,6 +99,15 @@ export default function ApplicationDetailPage() {
   };
 
   useEffect(load, [id]);
+
+  // Eligible candidates (shortlisted, no interview booked yet) see the
+  // available slots immediately — no extra click needed to "unlock" them.
+  useEffect(() => {
+    if (application?.status === 'SHORTLISTED' && !interview && !showSlotPicker) {
+      openSlotPicker();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [application?.status, interview]);
 
   // Re-checked every 30s so the "Join Interview" button enables itself
   // right at the scheduled time without the candidate needing to refresh.
@@ -224,25 +234,26 @@ export default function ApplicationDetailPage() {
         </Card>
       )}
 
-      {/* Shortlisted, no interview booked yet */}
+      {/* Shortlisted, no interview booked yet — AI interview ready to schedule */}
       {status === 'SHORTLISTED' && !interview && (
         <Card className="mb-6 p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="font-semibold text-slate-900">You're shortlisted!</h3>
-              <p className="text-sm text-slate-500">Pick an interview slot that works for you.</p>
+          <div className="flex items-center gap-3">
+            <div className="rounded-full bg-brand-50 p-2.5">
+              <Bot className="h-5 w-5 text-brand-600" />
             </div>
-            <Button onClick={openSlotPicker} className="w-full sm:w-auto">
-              <CalendarClock className="h-4 w-4" /> Schedule Interview
-            </Button>
+            <div>
+              <h3 className="font-semibold text-slate-900">
+                AI Interview{application.aiInterviewConfig?.aiName ? ` — ${application.aiInterviewConfig.aiName}` : ''}
+                {application.aiInterviewConfig?.aiTitle ? `, ${application.aiInterviewConfig.aiTitle}` : ''}
+              </h3>
+              <p className="text-sm text-slate-500">Your AI interview is ready to schedule — pick any available slot below.</p>
+            </div>
           </div>
 
-          {showSlotPicker && (
-            <div className="mt-5 border-t border-slate-100 pt-5">
-              {slotsError && <p className="mb-3 text-sm text-red-600">{slotsError}</p>}
-              {!slots ? <LoadingState label="Loading slots…" /> : <SlotGrid slots={sortedSlots} bookingSlotId={bookingSlotId} onSelect={handleBookSlot} />}
-            </div>
-          )}
+          <div className="mt-5 border-t border-slate-100 pt-5">
+            {slotsError && <p className="mb-3 text-sm text-red-600">{slotsError}</p>}
+            {!slots ? <LoadingState label="Loading available slots…" /> : <SlotGrid slots={sortedSlots} bookingSlotId={bookingSlotId} onSelect={handleBookSlot} />}
+          </div>
         </Card>
       )}
 
@@ -262,8 +273,15 @@ export default function ApplicationDetailPage() {
                     : 'Interview scheduled'}
               </h3>
               <p className="text-sm text-slate-500">
-                {formatDate(interview.slot.startTime)} · {formatTime(interview.slot.startTime)} – {formatTime(interview.slot.endTime)}
+                {formatDate(interview.slot.startTime)} · {formatTime(interview.slot.startTime)} – {formatTime(interview.slot.endTime)} ·{' '}
+                {Math.round((new Date(interview.slot.endTime) - new Date(interview.slot.startTime)) / 60000)} min
               </p>
+              {application.aiInterviewConfig?.aiName && (
+                <p className="text-xs text-slate-400">
+                  With {application.aiInterviewConfig.aiName}
+                  {application.aiInterviewConfig.aiTitle ? `, ${application.aiInterviewConfig.aiTitle}` : ''}
+                </p>
+              )}
             </div>
           </div>
 

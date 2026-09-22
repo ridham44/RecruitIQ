@@ -123,7 +123,7 @@ async function screenApplication(application) {
 async function fetchApplicationForScreening(applicationId) {
   const application = await prisma.application.findUnique({
     where: { id: applicationId },
-    include: { job: { include: { company: true } }, resume: true, candidate: { include: { user: true } } },
+    include: { job: { include: { company: true } }, resume: true, candidate: { include: { user: true } }, screeningResult: true },
   });
   if (!application) throw ApiError.notFound('Application not found');
   return application;
@@ -132,6 +132,20 @@ async function fetchApplicationForScreening(applicationId) {
 export async function runScreeningForApplication(userId, applicationId) {
   const application = await fetchApplicationForScreening(applicationId);
   await getOwnedJob(userId, application.jobId); // authorization: company must own the job
+
+  // Rejection is terminal — without this, screening would flip a REJECTED
+  // application's status back to SCREENING (see the status-write at the end
+  // of screenApplication, which only special-cases SHORTLISTED).
+  if (application.status === APPLICATION_STATUS.REJECTED) {
+    throw ApiError.badRequest('Cannot screen a rejected application', 'APPLICATION_REJECTED');
+  }
+
+  // Guard against re-screening a candidate that's already been scored —
+  // the per-row "Screen Candidate" button must be a one-shot action
+  // enforced here, not just disabled client-side.
+  if (application.screeningResult?.status === SCREENING_STATUS.COMPLETED) {
+    throw ApiError.conflict('This candidate has already been screened', 'ALREADY_SCREENED');
+  }
 
   await prisma.application.update({
     where: { id: application.id },

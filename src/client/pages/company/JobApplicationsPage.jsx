@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { Sparkles, Eye, Users, SlidersHorizontal, X, Save, RefreshCw } from 'lucide-react';
+import { Link, useParams, useNavigate } from 'react-router-dom';
+import { Sparkles, Eye, Users, SlidersHorizontal, X, Save, RefreshCw, ArrowLeft, CalendarCheck, XCircle } from 'lucide-react';
 import { screeningApi } from '../../services/screening.js';
 import { jobsApi } from '../../services/jobs.js';
 import { applicationsApi } from '../../services/applications.js';
@@ -13,6 +13,7 @@ import StatusBadge from '../../components/ui/StatusBadge.jsx';
 import ScoreRing from '../../components/ui/ScoreRing.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import { inputClass } from '../../components/ui/FormField.jsx';
+import { getApplicationActionState } from '../../utils/applicationActions.js';
 
 const SCORE_PRESETS = [
   { key: 'all', label: 'All' },
@@ -108,6 +109,7 @@ function applyFilters(applications, filters) {
 
 export default function JobApplicationsPage() {
   const { id: jobId } = useParams();
+  const navigate = useNavigate();
   const [job, setJob] = useState(null);
   const [applications, setApplications] = useState(null);
   const [error, setError] = useState('');
@@ -119,6 +121,9 @@ export default function JobApplicationsPage() {
   const [bulkLoading, setBulkLoading] = useState(false);
   const [rerunning, setRerunning] = useState(false);
   const [confirmRerun, setConfirmRerun] = useState(false);
+  const [rowError, setRowError] = useState({});
+  const [confirmRejectId, setConfirmRejectId] = useState(null);
+  const [rejecting, setRejecting] = useState(false);
 
   const [settings, setSettings] = useState(null);
   const [settingsSaving, setSettingsSaving] = useState(false);
@@ -201,6 +206,22 @@ export default function JobApplicationsPage() {
     }
   };
 
+  const runRejectOne = async () => {
+    const appId = confirmRejectId;
+    setRejecting(true);
+    setRowError((prev) => ({ ...prev, [appId]: '' }));
+    try {
+      await applicationsApi.reject(appId);
+      setConfirmRejectId(null);
+      load();
+    } catch (err) {
+      setRowError((prev) => ({ ...prev, [appId]: err.message }));
+      setConfirmRejectId(null);
+    } finally {
+      setRejecting(false);
+    }
+  };
+
   const handleSaveSettings = async () => {
     setSettingsSaving(true);
     setSettingsSaved(false);
@@ -264,6 +285,13 @@ export default function JobApplicationsPage() {
 
   return (
     <div>
+      <button
+        onClick={() => navigate(-1)}
+        className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"
+      >
+        <ArrowLeft className="h-4 w-4" /> Back
+      </button>
+
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-semibold text-slate-900">Applications — {job.title}</h2>
@@ -281,6 +309,11 @@ export default function JobApplicationsPage() {
               <RefreshCw className="h-4 w-4" /> Re-run Screening ({rerunnableCount})
             </Button>
           )}
+          <Link to={`/company/jobs/${jobId}/interviews`} className="w-full sm:w-auto">
+            <Button variant="secondary" className="w-full sm:w-auto">
+              <CalendarCheck className="h-4 w-4" /> Interview Scheduling
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -465,7 +498,7 @@ export default function JobApplicationsPage() {
         <EmptyState icon={SlidersHorizontal} title="No candidates match these filters" description="Try adjusting or clearing your filters." />
       ) : (
         <Card className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-sm">
+          <table className="w-full min-w-[900px] text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">
@@ -477,38 +510,54 @@ export default function JobApplicationsPage() {
                 <th className="px-4 py-3">Experience</th>
                 <th className="px-4 py-3">Education</th>
                 <th className="px-4 py-3">Matched skills</th>
-                <th className="px-4 py-3" />
+                <th className="px-4 py-3">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map((app, index) => (
-                <tr key={app.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3">
-                    <input type="checkbox" checked={selected.has(app.id)} onChange={() => toggleSelected(app.id)} />
-                  </td>
-                  <td className="px-4 py-3 font-medium text-slate-900">#{index + 1}</td>
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-slate-900">{app.candidate.fullName}</p>
-                    <StatusBadge status={app.status} />
-                  </td>
-                  <td className="px-4 py-3">
-                    {getScore(app) != null ? <ScoreRing score={getScore(app)} size={36} /> : <span className="text-slate-400">—</span>}
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{getExperience(app)} yrs</td>
-                  <td className="max-w-[160px] px-4 py-3 text-slate-600">{getDegree(app) || '—'}</td>
-                  <td className="max-w-xs px-4 py-3 text-slate-600">
-                    {(app.screeningResult?.matchedSkills || []).slice(0, 4).join(', ') || '—'}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Link
-                      to={`/company/jobs/${jobId}/candidates/${app.candidate.id}`}
-                      className="inline-flex items-center gap-1 text-brand-600 hover:text-brand-700"
-                    >
-                      <Eye className="h-4 w-4" /> View
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+              {filtered.map((app, index) => {
+                const actions = getApplicationActionState(app);
+                return (
+                  <tr key={app.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-3">
+                      <input type="checkbox" checked={selected.has(app.id)} onChange={() => toggleSelected(app.id)} />
+                    </td>
+                    <td className="px-4 py-3 font-medium text-slate-900">#{index + 1}</td>
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-slate-900">{app.candidate.fullName}</p>
+                      <StatusBadge status={app.status} />
+                    </td>
+                    <td className="px-4 py-3">
+                      {getScore(app) != null ? <ScoreRing score={getScore(app)} size={36} /> : <span className="text-slate-400">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">{getExperience(app)} yrs</td>
+                    <td className="max-w-[160px] px-4 py-3 text-slate-600">{getDegree(app) || '—'}</td>
+                    <td className="max-w-xs px-4 py-3 text-slate-600">
+                      {(app.screeningResult?.matchedSkills || []).slice(0, 4).join(', ') || '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex min-w-[140px] flex-col gap-1.5">
+                        <Button
+                          variant="danger"
+                          className="w-full justify-start px-3 py-1.5 text-xs"
+                          disabled={actions.reject.disabled}
+                          loading={rejecting && confirmRejectId === app.id}
+                          title={actions.reject.title}
+                          onClick={() => setConfirmRejectId(app.id)}
+                        >
+                          <XCircle className="h-3.5 w-3.5" /> {actions.reject.label}
+                        </Button>
+                        {rowError[app.id] && <p className="text-xs text-red-600">{rowError[app.id]}</p>}
+                        <Link
+                          to={`/company/jobs/${jobId}/candidates/${app.candidate.id}`}
+                          className="mt-0.5 inline-flex items-center gap-1 text-xs text-brand-600 hover:text-brand-700"
+                        >
+                          <Eye className="h-3.5 w-3.5" /> View
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </Card>
@@ -532,6 +581,16 @@ export default function JobApplicationsPage() {
         onConfirm={handleRerunScreening}
         onCancel={() => setConfirmRerun(false)}
         loading={rerunning}
+      />
+
+      <ConfirmDialog
+        open={confirmRejectId !== null}
+        title="Reject this candidate?"
+        description="This marks the application as rejected and notifies the candidate. This cannot be undone."
+        confirmLabel="Reject"
+        onConfirm={runRejectOne}
+        onCancel={() => setConfirmRejectId(null)}
+        loading={rejecting}
       />
     </div>
   );

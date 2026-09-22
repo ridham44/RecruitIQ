@@ -12,6 +12,21 @@ and relevant experience demonstrated in the answers. Gender, name, age, or any o
 characteristic must NEVER factor into scoring or reasoning — ignore any such detail if it appears in the
 transcript.
 
+Do NOT penalize the candidate for grammar, accent, filler words, or minor speech-to-text transcription
+errors (e.g. a mis-transcribed technical term) — judge the substance of what they were clearly trying to
+say, not the surface text. Do NOT infer personality traits, honesty, confidence, or intelligence from tone
+or phrasing — score only the content of the answer.
+
+For each question, score four separate dimensions (0-100 each):
+- correctness: was the technical/factual content of the answer accurate?
+- relevance: did the answer actually address what was asked?
+- technicalDepth: did the answer show real depth/understanding vs. a surface-level or memorized response?
+- communication: was the answer clearly structured and easy to follow (independent of grammar/accent/
+  filler words — judge clarity of thought, not delivery)?
+Then give one overall "score" (0-100) synthesizing those four for that question, plus up to 3 "strengths"
+and up to 3 "missingConcepts" (concepts the question was probing for that the answer didn't cover), and a
+short "evaluationReason".
+
 Return ONLY a JSON object with this exact shape:
 {
   "overallScore": number (0-100),
@@ -19,7 +34,13 @@ Return ONLY a JSON object with this exact shape:
   "communicationScore": number (0-100),
   "strengths": string[],
   "areasForImprovement": string[],
-  "questionAnalysis": [{ "questionId": string, "question": string, "answerSummary": string, "score": number (0-100), "notes": string }],
+  "questionAnalysis": [{
+    "questionId": string, "question": string, "answerSummary": string,
+    "correctness": number (0-100), "relevance": number (0-100),
+    "technicalDepth": number (0-100), "communication": number (0-100),
+    "score": number (0-100), "strengths": string[], "missingConcepts": string[],
+    "evaluationReason": string
+  }],
   "reasoning": string (2-4 sentences, overall summary)
 }
 Respond with JSON only, no prose.`;

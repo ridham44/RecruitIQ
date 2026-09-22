@@ -118,13 +118,14 @@ const { slots: futureSlots } = await req(`/scheduling/jobs/${job.id}/slots/gener
   },
 });
 const { interview: earlyBooked } = await req(`/scheduling/applications/${earlyApplication.id}/book`, { method: 'POST', token: earlyCandidateToken, body: { slotId: futureSlots[0].id } });
-let earlyJoinRejected = false;
-try {
-  await req(`/interviews/${earlyBooked.id}/start`, { method: 'POST', token: earlyCandidateToken });
-} catch (err) {
-  earlyJoinRejected = err.message.includes('cannot be joined before');
-}
-assert(earlyJoinRejected, 'starting an AI interview before its scheduled slot time is rejected server-side');
+// NOTE: interviewEngine.service.js's slot-time-window check is currently
+// commented out ("TEMP (testing)") so interviews can be joined at any time
+// for manual testing — this was an explicit, separate request in this
+// session, and is intentionally left untouched by the Phase 3 upgrade. This
+// assertion reflects that actual current behavior rather than the
+// originally-intended guard; flip it back once the guard is restored.
+const earlyStart = await req(`/interviews/${earlyBooked.id}/start`, { method: 'POST', token: earlyCandidateToken });
+assert(typeof earlyStart.token === 'string', 'joining before the scheduled slot time currently succeeds (join-window guard is disabled for testing)');
 
 console.log('\n== Candidate joins: gets LiveKit token + first (introduction) question ==');
 const startResult = await req(`/interviews/${interviewId}/start`, { method: 'POST', token: candidateToken });
@@ -139,18 +140,36 @@ console.log('\n== Re-joining is idempotent (reconnect case) ==');
 const rejoin = await req(`/interviews/${interviewId}/start`, { method: 'POST', token: candidateToken });
 assert(rejoin.question.id === startResult.question.id, 'rejoining returns the SAME current question, not a new one');
 
+// Mirrors interviewEngine.service.js's buildStagePlan/maxFollowUpBudget
+// exactly, so the loop-termination bound below is the real documented cap,
+// not an arbitrary safety ceiling.
+function computeStagePlanLength(cfg) {
+  const coreStages = ['RESUME_QUESTIONS', 'BASIC_TECHNICAL', 'JOB_SPECIFIC', 'SCENARIO', 'BEHAVIORAL'];
+  const budgetForCore = Math.max(coreStages.length, cfg.questionCount - 1);
+  const perStage = Math.max(1, Math.round(budgetForCore / coreStages.length));
+  let total = 0;
+  for (const s of coreStages) total += s === 'JOB_SPECIFIC' ? perStage + cfg.customQuestions.length : perStage;
+  return total + 1; // + CANDIDATE_QUESTIONS
+}
+function computeMaxFollowUpBudget(cfg) {
+  return Math.max(2, Math.ceil(cfg.questionCount / 3));
+}
+const maxTurns = 1 + computeStagePlanLength(config) + computeMaxFollowUpBudget(config); // 1 for the introduction turn
+
 console.log('\n== Driving the full interview via the worker endpoints ==');
 let current = startResult.question;
 let stage = startResult.interview.stage;
 let turns = 0;
 const seenStages = new Set();
 const seenTypes = new Set();
+const seenDifficulties = new Set();
 let sawFollowUp = false;
 
-while (turns < 40) {
+while (turns < maxTurns + 5) {
   turns++;
   seenStages.add(stage);
   seenTypes.add(current.type);
+  if (current.difficulty) seenDifficulties.add(current.difficulty);
   const answer = `This is a simulated detailed answer for question: "${current.text}". I have hands-on experience with React hooks, REST API integration, and have shipped production features using these technologies.`;
 
   const result = await req(`/interviews/${interviewId}/worker/answer`, {
@@ -167,11 +186,12 @@ while (turns < 40) {
   current = result.question;
   stage = result.stage;
 }
-assert(turns < 40, 'interview terminated naturally (did not loop forever)');
+assert(turns <= maxTurns, `interview terminated within the documented bound (${turns} <= ${maxTurns} = 1 intro + ${computeStagePlanLength(config)} planned + ${computeMaxFollowUpBudget(config)} follow-up budget)`);
 assert(seenStages.has('INTRODUCTION'), 'passed through INTRODUCTION');
 assert(seenStages.has('JOB_SPECIFIC'), 'passed through JOB_SPECIFIC');
 assert(seenStages.has('CANDIDATE_QUESTIONS'), 'passed through CANDIDATE_QUESTIONS');
 assert(seenTypes.has('CUSTOM'), 'the company custom question was asked verbatim');
+assert(seenDifficulties.size > 0, `adaptive difficulty was applied to at least one question (saw: ${[...seenDifficulties].join(', ')})`);
 
 console.log('\n== Interview + application status after completion ==');
 const finalState = await req(`/interviews/${interviewId}`, { token: candidateToken });
@@ -180,6 +200,15 @@ assert(finalState.interview.stage === 'END', 'stage is END');
 
 const { application: finalApp } = await req(`/applications/mine/${application.id}`, { token: candidateToken });
 assert(finalApp.status === 'INTERVIEW_COMPLETED', 'application status is INTERVIEW_COMPLETED');
+
+console.log('\n== Transcript normalization pipeline (Section 2) ==');
+const answeredQuestions = finalState.interview.questions.filter((q) => q.answer && q.answer.transcript?.trim());
+assert(answeredQuestions.length > 0, 'at least one answered question to inspect');
+for (const q of answeredQuestions) {
+  assert(typeof q.answer.rawTranscript === 'string' && q.answer.rawTranscript.length > 0, `rawTranscript stored for question ${q.id}`);
+  assert(typeof q.answer.normalizedTranscript === 'string', `normalizedTranscript stored for question ${q.id}`);
+}
+assert(answeredQuestions.every((q) => q.answer.manuallyCorrected === false), 'no answers were manually corrected in this run');
 
 console.log('\n== Final AI report was generated (synchronously, before the response returned) ==');
 assert(finalState.interview.report != null, 'report exists');
@@ -190,6 +219,12 @@ console.log('  communicationScore:', finalState.interview.report.communicationSc
 console.log('  strengths:', finalState.interview.report.strengths);
 console.log('  resumeAlignment:', JSON.stringify(finalState.interview.report.resumeAlignment));
 console.log('  questionAnalysis count:', finalState.interview.report.questionAnalysis?.length);
+
+const firstAnalysis = finalState.interview.report.questionAnalysis?.[0];
+assert(firstAnalysis != null, 'questionAnalysis has at least one entry');
+for (const dim of ['correctness', 'relevance', 'technicalDepth', 'communication', 'score']) {
+  assert(typeof firstAnalysis[dim] === 'number', `questionAnalysis[0].${dim} is a number (structured scoring rubric present)`);
+}
 
 console.log('\n== Security/monitoring events ==');
 await req(`/interviews/${interviewId}/events`, { method: 'POST', token: candidateToken, body: { type: 'TAB_SWITCH' } });
@@ -204,6 +239,23 @@ console.log('\n== Company can view the full interview detail (transcript, report
 const companyView = await req(`/interviews/${interviewId}`, { token: companyToken });
 assert(companyView.interview.questions.length === finalState.interview.questions.length, 'company sees the same full transcript');
 assert(companyView.interview.report.status === 'COMPLETED', 'company sees the completed report');
+assert(companyView.interview.voiceGender === 'FEMALE', 'interview detail includes the configured voiceGender (default FEMALE)');
+assert(companyView.interview.questionCount === 6 && companyView.interview.answerTimeSeconds === 20, 'interview detail includes flattened interview-configuration fields');
+
+console.log('\n== Voice config round-trip (Section 8) ==');
+const { config: updatedConfig } = await req(`/interviews/config/${job.id}`, {
+  method: 'PATCH',
+  token: companyToken,
+  body: { ...config, voiceGender: 'MALE' },
+});
+assert(updatedConfig.voiceGender === 'MALE', 'PATCH persists voiceGender = MALE');
+const { config: reGetConfig } = await req(`/interviews/config/${job.id}`, { token: companyToken });
+assert(reGetConfig.voiceGender === 'MALE', 'GET reflects the updated voiceGender');
+const companyViewAfterVoiceChange = await req(`/interviews/${interviewId}`, { token: companyToken });
+assert(
+  companyViewAfterVoiceChange.interview.voiceGender === 'MALE',
+  'interview detail reflects the job-level config change (config is per-job, not snapshotted per interview)'
+);
 
 console.log('\n== Company job-level interview list ==');
 const { interviews: jobInterviews } = await req(`/interviews/job/${job.id}`, { token: companyToken });

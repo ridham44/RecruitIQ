@@ -14,7 +14,14 @@ export const answerEvaluationSchema = z.object({
   needsFollowUp: z.boolean().default(false),
   followUpQuestion: z.string().default(''),
   relevance: z.coerce.number().min(0).max(100).default(50),
+  missingConcepts: z.array(z.string().max(200)).max(5).default([]),
   note: z.string().default(''),
+});
+
+// Transcript-normalization LLM pass (Section 2) — a narrow spell-correction
+// output, validated the same as every other AI call before being trusted.
+export const transcriptCorrectionSchema = z.object({
+  correctedText: z.string().default(''),
 });
 
 // Deep, final post-interview evaluation (Section 8). Numeric scores and
@@ -32,8 +39,16 @@ export const interviewReportSchema = z.object({
         questionId: z.string().default(''),
         question: z.string().default(''),
         answerSummary: z.string().default(''),
+        // Structured rubric (Section 13) — kept distinct so grammar/accent/
+        // filler-word/STT-error concerns never bleed into the technical read.
+        correctness: z.coerce.number().min(0).max(100).default(0),
+        relevance: z.coerce.number().min(0).max(100).default(0),
+        technicalDepth: z.coerce.number().min(0).max(100).default(0),
+        communication: z.coerce.number().min(0).max(100).default(0),
         score: z.coerce.number().min(0).max(100).default(0),
-        notes: z.string().default(''),
+        strengths: z.array(z.string()).default([]),
+        missingConcepts: z.array(z.string()).default([]),
+        evaluationReason: z.string().default(''),
       })
     )
     .default([]),
