@@ -23,6 +23,9 @@ function normalizeGender(value) {
 // persisted — it's handed back to the client so the candidate can review
 // and edit before anything is saved, and a field that's already filled in
 // is never suggested for overwrite.
+// NOTE: university/college/degree/latestSpi are no longer flat Candidate
+// fields — they live in the Education model. Suggestions for those are
+// omitted here to avoid trying to write removed DB columns.
 function buildProfileSuggestions(candidate, parsedData) {
   if (!parsedData) return null;
 
@@ -33,11 +36,7 @@ function buildProfileSuggestions(candidate, parsedData) {
     if (hasValue && !candidate[field]) suggestions[field] = value;
   };
 
-  suggestIfEmpty('university', parsedData.university);
-  suggestIfEmpty('college', parsedData.college);
-  suggestIfEmpty('degree', parsedData.degree);
   suggestIfEmpty('phone', parsedData.phone);
-  if (parsedData.spi != null && !candidate.latestSpi) suggestions.latestSpi = parsedData.spi;
 
   const normalizedGender = normalizeGender(parsedData.gender);
   if (normalizedGender && !candidate.gender) suggestions.gender = normalizedGender;
@@ -49,6 +48,7 @@ function buildProfileSuggestions(candidate, parsedData) {
 
   return Object.keys(suggestions).length > 0 ? suggestions : null;
 }
+
 
 // resume.pdf/docx -> text extraction -> storage -> AI analysis -> persisted
 // Resume row (Section 9/11). AI failure does not block the upload; the

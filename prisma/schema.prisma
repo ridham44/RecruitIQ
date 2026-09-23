@@ -232,26 +232,42 @@ model Candidate {
   // AI screening/matching prompt (see candidate-matcher.service.js).
   gender Gender?
 
-  // Academic information (Section 4/5). Not restricted to B.Tech — `degree`
-  // is a free-text exact degree name (e.g. "BCA", "B.Tech in Computer
-  // Science and Technology", "MBA"). currentSemester only applies when
-  // academicStatus is ONGOING; latestSpi doubles as "latest SPI" (ongoing)
-  // or "final SPI" (completed) depending on academicStatus.
-  university      String?
-  college         String?
-  degree          String?
-  academicStatus  AcademicStatus?
-  currentSemester Int?
-  latestSpi       Float?
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   resumes      Resume[]
   applications Application[]
+  educations   Education[]
 
   @@map("candidates")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Education (one-to-many from Candidate)
+// ─────────────────────────────────────────────────────────────
+
+// Each row is a single academic qualification for a candidate.
+// Replacing the old flat university/degree/academicStatus fields on
+// Candidate so multiple degrees can be stored without overwriting each other.
+model Education {
+  id                  String   @id @default(cuid())
+  candidateId         String
+  degree              String               // e.g. "B.Tech", "MBA", "Diploma"
+  fieldOfStudy        String?              // e.g. "Computer Science"
+  institution         String?              // university / college name
+  startYear           Int?
+  endYear             Int?
+  isCurrentlyStudying Boolean  @default(false)
+  // Free-text grade: "7.42 CGPA", "78%", "A+" etc.
+  grade               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+  @@map("educations")
 }
 
 // ─────────────────────────────────────────────────────────────

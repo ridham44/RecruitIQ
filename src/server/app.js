@@ -6,6 +6,7 @@ import { notFoundHandler, errorHandler } from './middleware/errorHandler.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import companiesRoutes from './modules/companies/companies.routes.js';
 import candidatesRoutes from './modules/candidates/candidates.routes.js';
+import educationRoutes from './modules/education/education.routes.js';
 import jobsRoutes from './modules/jobs/jobs.routes.js';
 import resumesRoutes from './modules/resumes/resumes.routes.js';
 import applicationsRoutes from './modules/applications/applications.routes.js';
@@ -38,6 +39,7 @@ export function createApp() {
   v1.use('/auth', authRoutes);
   v1.use('/companies', companiesRoutes);
   v1.use('/candidates', candidatesRoutes);
+  v1.use('/candidates/me/education', educationRoutes);
   v1.use('/jobs', jobsRoutes);
   v1.use('/resumes', resumesRoutes);
   v1.use('/applications', applicationsRoutes);

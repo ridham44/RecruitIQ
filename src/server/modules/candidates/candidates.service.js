@@ -1,8 +1,15 @@
 import { prisma } from '../../config/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 
+const CANDIDATE_WITH_EDUCATION = {
+  include: { educations: { orderBy: [{ startYear: 'asc' }, { createdAt: 'asc' }] } },
+};
+
 export async function getCandidateByUserId(userId) {
-  const candidate = await prisma.candidate.findUnique({ where: { userId } });
+  const candidate = await prisma.candidate.findUnique({
+    where: { userId },
+    ...CANDIDATE_WITH_EDUCATION,
+  });
   if (!candidate) throw ApiError.notFound('Candidate profile not found');
   return candidate;
 }
@@ -18,12 +25,8 @@ export async function updateCandidateProfile(userId, data) {
       headline: data.headline ?? candidate.headline,
       skills: data.skills ?? candidate.skills,
       gender: data.gender ?? candidate.gender,
-      university: data.university ?? candidate.university,
-      college: data.college ?? candidate.college,
-      degree: data.degree ?? candidate.degree,
-      academicStatus: data.academicStatus ?? candidate.academicStatus,
-      currentSemester: data.academicStatus === 'COMPLETED' ? null : data.currentSemester ?? candidate.currentSemester,
-      latestSpi: data.latestSpi ?? candidate.latestSpi,
     },
+    ...CANDIDATE_WITH_EDUCATION,
   });
 }
+
