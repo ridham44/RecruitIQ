@@ -24,15 +24,28 @@ const STAGE_QUESTION_TYPE = {
 // difficulty ladder.
 const STAGES_WITH_DIFFICULTY = new Set(['RESUME_QUESTIONS', 'BASIC_TECHNICAL', 'JOB_SPECIFIC', 'SCENARIO', 'BEHAVIORAL']);
 
-// "Question X of Y" progress (Section 10) — a follow-up shares its parent's
-// index, so it reports the same number as the question it follows up on.
-// The total is always the company's configured AiInterviewConfig.questionCount
-// itself (not the size of any internal plan array), so what the candidate
-// sees on screen always matches exactly what was configured — it never
-// grows, shrinks, or drifts as the interview progresses.
-function questionProgress(question, config) {
+// "Question X of Y" progress (Section 10). X is this question's own
+// chronological turn number among every non-introduction question asked so
+// far (a follow-up gets the NEXT number, not its parent's — sharing the
+// parent's `index` looked like a stuck/wrong counter on screen, e.g. "3 of
+// 5" shown for what was visibly the 4th distinct question). Y is always the
+// company's configured AiInterviewConfig.questionCount itself (not the size
+// of any internal plan array) — buildStagePlan guarantees exactly that many
+// non-introduction questions get asked in total (Section: "should not ask
+// more than N questions"), so X never exceeds Y and the closing
+// "any questions for us?" turn always lands on exactly Y of Y.
+//
+// `interview.questions` is passed in as it stood BEFORE this exact
+// question was persisted (true for every call site — the question in hand
+// is either an existing one already in that list, or one about to be
+// created that isn't in it yet), so a question already present is found at
+// its real position, and one not yet present falls back to "next in line".
+function questionProgress(question, interview, config) {
   if (!question || question.stage === 'INTRODUCTION') return { questionNumber: null, totalPlannedQuestions: config.questionCount };
-  return { questionNumber: question.index + 1, totalPlannedQuestions: config.questionCount };
+  const coreQuestions = interview.questions.filter((q) => q.stage !== 'INTRODUCTION');
+  const position = coreQuestions.findIndex((q) => q.id === question.id);
+  const questionNumber = position >= 0 ? position + 1 : coreQuestions.length + 1;
+  return { questionNumber, totalPlannedQuestions: config.questionCount };
 }
 
 function followUpsAskedSoFar(interview) {
@@ -263,7 +276,7 @@ export async function startInterview(userId, interviewId) {
     aiName: config.aiName,
     aiTitle: config.aiTitle,
     voiceGender: config.voiceGender,
-    ...questionProgress(question, config),
+    ...questionProgress(question, fresh, config),
   };
 }
 
@@ -298,7 +311,7 @@ export async function getCurrentState(userId, interviewId, { asCompany = false }
     aiName: config.aiName,
     aiTitle: config.aiTitle,
     voiceGender: config.voiceGender,
-    ...questionProgress(question, config),
+    ...questionProgress(question, interview, config),
   };
 }
 
@@ -394,7 +407,7 @@ async function advanceInterviewCore(interview, params) {
       isFollowUp: true,
       stage: question.stage,
       question: followUp,
-      ...questionProgress(followUp, config),
+      ...questionProgress(followUp, interview, config),
     };
   }
 
@@ -435,7 +448,7 @@ async function advanceInterviewCore(interview, params) {
     isFollowUp: false,
     stage: nextStage,
     question: nextQuestion,
-    ...questionProgress(nextQuestion, config),
+    ...questionProgress(nextQuestion, interview, config),
   };
 }
 

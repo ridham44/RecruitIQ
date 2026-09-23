@@ -25,7 +25,23 @@ export function startWebhookServer() {
         const event = await receiver.receive(body, req.headers.authorization);
         res.writeHead(200).end('ok');
 
-        if (event.event === 'room_started' && event.room?.name?.startsWith('interview-')) {
+        // The candidate-facing interview flow now handles TTS/STT entirely
+        // client-side (see InterviewRoomPage.jsx) — only video is published
+        // to the LiveKit room, specifically so no audio channel exists for
+        // an echo/feedback loop. This worker's realtime voice pipeline
+        // (session.js) is the OLDER design that flow replaced. Auto-joining
+        // every room here would make this worker independently synthesize
+        // and publish its OWN audio for the very same question the browser
+        // is already speaking locally — the candidate hears it twice,
+        // which sounds exactly like an echo, except it's a real duplicate
+        // audio source coming from LiveKit, not acoustic feedback. Disabled
+        // by default; set ENABLE_LEGACY_REALTIME_VOICE=1 to opt back into
+        // testing the old pipeline.
+        if (
+          process.env.ENABLE_LEGACY_REALTIME_VOICE === '1' &&
+          event.event === 'room_started' &&
+          event.room?.name?.startsWith('interview-')
+        ) {
           const interviewId = event.room.name.replace('interview-', '');
           if (!isSessionActive(interviewId)) {
             console.log(`[webhook] room_started for ${event.room.name} — starting session`);

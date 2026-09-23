@@ -73,6 +73,17 @@ function speak(text, voice, isEndedRef) {
   });
 }
 
+// `SpeechSynthesisUtterance.onend` fires as soon as the browser hands the
+// last chunk to the audio device, which can be measurably before that
+// audio has actually finished playing out of the speakers — enabling the
+// mic right on that event can catch the tail end of the AI's own voice,
+// which sounds like an echo. A short buffer after speak() resolves gives
+// that tail time to clear before recording is allowed to start.
+const POST_SPEECH_GRACE_MS = 400;
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export default function InterviewRoomPage() {
   const { interviewId } = useParams();
   const navigate = useNavigate();
@@ -242,8 +253,10 @@ export default function InterviewRoomPage() {
       setAiSpeaking(true);
       const voice = pickVoiceForGender(voices, voiceGender);
       await speak(nextQuestion.text, voice, isEndedRef);
+      if (isEndedRef.current) return;
+      await wait(POST_SPEECH_GRACE_MS);
       // Guard again after the await — cleanupAll may have run while the
-      // utterance was playing.
+      // utterance was playing or during the grace period.
       if (isEndedRef.current) return;
       setAiSpeaking(false);
     },
@@ -321,6 +334,10 @@ export default function InterviewRoomPage() {
 
   const startRecording = () => {
     if (!SpeechRecognitionCtor || aiSpeaking || recording || showCorrectionBox) return;
+    // Belt and braces: cancel any leftover/queued utterance before the mic
+    // goes live, in case something re-queued speech after aiSpeaking
+    // already flipped false.
+    window.speechSynthesis?.cancel();
     // Starting a fresh recording pass supersedes any earlier manual fix —
     // otherwise new speech would be silently masked by a stale correction.
     setCorrectedTranscript(null);
