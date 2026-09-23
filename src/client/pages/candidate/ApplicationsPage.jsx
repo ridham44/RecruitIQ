@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { FileText, Search } from 'lucide-react';
 import { applicationsApi } from '../../services/applications.js';
 import Card from '../../components/ui/Card.jsx';
@@ -10,6 +10,7 @@ import EmptyState from '../../components/ui/EmptyState.jsx';
 import StatusBadge from '../../components/ui/StatusBadge.jsx';
 
 export default function ApplicationsPage() {
+  const navigate = useNavigate();
   const [applications, setApplications] = useState(null);
   const [error, setError] = useState('');
 
@@ -58,11 +59,21 @@ export default function ApplicationsPage() {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {applications.map((app) => (
-              <tr key={app.id} className="cursor-pointer hover:bg-slate-50">
+              <tr
+                key={app.id}
+                onClick={() => navigate(`/candidate/applications/${app.id}`)}
+                role="link"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    navigate(`/candidate/applications/${app.id}`);
+                  }
+                }}
+                className="cursor-pointer hover:bg-slate-50 focus:outline-none focus-visible:bg-slate-50"
+              >
                 <td className="px-5 py-3">
-                  <Link to={`/candidate/applications/${app.id}`} className="font-medium text-slate-900 hover:text-brand-600">
-                    {app.job.title}
-                  </Link>
+                  <span className="font-medium text-slate-900">{app.job.title}</span>
                 </td>
                 <td className="px-5 py-3 text-slate-500">{app.job.company.name}</td>
                 <td className="px-5 py-3 text-slate-500">{new Date(app.createdAt).toLocaleDateString()}</td>

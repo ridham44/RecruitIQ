@@ -186,36 +186,29 @@ export default function CandidateDetailPage() {
 
       <Card className="mt-6 p-6">
         <h3 className="mb-3 font-semibold text-slate-900">Education</h3>
-        {candidate.degree || candidate.university || candidate.college || candidate.latestSpi ? (
-          <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-            {candidate.degree && (
-              <div>
-                <dt className="text-xs text-slate-400">Degree</dt>
-                <dd className="text-slate-800">{candidate.degree}</dd>
+        {candidate.educations?.length ? (
+          <div className="space-y-4">
+            {candidate.educations.map((edu) => (
+              <div key={edu.id} className="border-b border-slate-100 pb-4 last:border-0 last:pb-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-medium text-slate-900">
+                    {edu.degree}
+                    {edu.fieldOfStudy ? ` — ${edu.fieldOfStudy}` : ''}
+                  </p>
+                  {edu.isCurrentlyStudying && (
+                    <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">
+                      Currently studying
+                    </span>
+                  )}
+                </div>
+                {edu.institution && <p className="text-sm text-slate-600">{edu.institution}</p>}
+                <p className="text-xs text-slate-400">
+                  {edu.startYear ?? '—'} – {edu.isCurrentlyStudying ? 'Present' : edu.endYear ?? '—'}
+                  {edu.grade ? ` · ${edu.grade}` : ''}
+                </p>
               </div>
-            )}
-            {candidate.university && (
-              <div>
-                <dt className="text-xs text-slate-400">University</dt>
-                <dd className="text-slate-800">{candidate.university}</dd>
-              </div>
-            )}
-            {candidate.college && (
-              <div>
-                <dt className="text-xs text-slate-400">College / Institute</dt>
-                <dd className="text-slate-800">{candidate.college}</dd>
-              </div>
-            )}
-            {candidate.latestSpi != null && (
-              <div>
-                <dt className="text-xs text-slate-400">{candidate.academicStatus === 'ONGOING' ? 'Latest SPI' : 'Final SPI'}</dt>
-                <dd className="text-slate-800">
-                  {candidate.latestSpi}
-                  {candidate.academicStatus === 'ONGOING' && candidate.currentSemester ? ` (Semester ${candidate.currentSemester})` : ''}
-                </dd>
-              </div>
-            )}
-          </dl>
+            ))}
+          </div>
         ) : (
           <p className="text-sm text-slate-400">No academic information provided</p>
         )}

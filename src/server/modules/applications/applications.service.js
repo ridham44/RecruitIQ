@@ -131,7 +131,12 @@ export async function getCandidateApplicationDetail(userId, jobId, candidateId) 
 
   const application = await prisma.application.findUnique({
     where: { candidateId_jobId: { candidateId, jobId } },
-    include: { candidate: true, resume: true, job: true, screeningResult: true },
+    include: {
+      candidate: { include: { educations: { orderBy: [{ startYear: 'asc' }, { createdAt: 'asc' }] } } },
+      resume: true,
+      job: true,
+      screeningResult: true,
+    },
   });
 
   if (!application) throw ApiError.notFound('Application not found');
