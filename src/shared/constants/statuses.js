@@ -12,6 +12,25 @@ export const EMPLOYMENT_TYPE = {
   FREELANCE: 'FREELANCE',
 };
 
+export const WORK_MODE = {
+  ON_SITE: 'On-site',
+  REMOTE: 'Remote',
+  HYBRID: 'Hybrid',
+};
+
+export const WORK_MODES = ['On-site', 'Remote', 'Hybrid'];
+
+export const JOB_LEVEL = {
+  JUNIOR: 'Junior',
+  MID: 'Mid',
+  SENIOR: 'Senior',
+  LEAD: 'Lead',
+};
+
+export const JOB_LEVELS = ['Junior', 'Mid', 'Senior', 'Lead'];
+
+export const NOTICE_PERIOD_OPTIONS = ['Immediate', '15 days', '30 days', '60 days', '90 days'];
+
 // Future phases may append further values (e.g. OFFERED, HIRED) — never
 // repurpose existing ones.
 export const APPLICATION_STATUS = {

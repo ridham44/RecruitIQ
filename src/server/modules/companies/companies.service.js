@@ -99,6 +99,10 @@ export async function getDashboardOverview(userId) {
     createdAt: j.createdAt,
     location: j.location,
     employmentType: j.employmentType,
+    workMode: j.workMode,
+    openings: j.openings,
+    jobLevel: j.jobLevel,
+    salaryRange: j.salaryRange,
   }));
 
   // 2. Candidate Pipeline by Stage

@@ -7,12 +7,20 @@ import FormField, { inputClass } from '../../components/ui/FormField.jsx';
 import TagInput from '../../components/ui/TagInput.jsx';
 
 const EMPLOYMENT_TYPES = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP', 'FREELANCE'];
+const WORK_MODES = ['On-site', 'Remote', 'Hybrid'];
+const JOB_LEVELS = ['Junior', 'Mid', 'Senior', 'Lead'];
+const NOTICE_PERIODS = ['Immediate', '15 days', '30 days', '60 days', '90 days'];
 
 export default function JobNewPage() {
   const navigate = useNavigate();
   const [form, setForm] = useState({
     title: '',
     description: '',
+    workMode: 'On-site',
+    openings: 1,
+    jobLevel: 'Mid',
+    noticePeriod: '30 days',
+    salaryRange: '',
     minimumExperience: 0,
     maximumExperience: '',
     location: '',
@@ -20,6 +28,8 @@ export default function JobNewPage() {
     requiredSkills: [],
     preferredSkills: [],
     educationRequirements: [],
+    languagesRequired: [],
+    certifications: [],
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -31,8 +41,11 @@ export default function JobNewPage() {
     try {
       const { job } = await jobsApi.create({
         ...form,
+        openings: Math.max(1, parseInt(form.openings, 10) || 1),
         maximumExperience: form.maximumExperience === '' ? null : Number(form.maximumExperience),
         minimumExperience: Number(form.minimumExperience),
+        salaryRange: form.salaryRange?.trim() || null,
+        noticePeriod: form.noticePeriod?.trim() || null,
       });
       navigate(`/company/jobs/${job.id}`);
     } catch (err) {
@@ -69,6 +82,89 @@ export default function JobNewPage() {
           </FormField>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField label="Work mode">
+              <select
+                className={inputClass}
+                value={form.workMode}
+                onChange={(e) => setForm({ ...form, workMode: e.target.value })}
+              >
+                {WORK_MODES.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {mode}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+
+            <FormField label="Number of openings (required)">
+              <input
+                type="number"
+                required
+                min={1}
+                className={inputClass}
+                value={form.openings}
+                onChange={(e) => setForm({ ...form, openings: e.target.value })}
+                placeholder="e.g. 3"
+              />
+            </FormField>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField label="Job level">
+              <select
+                className={inputClass}
+                value={form.jobLevel}
+                onChange={(e) => setForm({ ...form, jobLevel: e.target.value })}
+              >
+                {JOB_LEVELS.map((level) => (
+                  <option key={level} value={level}>
+                    {level}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+
+            <FormField label="Notice period">
+              <select
+                className={inputClass}
+                value={form.noticePeriod}
+                onChange={(e) => setForm({ ...form, noticePeriod: e.target.value })}
+              >
+                {NOTICE_PERIODS.map((np) => (
+                  <option key={np} value={np}>
+                    {np}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField label="Salary range">
+              <input
+                className={inputClass}
+                value={form.salaryRange}
+                onChange={(e) => setForm({ ...form, salaryRange: e.target.value })}
+                placeholder="e.g. ₹6–10 LPA"
+              />
+            </FormField>
+
+            <FormField label="Employment type">
+              <select
+                className={inputClass}
+                value={form.employmentType}
+                onChange={(e) => setForm({ ...form, employmentType: e.target.value })}
+              >
+                {EMPLOYMENT_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type.replace('_', ' ')}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="Minimum experience (years)">
               <input
                 type="number"
@@ -91,35 +187,20 @@ export default function JobNewPage() {
             </FormField>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="Location">
-              <input
-                className={inputClass}
-                value={form.location}
-                onChange={(e) => setForm({ ...form, location: e.target.value })}
-                placeholder="Remote / City"
-              />
-            </FormField>
-            <FormField label="Employment type">
-              <select
-                className={inputClass}
-                value={form.employmentType}
-                onChange={(e) => setForm({ ...form, employmentType: e.target.value })}
-              >
-                {EMPLOYMENT_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {type.replace('_', ' ')}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-          </div>
+          <FormField label="Location">
+            <input
+              className={inputClass}
+              value={form.location}
+              onChange={(e) => setForm({ ...form, location: e.target.value })}
+              placeholder="e.g. Ahmedabad, Gujarat / Remote"
+            />
+          </FormField>
 
           <FormField label="Required skills">
             <TagInput
               value={form.requiredSkills}
               onChange={(v) => setForm({ ...form, requiredSkills: v })}
-              placeholder="Type a skill and press Enter"
+              placeholder="Type a skill and press Enter (e.g. React, JavaScript)"
             />
           </FormField>
 
@@ -127,7 +208,23 @@ export default function JobNewPage() {
             <TagInput
               value={form.preferredSkills}
               onChange={(v) => setForm({ ...form, preferredSkills: v })}
-              placeholder="Type a skill and press Enter"
+              placeholder="Type a skill and press Enter (e.g. TypeScript, Redux)"
+            />
+          </FormField>
+
+          <FormField label="Languages required">
+            <TagInput
+              value={form.languagesRequired}
+              onChange={(v) => setForm({ ...form, languagesRequired: v })}
+              placeholder="Type a language and press Enter (e.g. English, Hindi)"
+            />
+          </FormField>
+
+          <FormField label="Certifications">
+            <TagInput
+              value={form.certifications}
+              onChange={(v) => setForm({ ...form, certifications: v })}
+              placeholder="Type a certification and press Enter (e.g. AWS, Azure, PMP)"
             />
           </FormField>
 
@@ -135,7 +232,7 @@ export default function JobNewPage() {
             <TagInput
               value={form.educationRequirements}
               onChange={(v) => setForm({ ...form, educationRequirements: v })}
-              placeholder="e.g. Computer Science"
+              placeholder="e.g. B.Tech Computer Science, BCA"
             />
           </FormField>
 

@@ -11,6 +11,14 @@ export const createJobSchema = z.object({
   educationRequirements: z.array(z.string()).default([]),
   location: z.string().optional(),
   employmentType: z.nativeEnum(EMPLOYMENT_TYPE).default(EMPLOYMENT_TYPE.FULL_TIME),
+  workMode: z.enum(['On-site', 'Remote', 'Hybrid']).default('On-site'),
+  openings: z.coerce.number().int().min(1, 'Number of openings must be at least 1').default(1),
+  numberOfOpenings: z.coerce.number().int().min(1).optional(),
+  jobLevel: z.enum(['Junior', 'Mid', 'Senior', 'Lead']).default('Mid'),
+  noticePeriod: z.string().optional().nullable(),
+  languagesRequired: z.array(z.string()).default([]),
+  certifications: z.array(z.string()).default([]),
+  salaryRange: z.string().optional().nullable(),
   status: z.nativeEnum(JOB_STATUS).default(JOB_STATUS.OPEN),
   // Screening decision settings — see the comment on Job.minAcceptableScore
   // in schema.prisma. autoRejectBelowMinScore only ever auto-rejects; it

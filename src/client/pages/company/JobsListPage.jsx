@@ -55,6 +55,8 @@ export default function JobsListPage() {
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-5 py-3">Title</th>
+                <th className="px-5 py-3">Work Mode</th>
+                <th className="px-5 py-3">Openings</th>
                 <th className="px-5 py-3">Location</th>
                 <th className="px-5 py-3">Applications</th>
                 <th className="px-5 py-3">Status</th>
@@ -68,6 +70,12 @@ export default function JobsListPage() {
                       {job.title}
                     </Link>
                   </td>
+                  <td className="px-5 py-3 text-slate-600">
+                    <span className="rounded bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                      {job.workMode || 'On-site'}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3 text-slate-600">{job.openings ?? 1}</td>
                   <td className="px-5 py-3 text-slate-500">{job.location || '—'}</td>
                   <td className="px-5 py-3 text-slate-500">{job._count?.applications ?? 0}</td>
                   <td className="px-5 py-3">

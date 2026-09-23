@@ -46,6 +46,10 @@ export async function matchCandidateToJob({ job, resumeData, resumeText }) {
         minimumExperience: job.minimumExperience,
         maximumExperience: job.maximumExperience,
         educationRequirements: job.educationRequirements,
+        certifications: job.certifications || [],
+        languagesRequired: job.languagesRequired || [],
+        workMode: job.workMode,
+        jobLevel: job.jobLevel,
         description: job.description?.slice(0, 4000),
       },
       candidate: {

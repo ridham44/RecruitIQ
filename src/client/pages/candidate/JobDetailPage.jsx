@@ -77,16 +77,44 @@ export default function JobDetailPage() {
       <div className="mb-6">
         <h2 className="text-xl font-semibold text-slate-900">{job.title}</h2>
         <p className="text-sm text-slate-500">{job.company?.name}</p>
-        <div className="mt-2 flex flex-wrap gap-3 text-sm text-slate-500">
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
           {job.location && (
             <span className="flex items-center gap-1">
               <MapPin className="h-4 w-4" /> {job.location}
             </span>
           )}
+          <span>·</span>
           <span>{job.employmentType.replace('_', ' ')}</span>
-          <span>
-            {job.minimumExperience}+ yrs{job.maximumExperience ? ` – ${job.maximumExperience} yrs` : ''}
+          <span>·</span>
+          <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+            {job.workMode || 'On-site'}
           </span>
+          <span className="inline-flex items-center rounded-md bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700">
+            {job.jobLevel || 'Mid'} Level
+          </span>
+          <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+            {job.openings || 1} {job.openings === 1 ? 'opening' : 'openings'}
+          </span>
+        </div>
+      </div>
+
+      {/* Highlights bar */}
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-3.5 shadow-sm">
+          <p className="text-xs font-medium text-slate-400">Work Mode</p>
+          <p className="mt-0.5 font-semibold text-slate-800">{job.workMode || 'On-site'}</p>
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-white p-3.5 shadow-sm">
+          <p className="text-xs font-medium text-slate-400">Openings</p>
+          <p className="mt-0.5 font-semibold text-slate-800">{job.openings || 1}</p>
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-white p-3.5 shadow-sm">
+          <p className="text-xs font-medium text-slate-400">Salary Range</p>
+          <p className="mt-0.5 font-semibold text-slate-800">{job.salaryRange || 'Not disclosed'}</p>
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-white p-3.5 shadow-sm">
+          <p className="text-xs font-medium text-slate-400">Notice Period</p>
+          <p className="mt-0.5 font-semibold text-slate-800">{job.noticePeriod || 'Negotiable'}</p>
         </div>
       </div>
 
@@ -95,15 +123,70 @@ export default function JobDetailPage() {
         <p className="whitespace-pre-wrap text-sm text-slate-600">{job.description}</p>
       </Card>
 
+      <div className="mb-6 grid gap-6 sm:grid-cols-2">
+        <Card className="p-6">
+          <h3 className="mb-3 font-semibold text-slate-900">Experience</h3>
+          <p className="text-sm text-slate-600">
+            {job.minimumExperience}+ years{job.maximumExperience ? ` – up to ${job.maximumExperience} years` : ''}
+          </p>
+        </Card>
+        <Card className="p-6">
+          <h3 className="mb-3 font-semibold text-slate-900">Education</h3>
+          <p className="text-sm text-slate-600">
+            {job.educationRequirements?.length ? job.educationRequirements.join(', ') : 'No specific requirement'}
+          </p>
+        </Card>
+      </div>
+
       <Card className="mb-6 p-6">
         <h3 className="mb-3 font-semibold text-slate-900">Required skills</h3>
         <div className="flex flex-wrap gap-2">
-          {job.requiredSkills.map((skill) => (
+          {job.requiredSkills?.map((skill) => (
             <span key={skill} className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">
               {skill}
             </span>
           ))}
+          {!job.requiredSkills?.length && <p className="text-sm text-slate-400">None specified</p>}
         </div>
+
+        {job.preferredSkills?.length > 0 && (
+          <>
+            <h3 className="mb-3 mt-5 font-semibold text-slate-900">Preferred skills</h3>
+            <div className="flex flex-wrap gap-2">
+              {job.preferredSkills.map((skill) => (
+                <span key={skill} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                  {skill}
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+
+        {job.languagesRequired?.length > 0 && (
+          <>
+            <h3 className="mb-3 mt-5 font-semibold text-slate-900">Languages required</h3>
+            <div className="flex flex-wrap gap-2">
+              {job.languagesRequired.map((lang) => (
+                <span key={lang} className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                  {lang}
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+
+        {job.certifications?.length > 0 && (
+          <>
+            <h3 className="mb-3 mt-5 font-semibold text-slate-900">Certifications</h3>
+            <div className="flex flex-wrap gap-2">
+              {job.certifications.map((cert) => (
+                <span key={cert} className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                  {cert}
+                </span>
+              ))}
+            </div>
+          </>
+        )}
       </Card>
 
       <Card className="p-6">

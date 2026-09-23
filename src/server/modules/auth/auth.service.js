@@ -17,14 +17,15 @@ function serializeUser(user) {
 }
 
 export async function registerCompany({ email, password, companyName, website, industry, location }) {
-  const existing = await prisma.user.findUnique({ where: { email } });
+  const normalizedEmail = email.trim().toLowerCase();
+  const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
   if (existing) throw ApiError.conflict('An account with this email already exists', 'EMAIL_TAKEN');
 
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
   const user = await prisma.user.create({
     data: {
-      email,
+      email: normalizedEmail,
       passwordHash,
       role: ROLES.COMPANY,
       company: {
@@ -38,14 +39,15 @@ export async function registerCompany({ email, password, companyName, website, i
 }
 
 export async function registerCandidate({ email, password, fullName, phone, location }) {
-  const existing = await prisma.user.findUnique({ where: { email } });
+  const normalizedEmail = email.trim().toLowerCase();
+  const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
   if (existing) throw ApiError.conflict('An account with this email already exists', 'EMAIL_TAKEN');
 
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
   const user = await prisma.user.create({
     data: {
-      email,
+      email: normalizedEmail,
       passwordHash,
       role: ROLES.CANDIDATE,
       candidate: {
@@ -59,8 +61,9 @@ export async function registerCandidate({ email, password, fullName, phone, loca
 }
 
 export async function login({ email, password }) {
+  const normalizedEmail = email.trim().toLowerCase();
   const user = await prisma.user.findUnique({
-    where: { email },
+    where: { email: normalizedEmail },
     include: { company: true, candidate: true },
   });
 

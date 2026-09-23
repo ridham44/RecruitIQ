@@ -270,6 +270,13 @@ model Job {
   educationRequirements  String[]       @default([])
   location               String?
   employmentType         EmploymentType @default(FULL_TIME)
+  workMode               String         @default("On-site")
+  openings               Int            @default(1)
+  jobLevel               String         @default("Mid")
+  noticePeriod           String?
+  languagesRequired      String[]       @default([])
+  certifications         String[]       @default([])
+  salaryRange            String?
   status                 JobStatus      @default(OPEN)
   // AI-extracted structured requirements kept alongside the raw description
   // (see Section 12) — stored as JSON so the shape can evolve freely.

@@ -52,13 +52,29 @@ export default function JobsListPage() {
             <Card className="h-full p-5 transition-shadow hover:shadow-md">
               <p className="font-semibold text-slate-900">{job.title}</p>
               <p className="text-sm text-slate-500">{job.company?.name}</p>
-              <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                 {job.location && (
                   <span className="flex items-center gap-1">
                     <MapPin className="h-3.5 w-3.5" /> {job.location}
                   </span>
                 )}
                 <span>{job.employmentType.replace('_', ' ')}</span>
+                <span className="rounded bg-blue-50 px-1.5 py-0.5 font-medium text-blue-700">
+                  {job.workMode || 'On-site'}
+                </span>
+                <span className="rounded bg-purple-50 px-1.5 py-0.5 font-medium text-purple-700">
+                  {job.jobLevel || 'Mid'}
+                </span>
+                {job.salaryRange && (
+                  <span className="rounded bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-700">
+                    {job.salaryRange}
+                  </span>
+                )}
+                {job.openings > 1 && (
+                  <span className="rounded bg-amber-50 px-1.5 py-0.5 font-medium text-amber-700">
+                    {job.openings} openings
+                  </span>
+                )}
               </div>
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {job.requiredSkills.slice(0, 4).map((skill) => (
