@@ -9,5 +9,7 @@ router.use(authenticate, authorize(ROLES.COMPANY));
 
 router.get('/me', companiesController.getProfile);
 router.patch('/me', companiesController.updateProfile);
+router.get('/dashboard-overview', companiesController.getDashboardOverview);
 
 export default router;
+

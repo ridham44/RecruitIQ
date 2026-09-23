@@ -11,3 +11,9 @@ export const updateProfile = asyncHandler(async (req, res) => {
   const company = await companiesService.updateCompanyProfile(req.user.id, req.body);
   ok(res, { company });
 });
+
+export const getDashboardOverview = asyncHandler(async (req, res) => {
+  const overview = await companiesService.getDashboardOverview(req.user.id);
+  ok(res, { overview });
+});
+
