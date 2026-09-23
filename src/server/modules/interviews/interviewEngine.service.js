@@ -26,17 +26,17 @@ const STAGES_WITH_DIFFICULTY = new Set(['RESUME_QUESTIONS', 'BASIC_TECHNICAL', '
 
 // "Question X of Y" progress (Section 10) — a follow-up shares its parent's
 // index, so it reports the same number as the question it follows up on.
-function questionProgress(question, stagePlan) {
-  if (!question || question.stage === 'INTRODUCTION') return { questionNumber: null, totalPlannedQuestions: stagePlan.length };
-  return { questionNumber: question.index + 1, totalPlannedQuestions: stagePlan.length };
+// The total is always the company's configured AiInterviewConfig.questionCount
+// itself (not the size of any internal plan array), so what the candidate
+// sees on screen always matches exactly what was configured — it never
+// grows, shrinks, or drifts as the interview progresses.
+function questionProgress(question, config) {
+  if (!question || question.stage === 'INTRODUCTION') return { questionNumber: null, totalPlannedQuestions: config.questionCount };
+  return { questionNumber: question.index + 1, totalPlannedQuestions: config.questionCount };
 }
 
-// Deterministic ceiling on how many follow-ups the whole interview can ever
-// ask, independent of what the LLM "wants" (Section 5: "The AI should NOT
-// freely control the entire interview"). A follow-up is also only ever
-// allowed once per planned question (no follow-ups-of-follow-ups).
-function maxFollowUpBudget(config) {
-  return Math.max(2, Math.ceil(config.questionCount / 3));
+function followUpsAskedSoFar(interview) {
+  return interview.questions.filter((q) => q.type === 'FOLLOW_UP').length;
 }
 
 // Splits `total` items as evenly as possible across `bucketCount` buckets
@@ -52,31 +52,43 @@ function apportion(total, bucketCount) {
 
 // Flattens AiInterviewConfig into an ordered list of stages, one entry per
 // PLANNED question (follow-ups aren't in this list — they're inserted
-// live). CANDIDATE_QUESTIONS is always exactly one question, always last.
+// live, see advanceInterviewCore). CANDIDATE_QUESTIONS is always exactly
+// one question, always last.
 //
-// AiInterviewConfig.questionCount is the hard ceiling on the whole
-// interview (minus the one always-asked closing "any questions for us?"
-// turn) — company custom questions are mandatory (Section 1: "the AI must
-// ask") and are carved out of that budget FIRST, before any AI-generated
-// question gets a slot. If there are more custom questions than the
-// configured total allows, the custom questions win outright: only the
-// first `questionCount - 1` of them are asked and NO AI-generated question
-// is added on top. (upsertConfig also rejects saving that combination in
-// the first place — this is just the runtime safety net for configs saved
-// before that validation existed.)
-function buildStagePlan(config) {
+// AiInterviewConfig.questionCount is a HARD ceiling on the whole interview
+// (minus the one always-asked closing "any questions for us?" turn) that
+// must never be exceeded — including by follow-ups, which draw from this
+// exact same budget rather than being added on top of it. Company custom
+// questions are mandatory (Section 1: "the AI must ask") and are carved
+// out of the budget FIRST: JOB_SPECIFIC (which carries them) is ordered as
+// the very first core stage, right after the introduction, so every custom
+// question is always fully asked before any follow-up gets the chance to
+// eat into the budget the LATER stages depend on. If there are more custom
+// questions than the configured total allows, the custom questions win
+// outright: only the first `questionCount - 1` of them are asked and NO
+// AI-generated question is added on top. (upsertConfig also rejects saving
+// that combination in the first place — this is just the runtime safety
+// net for configs saved before that validation existed.)
+//
+// `followUpsUsed` — how many follow-ups have already been asked in this
+// interview — shrinks the AI-generated share of the stages AFTER
+// JOB_SPECIFIC each time this is recomputed, so a follow-up spends its
+// budget by quietly dropping a not-yet-asked AI-generated question rather
+// than extending the interview past the configured count.
+function buildStagePlan(config, followUpsUsed = 0) {
   // INTRODUCTION is handled separately (createIntroductionQuestion, asked
   // once at start() and never part of the plannedQuestionIndex sequence) —
   // must be excluded here too, or it collides with a real planned stage.
   const coreStages = PLANNED_QUESTION_STAGES.filter((s) => s !== 'CANDIDATE_QUESTIONS' && s !== 'INTRODUCTION');
+  const orderedStages = ['JOB_SPECIFIC', ...coreStages.filter((s) => s !== 'JOB_SPECIFIC')];
 
   const coreBudget = Math.max(0, config.questionCount - 1);
   const customToAsk = Math.min(config.customQuestions.length, coreBudget);
-  const aiBudget = coreBudget - customToAsk;
-  const aiShares = apportion(aiBudget, coreStages.length);
+  const aiBudget = Math.max(0, coreBudget - customToAsk - followUpsUsed);
+  const aiShares = apportion(aiBudget, orderedStages.length);
 
   const plan = [];
-  coreStages.forEach((stage, i) => {
+  orderedStages.forEach((stage, i) => {
     const count = aiShares[i] + (stage === 'JOB_SPECIFIC' ? customToAsk : 0);
     for (let n = 0; n < count; n++) plan.push(stage);
   });
@@ -242,7 +254,6 @@ export async function startInterview(userId, interviewId) {
   const config = await getEffectiveConfig(interview.application.jobId);
   const fresh = await loadInterviewContext(interviewId);
   const question = currentUnansweredQuestion(fresh);
-  const stagePlan = buildStagePlan(config);
   return {
     token,
     url,
@@ -252,7 +263,7 @@ export async function startInterview(userId, interviewId) {
     aiName: config.aiName,
     aiTitle: config.aiTitle,
     voiceGender: config.voiceGender,
-    ...questionProgress(question, stagePlan),
+    ...questionProgress(question, config),
   };
 }
 
@@ -276,7 +287,6 @@ export async function getCurrentState(userId, interviewId, { asCompany = false }
   const interview = asCompany ? await authorizeCompany(userId, interviewId) : await authorizeCandidate(userId, interviewId);
   const config = await getEffectiveConfig(interview.application.jobId);
   const question = currentUnansweredQuestion(interview);
-  const stagePlan = buildStagePlan(config);
   return {
     id: interview.id,
     status: interview.status,
@@ -288,7 +298,7 @@ export async function getCurrentState(userId, interviewId, { asCompany = false }
     aiName: config.aiName,
     aiTitle: config.aiTitle,
     voiceGender: config.voiceGender,
-    ...questionProgress(question, stagePlan),
+    ...questionProgress(question, config),
   };
 }
 
@@ -336,14 +346,24 @@ async function advanceInterviewCore(interview, params) {
   // as-is (not re-normalized, so a human fix is never silently undone).
   const evaluationTranscript = manuallyCorrected ? correctedTranscript : normalizedTranscript;
 
-  const stagePlan = buildStagePlan(config);
+  // Follow-ups draw from the SAME total budget as every other question
+  // (Section: "should not ask more than N questions") — never on top of
+  // it. `coreAskedSoFar` counts every non-intro, non-closing question
+  // asked so far (planned AND follow-up alike); once it reaches the
+  // configured budget, no more questions of either kind are allowed and
+  // the interview moves straight to its closing turn.
+  const followUpsUsedSoFar = followUpsAskedSoFar(interview);
+  const coreBudget = Math.max(0, config.questionCount - 1);
+  const coreAskedSoFar = interview.questions.filter(
+    (q) => q.stage !== 'INTRODUCTION' && q.stage !== 'CANDIDATE_QUESTIONS'
+  ).length;
+  const remainingCoreBudget = coreBudget - coreAskedSoFar;
 
   // Follow-ups only ever apply to planned questions (never a follow-up of a
-  // follow-up), and only while the interview-wide budget allows it.
-  const followUpCount = interview.questions.filter((q) => q.type === 'FOLLOW_UP').length;
+  // follow-up), and only while budget remains.
   const isPlannedQuestion = question.type !== 'FOLLOW_UP';
-  const followUpBudgetLeft = followUpCount < maxFollowUpBudget(config);
-  const allowFollowUp = isPlannedQuestion && followUpBudgetLeft && question.stage !== 'CANDIDATE_QUESTIONS' && question.stage !== 'INTRODUCTION';
+  const allowFollowUp =
+    isPlannedQuestion && remainingCoreBudget > 0 && question.stage !== 'CANDIDATE_QUESTIONS' && question.stage !== 'INTRODUCTION';
 
   let evaluation = { needsFollowUp: false, relevance: 0 };
   if (evaluationTranscript?.trim()) {
@@ -374,13 +394,18 @@ async function advanceInterviewCore(interview, params) {
       isFollowUp: true,
       stage: question.stage,
       question: followUp,
-      ...questionProgress(followUp, stagePlan),
+      ...questionProgress(followUp, config),
     };
   }
 
   // Introduction doesn't count against plannedQuestionIndex — the plan
   // starts fresh at index 0 for the first REAL planned question.
   const nextPlannedIndex = question.stage === 'INTRODUCTION' ? 0 : interview.plannedQuestionIndex + 1;
+
+  // Recomputed with the follow-ups spent so far — each one quietly drops a
+  // not-yet-asked AI-generated question from a later stage instead of
+  // extending the plan, so the total can never exceed config.questionCount.
+  const stagePlan = buildStagePlan(config, followUpsUsedSoFar);
 
   if (nextPlannedIndex >= stagePlan.length) {
     return finalizeInterview(interviewId);
@@ -410,7 +435,7 @@ async function advanceInterviewCore(interview, params) {
     isFollowUp: false,
     stage: nextStage,
     question: nextQuestion,
-    ...questionProgress(nextQuestion, stagePlan),
+    ...questionProgress(nextQuestion, config),
   };
 }
 

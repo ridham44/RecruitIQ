@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Pencil, Users, Calendar, XCircle, Save, X } from 'lucide-react';
+import { Pencil, Users, Calendar, XCircle, Save, X, Laptop, IndianRupee, Clock3 } from 'lucide-react';
 import { jobsApi } from '../../services/jobs.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
@@ -250,44 +250,33 @@ export default function JobDetailPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="flex items-center gap-3">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-xl font-semibold text-slate-900">{job.title}</h2>
             <StatusBadge status={job.status} />
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
-            <span>{job.location || 'Remote'}</span>
-            <span>·</span>
-            <span>{job.employmentType.replace('_', ' ')}</span>
-            <span>·</span>
-            <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
-              {job.workMode || 'On-site'}
-            </span>
-            <span className="inline-flex items-center rounded-md bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700">
-              {job.jobLevel || 'Mid'} Level
-            </span>
-            <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
-              {job.openings || 1} {job.openings === 1 ? 'opening' : 'openings'}
-            </span>
-          </div>
+          <p className="mt-1 text-sm text-slate-500">
+            {job.location || 'Remote'} · {job.employmentType.replace('_', ' ')} · {job.jobLevel || 'Mid'} Level
+          </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" onClick={startEdit}>
+
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+          <Button variant="secondary" onClick={startEdit} className="w-full sm:w-auto">
             <Pencil className="h-4 w-4" /> Edit
           </Button>
-          <Link to={`/company/jobs/${id}/applications`}>
-            <Button variant="secondary">
+          <Link to={`/company/jobs/${id}/applications`} className="contents sm:block">
+            <Button variant="secondary" className="w-full sm:w-auto">
               <Users className="h-4 w-4" /> Applications
             </Button>
           </Link>
-          <Link to={`/company/jobs/${id}/interviews`}>
-            <Button variant="secondary">
+          <Link to={`/company/jobs/${id}/interviews`} className="contents sm:block">
+            <Button variant="secondary" className="w-full sm:w-auto">
               <Calendar className="h-4 w-4" /> Interviews
             </Button>
           </Link>
           {job.status !== 'CLOSED' && (
-            <Button variant="danger" onClick={() => setConfirmClose(true)}>
+            <Button variant="danger" onClick={() => setConfirmClose(true)} className="w-full sm:w-auto">
               <XCircle className="h-4 w-4" /> Close job
             </Button>
           )}
@@ -296,55 +285,43 @@ export default function JobDetailPage() {
 
       {/* Highlights bar */}
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-lg border border-slate-200 bg-white p-3.5 shadow-sm">
-          <p className="text-xs font-medium text-slate-400">Work Mode</p>
-          <p className="mt-0.5 font-semibold text-slate-800">{job.workMode || 'On-site'}</p>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-3.5 shadow-sm">
-          <p className="text-xs font-medium text-slate-400">Openings</p>
-          <p className="mt-0.5 font-semibold text-slate-800">{job.openings || 1}</p>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-3.5 shadow-sm">
-          <p className="text-xs font-medium text-slate-400">Salary Range</p>
-          <p className="mt-0.5 font-semibold text-slate-800">{job.salaryRange || 'Not disclosed'}</p>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-3.5 shadow-sm">
-          <p className="text-xs font-medium text-slate-400">Notice Period</p>
-          <p className="mt-0.5 font-semibold text-slate-800">{job.noticePeriod || 'Negotiable'}</p>
-        </div>
+        <StatChip icon={Laptop} iconBg="bg-blue-50 text-blue-600" label="Work Mode" value={job.workMode || 'On-site'} />
+        <StatChip icon={Users} iconBg="bg-brand-50 text-brand-600" label="Openings" value={job.openings || 1} />
+        <StatChip icon={IndianRupee} iconBg="bg-emerald-50 text-emerald-600" label="Salary Range" value={job.salaryRange || 'Not disclosed'} />
+        <StatChip icon={Clock3} iconBg="bg-amber-50 text-amber-600" label="Notice Period" value={job.noticePeriod || 'Negotiable'} />
       </div>
 
-      <Card className="mb-6 p-6">
-        <h3 className="mb-2 font-semibold text-slate-900">Description</h3>
+      <Card className="mb-6 p-5">
+        <h3 className="mb-2 text-sm font-semibold text-slate-900">Description</h3>
         <p className="whitespace-pre-wrap text-sm text-slate-600">{job.description}</p>
       </Card>
 
-      <div className="grid gap-6 sm:grid-cols-2">
-        <Card className="p-6">
-          <h3 className="mb-3 font-semibold text-slate-900">Experience</h3>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Card className="p-5">
+          <h3 className="mb-2 text-sm font-semibold text-slate-900">Experience</h3>
           <p className="text-sm text-slate-600">
             {job.minimumExperience}+ years{job.maximumExperience ? ` – up to ${job.maximumExperience} years` : ''}
           </p>
         </Card>
-        <Card className="p-6">
-          <h3 className="mb-3 font-semibold text-slate-900">Education</h3>
+        <Card className="p-5">
+          <h3 className="mb-2 text-sm font-semibold text-slate-900">Education</h3>
           <p className="text-sm text-slate-600">
             {job.educationRequirements?.length ? job.educationRequirements.join(', ') : 'No specific requirement'}
           </p>
         </Card>
       </div>
 
-      <Card className="mt-6 p-6">
-        <h3 className="mb-3 font-semibold text-slate-900">Required skills</h3>
+      <Card className="mt-4 p-5">
+        <h3 className="mb-2 text-sm font-semibold text-slate-900">Required skills</h3>
         <SkillTags skills={job.requiredSkills} />
 
-        <h3 className="mb-3 mt-5 font-semibold text-slate-900">Preferred skills</h3>
+        <h3 className="mb-2 mt-4 text-sm font-semibold text-slate-900">Preferred skills</h3>
         <SkillTags skills={job.preferredSkills} tone="slate" />
 
-        <h3 className="mb-3 mt-5 font-semibold text-slate-900">Languages required</h3>
+        <h3 className="mb-2 mt-4 text-sm font-semibold text-slate-900">Languages required</h3>
         <SkillTags skills={job.languagesRequired} tone="emerald" />
 
-        <h3 className="mb-3 mt-5 font-semibold text-slate-900">Certifications</h3>
+        <h3 className="mb-2 mt-4 text-sm font-semibold text-slate-900">Certifications</h3>
         <SkillTags skills={job.certifications} tone="amber" />
       </Card>
 
@@ -358,6 +335,18 @@ export default function JobDetailPage() {
         loading={closing}
       />
     </div>
+  );
+}
+
+function StatChip({ icon: Icon, iconBg, label, value }) {
+  return (
+    <Card className="p-3.5">
+      <div className={`inline-flex rounded-lg p-1.5 ${iconBg}`}>
+        <Icon className="h-3.5 w-3.5" />
+      </div>
+      <p className="mt-2 text-xs font-medium text-slate-400">{label}</p>
+      <p className="truncate text-sm font-semibold text-slate-800">{value}</p>
+    </Card>
   );
 }
 
