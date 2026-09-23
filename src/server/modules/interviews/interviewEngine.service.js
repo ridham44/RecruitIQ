@@ -39,25 +39,47 @@ function maxFollowUpBudget(config) {
   return Math.max(2, Math.ceil(config.questionCount / 3));
 }
 
+// Splits `total` items as evenly as possible across `bucketCount` buckets
+// (largest-remainder style), returning per-bucket counts that sum to
+// exactly `total` — used to divide the AI-generated-question budget across
+// stages without rounding drift losing or adding questions.
+function apportion(total, bucketCount) {
+  if (bucketCount <= 0) return [];
+  const base = Math.floor(total / bucketCount);
+  const remainder = total % bucketCount;
+  return Array.from({ length: bucketCount }, (_, i) => base + (i < remainder ? 1 : 0));
+}
+
 // Flattens AiInterviewConfig into an ordered list of stages, one entry per
 // PLANNED question (follow-ups aren't in this list — they're inserted
-// live). Company custom questions are guaranteed to all be asked (Section
-// 1: "must ask") by expanding the JOB_SPECIFIC stage's share; every other
-// stage gets an even split of the remaining budget. CANDIDATE_QUESTIONS is
-// always exactly one question, always last.
+// live). CANDIDATE_QUESTIONS is always exactly one question, always last.
+//
+// AiInterviewConfig.questionCount is the hard ceiling on the whole
+// interview (minus the one always-asked closing "any questions for us?"
+// turn) — company custom questions are mandatory (Section 1: "the AI must
+// ask") and are carved out of that budget FIRST, before any AI-generated
+// question gets a slot. If there are more custom questions than the
+// configured total allows, the custom questions win outright: only the
+// first `questionCount - 1` of them are asked and NO AI-generated question
+// is added on top. (upsertConfig also rejects saving that combination in
+// the first place — this is just the runtime safety net for configs saved
+// before that validation existed.)
 function buildStagePlan(config) {
   // INTRODUCTION is handled separately (createIntroductionQuestion, asked
   // once at start() and never part of the plannedQuestionIndex sequence) —
   // must be excluded here too, or it collides with a real planned stage.
   const coreStages = PLANNED_QUESTION_STAGES.filter((s) => s !== 'CANDIDATE_QUESTIONS' && s !== 'INTRODUCTION');
-  const budgetForCore = Math.max(coreStages.length, config.questionCount - 1);
-  const perStage = Math.max(1, Math.round(budgetForCore / coreStages.length));
+
+  const coreBudget = Math.max(0, config.questionCount - 1);
+  const customToAsk = Math.min(config.customQuestions.length, coreBudget);
+  const aiBudget = coreBudget - customToAsk;
+  const aiShares = apportion(aiBudget, coreStages.length);
 
   const plan = [];
-  for (const stage of coreStages) {
-    const count = stage === 'JOB_SPECIFIC' ? perStage + config.customQuestions.length : perStage;
-    for (let i = 0; i < count; i++) plan.push(stage);
-  }
+  coreStages.forEach((stage, i) => {
+    const count = aiShares[i] + (stage === 'JOB_SPECIFIC' ? customToAsk : 0);
+    for (let n = 0; n < count; n++) plan.push(stage);
+  });
   plan.push('CANDIDATE_QUESTIONS');
   return plan;
 }

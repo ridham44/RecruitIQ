@@ -19,12 +19,18 @@ const VOICE_LABELS = { FEMALE: 'Female', MALE: 'Male', NEUTRAL: 'Neutral' };
 // A custom question is a full sentence, not a short tag — a dedicated
 // add/remove list reads better here than the chip-style TagInput used for
 // skills elsewhere.
-function CustomQuestionList({ questions, onChange }) {
+//
+// `maxQuestions` is (Number of questions - 1): one slot is always reserved
+// for the closing "any questions for us?" turn, so that's the most custom
+// questions that can ever all be asked. Enforced here (not just on save) so
+// the company sees the limit while typing, not after a rejected submit.
+function CustomQuestionList({ questions, onChange, maxQuestions }) {
   const [draft, setDraft] = useState('');
+  const atLimit = questions.length >= maxQuestions;
 
   const add = () => {
     const q = draft.trim();
-    if (q) onChange([...questions, q]);
+    if (q && !atLimit) onChange([...questions, q]);
     setDraft('');
   };
 
@@ -49,8 +55,9 @@ function CustomQuestionList({ questions, onChange }) {
       <div className="flex gap-2">
         <input
           className={inputClass}
-          placeholder="Type a question the AI must ask, then press Add"
+          placeholder={atLimit ? 'Maximum custom questions reached' : 'Type a question the AI must ask, then press Add'}
           value={draft}
+          disabled={atLimit}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
@@ -59,10 +66,14 @@ function CustomQuestionList({ questions, onChange }) {
             }
           }}
         />
-        <Button type="button" variant="secondary" onClick={add}>
+        <Button type="button" variant="secondary" onClick={add} disabled={atLimit}>
           Add
         </Button>
       </div>
+      <p className={`mt-1 text-xs ${atLimit ? 'font-medium text-amber-600' : 'text-slate-400'}`}>
+        {questions.length}/{maxQuestions} used
+        {atLimit ? ' — increase "Number of questions" to add more.' : ''}
+      </p>
     </div>
   );
 }
@@ -340,6 +351,7 @@ export default function JobInterviewsPage() {
               <CustomQuestionList
                 questions={configForm.customQuestions}
                 onChange={(customQuestions) => setConfigForm({ ...configForm, customQuestions })}
+                maxQuestions={Math.max(0, Number(configForm.questionCount) - 1)}
               />
               <p className="mt-1 text-xs text-slate-400">
                 The AI also generates its own questions from the job requirements, the candidate's resume, and their

@@ -172,14 +172,20 @@ function EducationCard({ entry, onChange, onSave, onDelete }) {
             </FormField>
           </div>
 
-          {/* Currently Studying toggle */}
-          <label className="mb-4 flex cursor-pointer items-center gap-3 text-sm text-slate-700">
-            <div
-              onClick={() => {
-                set('isCurrentlyStudying', !entry.isCurrentlyStudying);
-                if (!entry.isCurrentlyStudying) set('endYear', '');
-              }}
-              className={`relative h-5 w-9 rounded-full transition-colors duration-200 ${
+          {/* Currently Studying toggle — the whole row (dial + label text) is
+              the click target, not just the small dial, so it's easy to hit
+              on touch screens and actually responds when tapped. */}
+          <label
+            className="mb-4 flex cursor-pointer select-none items-center gap-3 py-1 text-sm text-slate-700"
+            onClick={() => {
+              set('isCurrentlyStudying', !entry.isCurrentlyStudying);
+              if (!entry.isCurrentlyStudying) set('endYear', '');
+            }}
+          >
+            <span
+              role="switch"
+              aria-checked={entry.isCurrentlyStudying}
+              className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 ${
                 entry.isCurrentlyStudying ? 'bg-brand-600' : 'bg-slate-300'
               }`}
             >
@@ -188,7 +194,7 @@ function EducationCard({ entry, onChange, onSave, onDelete }) {
                   entry.isCurrentlyStudying ? 'translate-x-4' : 'translate-x-0.5'
                 }`}
               />
-            </div>
+            </span>
             Currently studying here
           </label>
 

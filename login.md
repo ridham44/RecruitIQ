@@ -4,7 +4,7 @@ All accounts use the same password: **`Demo@1234`**
 
 ---
 
-## Company Account
+## Company Accounts
 
 | Field    | Value                          |
 |----------|-------------------------------|
@@ -13,7 +13,30 @@ All accounts use the same password: **`Demo@1234`**
 | Company  | Ravantra Tech                 |
 | Role     | COMPANY                        |
 
+| Field    | Value                          |
+|----------|-------------------------------|
+| Email    | `company@redflextech.demo`    |
+| Password | `Demo@1234`                   |
+| Company  | Redflex Tech                  |
+| Role     | COMPANY                        |
+| Job      | Node.js Developer Intern      |
+
 **Login redirects to → `/company/dashboard`**
+
+---
+
+## Redflex Tech — Node.js Developer Intern
+
+All 6 candidates below (existing demo accounts, see Candidate Accounts table for their login emails) applied to this
+job at Redflex Tech, in addition to their existing React.js Developer application at Ravantra Tech. Applications are
+in **APPLIED** status (not yet screened) — screen them from the company dashboard to test that flow.
+
+- Dev Solanki
+- Arjun Shah
+- Kavya Nair
+- Riya Mehta
+- Ridham Patel
+- Priya Sharma
 
 ---
 

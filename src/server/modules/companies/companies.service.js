@@ -38,7 +38,7 @@ export async function getDashboardOverview(userId) {
       },
       applications: {
         include: {
-          candidate: true,
+          candidate: { include: { educations: true } },
           screeningResult: true,
           resume: {
             select: {
@@ -355,57 +355,61 @@ export async function getDashboardOverview(userId) {
       const tabSwitches = interview?.events?.filter((e) => e.type === 'TAB_SWITCH').length || 0;
       const hasProctoringFlag = tabSwitches > 2;
 
+      const hasExperienceData = (parsed?.totalExperienceYears ?? null) != null || (parsed?.experience?.length || 0) > 0;
+      const hasEducationData =
+        (app.candidate.educations?.length || 0) > 0 || !!parsed?.degree || (parsed?.education?.length || 0) > 0;
+
       const checks = [
         {
           id: 'screening',
-          name: 'AI Screening Result',
-          passed: hasScreening,
+          name: 'AI Screening',
+          readyLabel: 'Complete',
           detail: hasScreening ? `Score: ${Math.round(sr.overallScore)}/100` : 'Screening not run yet',
           status: hasScreening ? 'passed' : 'warning',
         },
         {
           id: 'skills',
-          name: 'Skill Match Alignment',
-          passed: requiredSkills.length === 0 || matchedRequired.length >= Math.ceil(requiredSkills.length * 0.6),
+          name: 'Skills Match',
+          readyLabel: 'Verified',
           detail: `${matchedRequired.length}/${requiredSkills.length} required skills matched${missingRequired.length > 0 ? ` (missing: ${missingRequired.slice(0, 2).join(', ')})` : ''}`,
           status: missingRequired.length === 0 ? 'passed' : matchedRequired.length > 0 ? 'warning' : 'failed',
         },
         {
           id: 'experience',
-          name: 'Experience & Education',
-          passed: (parsed?.totalExperienceYears ?? 0) >= 0 && (app.candidate.degree || parsed?.degree),
-          detail: `${parsed?.totalExperienceYears ?? 0} yrs experience · ${app.candidate.degree || parsed?.degree || 'Degree not listed'}`,
-          status: app.candidate.degree || parsed?.degree ? 'passed' : 'warning',
+          name: 'Experience/Education',
+          readyLabel: 'Verified',
+          detail: `${parsed?.totalExperienceYears ?? 0} yrs experience · ${app.candidate.educations?.[0]?.degree || parsed?.degree || 'Degree not listed'}`,
+          status: hasExperienceData && hasEducationData ? 'passed' : 'warning',
+        },
+        {
+          id: 'interview',
+          name: 'AI Interview',
+          readyLabel: 'Complete',
+          detail: hasInterviewCompleted ? 'Interview session completed' : 'Interview not completed yet',
+          status: hasInterviewCompleted ? 'passed' : 'warning',
         },
         {
           id: 'interview_report',
-          name: 'AI Interview Report',
-          passed: hasReport,
+          name: 'Interview Report',
+          readyLabel: 'Ready',
           detail: hasReport
             ? `Overall: ${Math.round(report.overallScore)}/100 (Tech: ${Math.round(report.technicalScore || 0)}, Comm: ${Math.round(report.communicationScore || 0)})`
             : hasInterviewCompleted
               ? 'Report generating...'
-              : 'Interview not completed',
+              : 'Awaiting interview',
           status: hasReport ? 'passed' : 'warning',
         },
         {
-          id: 'question_analysis',
-          name: 'Question-Level Rubric',
-          passed: hasReport && (report?.questionAnalysis?.length || 0) > 0,
-          detail: hasReport ? `${report?.questionAnalysis?.length || 0} questions evaluated` : 'Pending interview completion',
-          status: hasReport && (report?.questionAnalysis?.length || 0) > 0 ? 'passed' : 'warning',
-        },
-        {
           id: 'proctoring',
-          name: 'Security & Proctoring Audit',
-          passed: !hasProctoringFlag,
+          name: 'Security Audit',
+          readyLabel: 'Complete',
           detail: interview ? `${interview.events?.length || 0} audit events (${tabSwitches} tab switch${tabSwitches === 1 ? '' : 'es'})` : 'No interview session yet',
-          status: hasProctoringFlag ? 'warning' : 'passed',
+          status: !interview ? 'warning' : hasProctoringFlag ? 'warning' : 'passed',
         },
         {
           id: 'resume',
-          name: 'Resume & Transcript',
-          passed: !!(app.resume?.rawText || interview?.questions?.some((q) => q.answer)),
+          name: 'Resume',
+          readyLabel: 'Available',
           detail: app.resume?.fileName ? `${app.resume.fileName} attached` : 'Resume available',
           status: 'passed',
         },
