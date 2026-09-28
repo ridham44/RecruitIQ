@@ -29,7 +29,10 @@ export const listAvailableSlots = asyncHandler(async (req, res) => {
 });
 
 export const bookSlot = asyncHandler(async (req, res) => {
-  const interview = await schedulingService.bookSlot(req.user.id, req.params.applicationId, req.body.slotId);
+  // const interview = await schedulingService.bookSlot(req.user.id, req.params.applicationId, req.body.slotId);
+  const interview = await schedulingService.bookSlot(req.user.id, req.params.applicationId, req.body.slotId, {
+    phoneNumber: req.body.phoneNumber,
+  });
   created(res, { interview });
 });
 

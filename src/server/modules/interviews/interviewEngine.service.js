@@ -109,7 +109,9 @@ function buildStagePlan(config, followUpsUsed = 0) {
   return plan;
 }
 
-async function loadInterviewContext(interviewId) {
+// Exported for phoneInterview.service.js (telephonic interviews), which
+// needs the same context/authorization lookups without duplicating them.
+export async function loadInterviewContext(interviewId) {
   const interview = await prisma.interview.findUnique({
     where: { id: interviewId },
     include: {
@@ -137,7 +139,7 @@ async function authorizeCandidate(userId, interviewId) {
   return interview;
 }
 
-async function authorizeCompany(userId, interviewId) {
+export async function authorizeCompany(userId, interviewId) {
   const interview = await loadInterviewContext(interviewId);
   await getOwnedJob(userId, interview.application.jobId);
   return interview;
@@ -238,6 +240,12 @@ export async function startInterview(userId, interviewId) {
     throw ApiError.badRequest('This interview is no longer active', 'INTERVIEW_NOT_ACTIVE');
   }
 
+  // Telephonic interviews run over the phone call only (phone-agent/) —
+  // joining the browser room as well would run two answer loops at once.
+  if (interview.mode === 'PHONE') {
+    throw ApiError.badRequest('This is a telephonic interview — you will receive a phone call at the scheduled time', 'PHONE_INTERVIEW');
+  }
+
   // First join only — a candidate already IN_PROGRESS is reconnecting
   // (dropped connection, refresh) and must always be let back in regardless
   // of the slot window, or a flaky connection would lock them out mid-interview.
@@ -255,14 +263,15 @@ export async function startInterview(userId, interviewId) {
     name: interview.application.candidate.fullName,
   });
 
-  if (interview.status === 'SCHEDULED') {
-    await prisma.interview.update({
-      where: { id: interviewId },
-      data: { status: 'IN_PROGRESS', stage: 'INTRODUCTION', startedAt: new Date(), liveKitRoomName: roomName },
-    });
-    await createIntroductionQuestion(interview);
-    await prisma.interviewEvent.create({ data: { interviewId, type: 'INTERVIEW_STARTED' } });
-  }
+  // if (interview.status === 'SCHEDULED') {
+  //   await prisma.interview.update({
+  //     where: { id: interviewId },
+  //     data: { status: 'IN_PROGRESS', stage: 'INTRODUCTION', startedAt: new Date(), liveKitRoomName: roomName },
+  //   });
+  //   await createIntroductionQuestion(interview);
+  //   await prisma.interviewEvent.create({ data: { interviewId, type: 'INTERVIEW_STARTED' } });
+  // }
+  await beginInterviewIfScheduled(interview, { roomName });
 
   const config = await getEffectiveConfig(interview.application.jobId);
   const fresh = await loadInterviewContext(interviewId);
@@ -280,19 +289,53 @@ export async function startInterview(userId, interviewId) {
   };
 }
 
+// SCHEDULED -> IN_PROGRESS plus the introduction question, exactly once.
+// Shared by the browser join (startInterview above) and the telephonic
+// flow (phoneInterview.service.js, once the candidate answers the call), so
+// both modes start an interview identically. A no-op when the interview is
+// already IN_PROGRESS (reconnect / redial) — the caller then just resumes at
+// the current unanswered question.
+export async function beginInterviewIfScheduled(interview, { roomName }) {
+  if (interview.status !== 'SCHEDULED') return false;
+  await prisma.interview.update({
+    where: { id: interview.id },
+    data: { status: 'IN_PROGRESS', stage: 'INTRODUCTION', startedAt: new Date(), liveKitRoomName: roomName },
+  });
+  await createIntroductionQuestion(interview);
+  await prisma.interviewEvent.create({ data: { interviewId: interview.id, type: 'INTERVIEW_STARTED' } });
+  return true;
+}
+
 // Worker calls this trusted via the worker secret (workerAuth.js), not a
 // candidate/company JWT — no ownership check applies, only existence.
 export async function getCurrentStateForWorker(interviewId) {
   const interview = await loadInterviewContext(interviewId);
   const config = await getEffectiveConfig(interview.application.jobId);
+  // return {
+  //   id: interview.id,
+  //   status: interview.status,
+  //   stage: interview.stage,
+  //   question: currentUnansweredQuestion(interview),
+  //   aiName: config.aiName,
+  //   aiTitle: config.aiTitle,
+  //   ttsVoiceId: resolveTtsVoiceId(config),
+  // };
+  const question = currentUnansweredQuestion(interview);
   return {
     id: interview.id,
     status: interview.status,
     stage: interview.stage,
-    question: currentUnansweredQuestion(interview),
+    question,
     aiName: config.aiName,
     aiTitle: config.aiTitle,
     ttsVoiceId: resolveTtsVoiceId(config),
+    // Telephonic interviews: phone-agent/ needs the voice + per-answer timer
+    // (there's no on-screen countdown on a phone call).
+    mode: interview.mode,
+    callStatus: interview.callStatus,
+    voiceGender: config.voiceGender,
+    answerTimeSeconds: config.answerTimeSeconds,
+    ...questionProgress(question, interview, config),
   };
 }
 
@@ -476,9 +519,16 @@ export async function finalizeInterview(interviewId) {
   const interview = await loadInterviewContext(interviewId);
   if (interview.status === 'COMPLETED') return { done: true, stage: 'END' };
 
+  // await prisma.interview.update({
+  //   where: { id: interviewId },
+  //   data: { status: 'COMPLETED', stage: 'END', endedAt: new Date() },
+  // });
+  // Telephonic interviews: the call is done once the interview is — set it
+  // here too so a hang-up racing the final answer can't leave it PENDING.
+  const phoneCallDone = interview.mode === 'PHONE' ? { callStatus: 'COMPLETED', callEndedAt: new Date() } : {};
   await prisma.interview.update({
     where: { id: interviewId },
-    data: { status: 'COMPLETED', stage: 'END', endedAt: new Date() },
+    data: { status: 'COMPLETED', stage: 'END', endedAt: new Date(), ...phoneCallDone },
   });
   await prisma.interviewEvent.create({ data: { interviewId, type: 'INTERVIEW_ENDED' } });
   await prisma.application.update({
@@ -593,6 +643,13 @@ async function getFullDetail(interview) {
     startedAt: interview.startedAt,
     endedAt: interview.endedAt,
     slot: interview.slot,
+    // Telephonic interviews (null/defaults for ONLINE).
+    mode: interview.mode,
+    phoneNumber: interview.phoneNumber,
+    callStatus: interview.callStatus,
+    callAttempts: interview.callAttempts,
+    callStartedAt: interview.callStartedAt,
+    callEndedAt: interview.callEndedAt,
     candidate: interview.application.candidate,
     job: { id: interview.application.job.id, title: interview.application.job.title },
     questions: interview.questions,

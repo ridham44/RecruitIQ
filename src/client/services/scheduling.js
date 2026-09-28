@@ -10,7 +10,10 @@ export const schedulingApi = {
 
   // Candidate
   listAvailableSlots: (applicationId) => api.get(`/scheduling/applications/${applicationId}/slots`),
-  bookSlot: (applicationId, slotId) => api.post(`/scheduling/applications/${applicationId}/book`, { slotId }),
+  // bookSlot: (applicationId, slotId) => api.post(`/scheduling/applications/${applicationId}/book`, { slotId }),
+  // phoneNumber only matters (and is required) for a telephonic (PHONE) slot.
+  bookSlot: (applicationId, slotId, phoneNumber) =>
+    api.post(`/scheduling/applications/${applicationId}/book`, phoneNumber ? { slotId, phoneNumber } : { slotId }),
   cancelMyInterview: (applicationId) => api.post(`/scheduling/applications/${applicationId}/cancel`),
 
   // Shared

@@ -148,6 +148,22 @@ changed. What's new is what happens once a candidate joins one.
   once after the interview ends (`interview-report-generator.service.js`), blended with a deterministic,
   non-LLM resume/job skill-overlap check (reused from the screening module) into `InterviewReport`.
 
+## Telephonic AI interviews
+
+The company picks **Online** or **Telephonic** for each interview slot. For a telephonic slot, the candidate confirms a phone number when booking. At the slot time (or when the company clicks **Call now**), the AI calls that number and runs the interview over the phone.
+
+- **Same engine, same report.** The phone call is only a different "mouth and ears". Questions come from the same `interviewEngine.service.js` state machine (resume-based questions, follow-ups, adaptive difficulty) through `/interviews/:id/worker/answer`. The report (overall, technical and communication %) is identical to an online interview's.
+- **`phone-agent/`** is a separate Python process (LiveKit Agents + Twilio), adapted from the livekit-twilow prototype. It is not part of the Vercel app.
+  - `dialer.py` polls `/worker/phone-interviews/due`, claims each call atomically (`PENDING → DIALING`, never dialed twice) and places a Twilio call that bridges into the LiveKit inbound trunk.
+  - `agent.py` runs the conversation.
+  - See `phone-agent/README.md`.
+- **Call lifecycle** (`phoneInterview.service.js`):
+  - An unanswered call is retried (`PHONE_INTERVIEW_MAX_CALL_ATTEMPTS`, default 3).
+  - A dropped line is redialled and resumes at the same question.
+  - If every attempt goes unanswered, the booking is cancelled and the candidate can rebook.
+  - If retries run out mid-interview, the interview is finalized with a partial report.
+- Test with `node scripts/test-phone-interview.mjs path/to/resume.docx`.
+
 ## Environment variables
 
 Copy `.env.example` to `.env`. Minimum to run locally:

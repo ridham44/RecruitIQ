@@ -1,6 +1,8 @@
 import { prisma } from '../../config/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
-import { APPLICATION_STATUS, INTERVIEW_SLOT_STATUS, INTERVIEW_STATUS } from '../../../shared/constants/statuses.js';
+// import { APPLICATION_STATUS, INTERVIEW_SLOT_STATUS, INTERVIEW_STATUS } from '../../../shared/constants/statuses.js';
+import { APPLICATION_STATUS, INTERVIEW_SLOT_STATUS, INTERVIEW_STATUS, INTERVIEW_MODE, CALL_STATUS } from '../../../shared/constants/statuses.js';
+import { phoneNumberSchema } from '../../../shared/schemas/scheduling.schema.js';
 import { getOwnedJob } from '../jobs/jobs.service.js';
 import { sendInterviewConfirmationEmail } from '../notifications/email.service.js';
 
@@ -31,8 +33,13 @@ async function getOwnApplication(userId, applicationId) {
 
 export async function createSlots(userId, jobId, slots) {
   await getOwnedJob(userId, jobId);
+  // return prisma.$transaction(
+  //   slots.map(({ startTime, endTime }) => prisma.interviewSlot.create({ data: { jobId, startTime, endTime } }))
+  // );
   return prisma.$transaction(
-    slots.map(({ startTime, endTime }) => prisma.interviewSlot.create({ data: { jobId, startTime, endTime } }))
+    slots.map(({ startTime, endTime, mode = INTERVIEW_MODE.ONLINE }) =>
+      prisma.interviewSlot.create({ data: { jobId, startTime, endTime, mode } })
+    )
   );
 }
 
@@ -45,7 +52,8 @@ export async function createSlots(userId, jobId, slots) {
 // model and createSlots-style transaction as manual creation — nothing
 // downstream (booking, cancelling, the candidate's slot list) needs to
 // know slots were generated in bulk rather than created one at a time.
-export async function generateSlots(userId, jobId, { rangeStart, rangeEnd, durationMinutes, bufferMinutes }) {
+// export async function generateSlots(userId, jobId, { rangeStart, rangeEnd, durationMinutes, bufferMinutes }) {
+export async function generateSlots(userId, jobId, { rangeStart, rangeEnd, durationMinutes, bufferMinutes, mode = INTERVIEW_MODE.ONLINE }) {
   await getOwnedJob(userId, jobId);
 
   const durationMs = durationMinutes * 60 * 1000;
@@ -73,8 +81,11 @@ export async function generateSlots(userId, jobId, { rangeStart, rangeEnd, durat
     throw ApiError.conflict('Every generated slot overlaps an existing slot for this job', 'ALL_SLOTS_OVERLAP');
   }
 
+  // const created = await prisma.$transaction(
+  //   newSlots.map((slot) => prisma.interviewSlot.create({ data: { jobId, startTime: slot.startTime, endTime: slot.endTime } }))
+  // );
   const created = await prisma.$transaction(
-    newSlots.map((slot) => prisma.interviewSlot.create({ data: { jobId, startTime: slot.startTime, endTime: slot.endTime } }))
+    newSlots.map((slot) => prisma.interviewSlot.create({ data: { jobId, startTime: slot.startTime, endTime: slot.endTime, mode } }))
   );
 
   return { slots: created, skippedCount: candidateSlots.length - newSlots.length };
@@ -148,7 +159,8 @@ export async function listAvailableSlotsForApplication(userId, applicationId) {
   });
 }
 
-export async function bookSlot(userId, applicationId, slotId) {
+// export async function bookSlot(userId, applicationId, slotId) {
+export async function bookSlot(userId, applicationId, slotId, { phoneNumber } = {}) {
   const application = await getOwnApplication(userId, applicationId);
 
   if (application.status !== APPLICATION_STATUS.SHORTLISTED) {
@@ -157,6 +169,26 @@ export async function bookSlot(userId, applicationId, slotId) {
 
   const slot = await prisma.interviewSlot.findUnique({ where: { id: slotId } });
   if (!slot || slot.jobId !== application.jobId) throw ApiError.notFound('Slot not found');
+
+  // Telephonic slot: the AI calls this number at slot time. Checked before
+  // claiming the slot so a missing/invalid number never leaves it BOOKED.
+  // Falls back to the profile phone when the booking request omits one.
+  let phoneFields = {};
+  if (slot.mode === INTERVIEW_MODE.PHONE) {
+    const parsed = phoneNumberSchema.safeParse(phoneNumber || application.candidate.phone || '');
+    if (!parsed.success) {
+      throw ApiError.badRequest(
+        'This is a telephonic interview — please enter the phone number we should call, with country code (e.g. +919876543210)',
+        'PHONE_NUMBER_REQUIRED'
+      );
+    }
+    phoneFields = {
+      mode: INTERVIEW_MODE.PHONE,
+      phoneNumber: parsed.data,
+      callStatus: CALL_STATUS.PENDING,
+      nextCallAt: slot.startTime,
+    };
+  }
 
   // Atomic check-and-set: only succeeds if the slot is still AVAILABLE right
   // now, so two candidates racing for the same slot can't both win it.
@@ -171,7 +203,8 @@ export async function bookSlot(userId, applicationId, slotId) {
   let interview;
   try {
     [interview] = await prisma.$transaction([
-      prisma.interview.create({ data: { applicationId, slotId, status: INTERVIEW_STATUS.SCHEDULED } }),
+      // prisma.interview.create({ data: { applicationId, slotId, status: INTERVIEW_STATUS.SCHEDULED } }),
+      prisma.interview.create({ data: { applicationId, slotId, status: INTERVIEW_STATUS.SCHEDULED, ...phoneFields } }),
       prisma.application.update({ where: { id: applicationId }, data: { status: APPLICATION_STATUS.INTERVIEW_SCHEDULED } }),
     ]);
   } catch (err) {
@@ -180,7 +213,8 @@ export async function bookSlot(userId, applicationId, slotId) {
     throw err;
   }
 
-  await sendInterviewConfirmationEmail({ application, slot }).catch(() => {});
+  // await sendInterviewConfirmationEmail({ application, slot }).catch(() => {});
+  await sendInterviewConfirmationEmail({ application, slot, phoneNumber: phoneFields.phoneNumber }).catch(() => {});
 
   return getInterviewForApplication(userId, applicationId);
 }
