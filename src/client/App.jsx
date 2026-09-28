@@ -24,12 +24,36 @@ import CandidateApplicationDetailPage from './pages/candidate/ApplicationDetailP
 import CandidateProfilePage from './pages/candidate/ProfilePage.jsx';
 import CandidateInterviewRoomPage from './pages/candidate/InterviewRoomPage.jsx';
 
+// Build plan P1 — Platform Admin + invite links
+import SetPasswordPage from './pages/auth/SetPasswordPage.jsx';
+import AdminLayout from './layouts/AdminLayout.jsx';
+import AdminCompaniesPage from './pages/admin/CompaniesPage.jsx';
+import AdminCompanyNewPage from './pages/admin/CompanyNewPage.jsx';
+import AdminCompanyDetailPage from './pages/admin/CompanyDetailPage.jsx';
+import AdminUsersPage from './pages/admin/UsersPage.jsx';
+
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/auth/login" element={<LoginPage />} />
       <Route path="/auth/register" element={<RegisterPage />} />
+      <Route path="/auth/set-password" element={<SetPasswordPage />} />
+
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute role="ADMIN">
+            <AdminLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<Navigate to="companies" replace />} />
+        <Route path="companies" element={<AdminCompaniesPage />} />
+        <Route path="companies/new" element={<AdminCompanyNewPage />} />
+        <Route path="companies/:id" element={<AdminCompanyDetailPage />} />
+        <Route path="users" element={<AdminUsersPage />} />
+      </Route>
 
       <Route
         path="/company"

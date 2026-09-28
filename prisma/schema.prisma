@@ -174,6 +174,17 @@ enum EmailType {
   APPLICATION_SHORTLISTED
   APPLICATION_REJECTED
   INTERVIEW_CONFIRMATION
+  // Build plan P1: "set your password" link for accounts created by someone
+  // else (admin-onboarded company owners; recruiters/HR in later phases).
+  ACCOUNT_SETUP
+}
+
+// Build plan P1: a Platform Admin can suspend a recruitment company. A
+// suspended company's users can't log in, and their existing tokens are
+// rejected by the authenticate middleware.
+enum CompanyStatus {
+  ACTIVE
+  SUSPENDED
 }
 
 enum EmailStatus {
@@ -197,7 +208,29 @@ model User {
   company   Company?
   candidate Candidate?
 
+  passwordTokens PasswordToken[]
+
   @@map("users")
+}
+
+// Build plan P1: single-use, expiring link to set a password — used when an
+// account is created on someone's behalf (admin onboarding a company owner
+// now; recruiter and client-HR invites in later phases). Only the SHA-256
+// hash of the token is stored, never the token itself.
+model PasswordToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  // INVITE for now; RESET can reuse this table later.
+  purpose   String    @default("INVITE")
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_tokens")
 }
 
 model Company {
@@ -213,9 +246,16 @@ model Company {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  // Build plan P1 — Platform Admin management. Existing companies become
+  // ACTIVE via the column default; createdByAdminId is null for companies
+  // that registered themselves.
+  status           CompanyStatus @default(ACTIVE)
+  createdByAdminId String?
+
   user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   jobs Job[]
 
+  @@index([status])
   @@map("companies")
 }
 

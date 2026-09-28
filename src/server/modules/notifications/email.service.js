@@ -94,6 +94,27 @@ export async function sendApplicationStatusEmail(application) {
   }
 }
 
+// Build plan P1: invite for an account someone else created (admin-onboarded
+// company owner). Not tied to an application, so applicationId stays null.
+export async function sendAccountSetupEmail({ to, companyName: rawCompanyName, link, expiresInHours = 72 }) {
+  const subject = `Set up your RecruitIQ account for ${rawCompanyName}`;
+  const companyName = String(rawCompanyName).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const html = layout(`
+    <p>Hello,</p>
+    <p>A RecruitIQ account has been created for <strong>${companyName}</strong> with this email address.
+    Choose a password to start posting jobs and screening candidates.</p>
+    <p style="margin:24px 0;">
+      <a href="${link}" style="background:#2a4bd6;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:bold;display:inline-block;">
+        Set your password
+      </a>
+    </p>
+    <p style="color:#64748b;font-size:12px;">This link works once and expires in ${expiresInHours} hours.
+    If the button doesn't work, copy this link: ${link}</p>
+    <p>— The RecruitIQ team</p>
+  `);
+  return sendAndLog({ to, subject, html, type: 'ACCOUNT_SETUP', applicationId: null });
+}
+
 // application/interview/slot as returned by scheduling.service.js's bookSlot.
 export async function sendInterviewConfirmationEmail({ application, slot }) {
   const to = application.candidate.user.email;

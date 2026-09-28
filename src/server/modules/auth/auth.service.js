@@ -3,6 +3,7 @@ import { prisma } from '../../config/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ROLES } from '../../../shared/constants/roles.js';
 import { signToken } from './token.util.js';
+import { findUsableToken } from './passwordToken.service.js';
 
 const SALT_ROUNDS = 10;
 
@@ -76,7 +77,55 @@ export async function login({ email, password }) {
     throw ApiError.unauthorized('Invalid email or password', 'INVALID_CREDENTIALS');
   }
 
+  // Build plan P1: checked only after the password matches, so a wrong
+  // password never reveals whether a company is suspended.
+  assertCompanyNotSuspended(user);
+
   return { user: serializeUser(user), token: signToken(user) };
+}
+
+export function assertCompanyNotSuspended(user) {
+  if (user.role === ROLES.COMPANY && user.company?.status === 'SUSPENDED') {
+    throw ApiError.forbidden(
+      'Your company account has been suspended. Please contact the RecruitIQ administrator.',
+      'COMPANY_SUSPENDED'
+    );
+  }
+}
+
+// Build plan P1: lets the set-password page greet the user and show which
+// account the link is for before they choose a password.
+export async function getPasswordTokenInfo(token) {
+  const row = await findUsableToken(token);
+  return {
+    email: row.user.email,
+    role: row.user.role,
+    companyName: row.user.company?.name,
+    purpose: row.purpose,
+  };
+}
+
+// Build plan P1: consumes an invite link, sets the password and logs the
+// user straight in. The usedAt IS NULL condition makes the link single-use
+// even if it's submitted twice at the same moment.
+export async function setPasswordWithToken({ token, password }) {
+  const row = await findUsableToken(token);
+  if (!row.user.isActive) throw ApiError.forbidden('This account is inactive', 'ACCOUNT_INACTIVE');
+  assertCompanyNotSuspended(row.user);
+
+  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+  const consumed = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.passwordToken.updateMany({
+      where: { id: row.id, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+    if (count === 0) return false;
+    await tx.user.update({ where: { id: row.userId }, data: { passwordHash } });
+    return true;
+  });
+  if (!consumed) throw ApiError.badRequest('This link has already been used. Please log in.', 'TOKEN_USED');
+
+  return { user: serializeUser(row.user), token: signToken(row.user) };
 }
 
 export async function getCurrentUser(userId) {

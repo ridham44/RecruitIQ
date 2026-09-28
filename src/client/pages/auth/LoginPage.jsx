@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth.jsx';
 import FormField, { inputClass } from '../../components/ui/FormField.jsx';
 import PasswordInput from '../../components/ui/PasswordInput.jsx';
 import Button from '../../components/ui/Button.jsx';
+import { homePathForRole } from '../../utils/homePath.js';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -43,7 +44,8 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const user = await login(trimmedEmail, form.password);
-      navigate(user.role === 'COMPANY' ? '/company/dashboard' : '/candidate/dashboard');
+      // navigate(user.role === 'COMPANY' ? '/company/dashboard' : '/candidate/dashboard');
+      navigate(homePathForRole(user.role));
     } catch (err) {
       setError(err.message);
     } finally {

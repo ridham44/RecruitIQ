@@ -1,4 +1,5 @@
-import { useState } from 'react';
+// import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Check, X } from 'lucide-react';
 import AuthShell from './AuthShell.jsx';
@@ -6,6 +7,8 @@ import { useAuth } from '../../hooks/useAuth.jsx';
 import FormField, { inputClass } from '../../components/ui/FormField.jsx';
 import PasswordInput from '../../components/ui/PasswordInput.jsx';
 import Button from '../../components/ui/Button.jsx';
+import { configApi } from '../../services/config.js';
+import { homePathForRole } from '../../utils/homePath.js';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -18,6 +21,23 @@ export default function RegisterPage() {
   const [touched, setTouched] = useState({ email: false, password: false, name: false });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // Build plan P1: company self-signup can be switched off
+  // (ALLOW_COMPANY_SELF_REGISTER=false). Defaults to shown, so if the config
+  // request fails the page behaves exactly as before.
+  const [allowCompanySignup, setAllowCompanySignup] = useState(true);
+  const companyRequested = searchParams.get('role') === 'company';
+
+  useEffect(() => {
+    configApi
+      .getPublic()
+      .then((config) => {
+        if (config?.allowCompanySelfRegister === false) {
+          setAllowCompanySignup(false);
+          setRole('CANDIDATE');
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const trimmedEmail = form.email.trim();
   const hasMinLength = form.password.length >= 8;
@@ -59,7 +79,8 @@ export default function RegisterPage() {
         role === 'COMPANY'
           ? await registerCompany({ email: trimmedEmail, password: form.password, companyName: form.name.trim() })
           : await registerCandidate({ email: trimmedEmail, password: form.password, fullName: form.name.trim() });
-      navigate(user.role === 'COMPANY' ? '/company/dashboard' : '/candidate/dashboard');
+      // navigate(user.role === 'COMPANY' ? '/company/dashboard' : '/candidate/dashboard');
+      navigate(homePathForRole(user.role));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -69,11 +90,23 @@ export default function RegisterPage() {
 
   return (
     <AuthShell title="Create your account" subtitle="Start hiring or start applying in minutes">
+      {!allowCompanySignup && companyRequested && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          Company accounts are set up by the RecruitIQ team. Please contact us to get started — or, if you're
+          looking for a job, create a candidate account below.
+        </div>
+      )}
       <div className="mb-6 flex rounded-lg border border-slate-200 p-1">
+        {/* {[
+          { key: 'CANDIDATE', label: "I'm a Candidate" },
+          { key: 'COMPANY', label: "I'm a Company" },
+        ].map((option) => ( */}
         {[
           { key: 'CANDIDATE', label: "I'm a Candidate" },
           { key: 'COMPANY', label: "I'm a Company" },
-        ].map((option) => (
+        ]
+          .filter((option) => option.key !== 'COMPANY' || allowCompanySignup)
+          .map((option) => (
           <button
             key={option.key}
             type="button"

@@ -34,3 +34,9 @@ export const loginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 });
 
+// Build plan P1: set a password from an emailed invite link.
+export const setPasswordSchema = z.object({
+  token: z.string().trim().min(1, 'Token is required'),
+  password: passwordSchema,
+});
+
