@@ -1,12 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-// import { ArrowLeft, CalendarCheck, Clock, Video, Info, Bot } from 'lucide-react';
-import { ArrowLeft, CalendarCheck, Clock, Video, Info, Bot, Phone } from 'lucide-react';
+import { ArrowLeft, CalendarCheck, Clock, Video, Info, Bot } from 'lucide-react';
 import { applicationsApi } from '../../services/applications.js';
 import { schedulingApi } from '../../services/scheduling.js';
-import { candidateProfileApi } from '../../services/profile.js';
-import { inputClass } from '../../components/ui/FormField.jsx';
-import { InterviewModeBadge, CallStatusBadge, isCallLive } from '../../components/ui/InterviewMode.jsx';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import LoadingState from '../../components/ui/LoadingState.jsx';
@@ -34,53 +30,8 @@ function formatTime(iso) {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
-// Telephonic slot: confirm the number the AI will call before booking.
-// Prefilled from the profile; must include the country code (E.164).
-function PhoneConfirm({ slot, phone, onPhoneChange, onConfirm, onCancel, loading }) {
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        onConfirm();
-      }}
-      className="mt-4 rounded-lg border border-indigo-200 bg-indigo-50 p-4"
-    >
-      <p className="flex items-center gap-2 text-sm font-medium text-indigo-900">
-        <Phone className="h-4 w-4" /> Telephonic interview — {formatDate(slot.startTime)}, {formatTime(slot.startTime)}
-      </p>
-      <p className="mt-1 text-xs text-indigo-800">
-        Our AI interviewer will call you on this number at the start time. Keep your phone nearby, somewhere quiet.
-      </p>
-      <label htmlFor="interview-phone" className="mt-3 block text-sm font-medium text-slate-700">
-        Phone number (with country code)
-      </label>
-      <input
-        id="interview-phone"
-        type="tel"
-        inputMode="tel"
-        autoComplete="tel"
-        required
-        className={`${inputClass} mt-1`}
-        placeholder="+919876543210"
-        value={phone}
-        onChange={(e) => onPhoneChange(e.target.value)}
-      />
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-        <Button type="submit" loading={loading} className="w-full sm:w-auto">
-          <Phone className="h-4 w-4" /> Confirm booking
-        </Button>
-        <Button variant="secondary" onClick={onCancel} disabled={loading} className="w-full sm:w-auto">
-          Cancel
-        </Button>
-      </div>
-    </form>
-  );
-}
-
 // Green = open and bookable, grey = already booked (by anyone) and
 // unselectable — cancelled slots are excluded by the API entirely.
-// `onSelect` receives the whole slot (not just its id) so the page can ask
-// for a phone number first when it's a telephonic slot.
 function SlotGrid({ slots, bookingSlotId, onSelect }) {
   if (slots.length === 0) {
     return <EmptyState icon={Clock} title="No slots available yet" description="Check back soon — the company hasn't published interview times yet." />;
@@ -102,15 +53,11 @@ function SlotGrid({ slots, bookingSlotId, onSelect }) {
               <p className="text-sm text-slate-500">
                 {formatTime(slot.startTime)} – {formatTime(slot.endTime)}
               </p>
-              <div className="mt-1">
-                <InterviewModeBadge mode={slot.mode} />
-              </div>
             </div>
             {isAvailable ? (
               <Button
                 variant="secondary"
-                // onClick={() => onSelect(slot.id)}
-                onClick={() => onSelect(slot)}
+                onClick={() => onSelect(slot.id)}
                 loading={bookingSlotId === slot.id}
                 className="w-full sm:w-auto"
               >
@@ -140,9 +87,6 @@ export default function ApplicationDetailPage() {
   const [confirmReschedule, setConfirmReschedule] = useState(false);
   const [rescheduling, setRescheduling] = useState(false);
   const [now, setNow] = useState(() => Date.now());
-  // Telephonic slot waiting for the candidate to confirm their phone number.
-  const [phoneSlot, setPhoneSlot] = useState(null);
-  const [phoneInput, setPhoneInput] = useState('');
 
   const load = () => {
     setError('');
@@ -172,22 +116,6 @@ export default function ApplicationDetailPage() {
     return () => clearInterval(timer);
   }, []);
 
-  // Telephonic interview: while the call is ringing/live (or the interview
-  // is running over the phone), refresh so the status updates by itself.
-  const phoneLive = interview?.mode === 'PHONE' && (isCallLive(interview.callStatus) || interview.status === 'IN_PROGRESS');
-  useEffect(() => {
-    if (!phoneLive) return undefined;
-    const timer = setInterval(() => {
-      Promise.all([applicationsApi.getMine(id), schedulingApi.getInterview(id)])
-        .then(([appData, interviewData]) => {
-          setApplication(appData.application);
-          setInterview(interviewData.interview);
-        })
-        .catch(() => {});
-    }, 8000);
-    return () => clearInterval(timer);
-  }, [phoneLive, id]);
-
   const openSlotPicker = () => {
     setShowSlotPicker(true);
     setSlotsError('');
@@ -198,26 +126,12 @@ export default function ApplicationDetailPage() {
       .catch((err) => setSlotsError(err.message));
   };
 
-  // const handleBookSlot = async (slotId) => {
-  //   setBookingSlotId(slotId);
-  //   setSlotsError('');
-  //   try {
-  //     await schedulingApi.bookSlot(id, slotId);
-  //     setShowSlotPicker(false);
-  //     load();
-  //   } catch (err) {
-  //     setSlotsError(err.message);
-  //   } finally {
-  //     setBookingSlotId(null);
-  //   }
-  // };
-  const handleBookSlot = async (slotId, phoneNumber) => {
+  const handleBookSlot = async (slotId) => {
     setBookingSlotId(slotId);
     setSlotsError('');
     try {
-      await schedulingApi.bookSlot(id, slotId, phoneNumber);
+      await schedulingApi.bookSlot(id, slotId);
       setShowSlotPicker(false);
-      setPhoneSlot(null);
       load();
     } catch (err) {
       setSlotsError(err.message);
@@ -225,34 +139,6 @@ export default function ApplicationDetailPage() {
       setBookingSlotId(null);
     }
   };
-
-  // Online slots book straight away (unchanged); telephonic slots first ask
-  // which number to call, prefilled from the candidate's profile.
-  const handleSelectSlot = (slot) => {
-    if (slot.mode !== 'PHONE') {
-      handleBookSlot(slot.id);
-      return;
-    }
-    setSlotsError('');
-    setPhoneSlot(slot);
-    if (!phoneInput) {
-      candidateProfileApi
-        .get()
-        .then((data) => setPhoneInput((current) => current || data.candidate?.phone || ''))
-        .catch(() => {});
-    }
-  };
-
-  const phoneConfirm = phoneSlot && (
-    <PhoneConfirm
-      slot={phoneSlot}
-      phone={phoneInput}
-      onPhoneChange={setPhoneInput}
-      onConfirm={() => handleBookSlot(phoneSlot.id, phoneInput.trim())}
-      onCancel={() => setPhoneSlot(null)}
-      loading={bookingSlotId === phoneSlot.id}
-    />
-  );
 
   const handleReschedule = async () => {
     setRescheduling(true);
@@ -366,9 +252,7 @@ export default function ApplicationDetailPage() {
 
           <div className="mt-5 border-t border-slate-100 pt-5">
             {slotsError && <p className="mb-3 text-sm text-red-600">{slotsError}</p>}
-            {/* {!slots ? <LoadingState label="Loading available slots…" /> : <SlotGrid slots={sortedSlots} bookingSlotId={bookingSlotId} onSelect={handleBookSlot} />} */}
-            {!slots ? <LoadingState label="Loading available slots…" /> : <SlotGrid slots={sortedSlots} bookingSlotId={bookingSlotId} onSelect={handleSelectSlot} />}
-            {phoneConfirm}
+            {!slots ? <LoadingState label="Loading available slots…" /> : <SlotGrid slots={sortedSlots} bookingSlotId={bookingSlotId} onSelect={handleBookSlot} />}
           </div>
         </Card>
       )}
@@ -377,15 +261,8 @@ export default function ApplicationDetailPage() {
       {interview && (
         <Card className="mb-6 p-6">
           <div className="flex items-center gap-3">
-            {/* <div className="rounded-full bg-blue-50 p-2.5">
+            <div className="rounded-full bg-blue-50 p-2.5">
               <CalendarCheck className="h-5 w-5 text-blue-600" />
-            </div> */}
-            <div className={`rounded-full p-2.5 ${interview.mode === 'PHONE' ? 'bg-indigo-50' : 'bg-blue-50'}`}>
-              {interview.mode === 'PHONE' ? (
-                <Phone className="h-5 w-5 text-indigo-600" />
-              ) : (
-                <CalendarCheck className="h-5 w-5 text-blue-600" />
-              )}
             </div>
             <div>
               <h3 className="font-semibold text-slate-900">
@@ -408,34 +285,7 @@ export default function ApplicationDetailPage() {
             </div>
           </div>
 
-          {/* Telephonic interview — no room to join; the AI rings the candidate. */}
-          {interview.mode === 'PHONE' && (
-            <div className="mt-4 rounded-lg border border-indigo-100 bg-indigo-50 p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <InterviewModeBadge mode="PHONE" />
-                <CallStatusBadge status={interview.callStatus} />
-              </div>
-              <p className="mt-2 text-sm text-indigo-900">
-                {interview.status === 'COMPLETED'
-                  ? 'Your telephonic interview is complete. Thank you!'
-                  : interview.callStatus === 'DIALING'
-                    ? `We're calling you now on ${interview.phoneNumber} — please pick up.`
-                    : interview.callStatus === 'IN_CALL'
-                      ? 'You are on the call with our AI interviewer.'
-                      : `We will call you on ${interview.phoneNumber} at ${formatTime(interview.slot.startTime)} on ${formatDate(
-                          interview.slot.startTime
-                        )}. Keep your phone nearby, somewhere quiet.`}
-              </p>
-              {interview.status === 'SCHEDULED' && !isCallLive(interview.callStatus) && (
-                <Button variant="secondary" onClick={() => setConfirmReschedule(true)} className="mt-3 w-full sm:w-auto">
-                  Reschedule
-                </Button>
-              )}
-            </div>
-          )}
-
-          {/* {(interview.status === 'SCHEDULED' || interview.status === 'IN_PROGRESS') && ( */}
-          {interview.mode !== 'PHONE' && (interview.status === 'SCHEDULED' || interview.status === 'IN_PROGRESS') && (
+          {(interview.status === 'SCHEDULED' || interview.status === 'IN_PROGRESS') && (
             <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
               <Button
                 disabled={interview.status === 'SCHEDULED' && !joinable}
@@ -451,8 +301,7 @@ export default function ApplicationDetailPage() {
               )}
             </div>
           )}
-          {/* {interview.status === 'SCHEDULED' && !joinable && ( */}
-          {interview.mode !== 'PHONE' && interview.status === 'SCHEDULED' && !joinable && (
+          {interview.status === 'SCHEDULED' && !joinable && (
             <p className="mt-2 text-xs text-slate-400">
               The join button unlocks at {formatTime(interview.slot.startTime)} on {formatDate(interview.slot.startTime)}.
             </p>
@@ -461,9 +310,7 @@ export default function ApplicationDetailPage() {
           {showSlotPicker && interview.status === 'SCHEDULED' && (
             <div className="mt-5 border-t border-slate-100 pt-5">
               {slotsError && <p className="mb-3 text-sm text-red-600">{slotsError}</p>}
-              {/* {!slots ? <LoadingState label="Loading slots…" /> : <SlotGrid slots={sortedSlots} bookingSlotId={bookingSlotId} onSelect={handleBookSlot} />} */}
-              {!slots ? <LoadingState label="Loading slots…" /> : <SlotGrid slots={sortedSlots} bookingSlotId={bookingSlotId} onSelect={handleSelectSlot} />}
-              {phoneConfirm}
+              {!slots ? <LoadingState label="Loading slots…" /> : <SlotGrid slots={sortedSlots} bookingSlotId={bookingSlotId} onSelect={handleBookSlot} />}
             </div>
           )}
         </Card>

@@ -107,29 +107,6 @@ export const INTERVIEW_EVENT_TYPE = {
   CONNECTION_RESTORED: 'CONNECTION_RESTORED',
   INTERVIEW_STARTED: 'INTERVIEW_STARTED',
   INTERVIEW_ENDED: 'INTERVIEW_ENDED',
-  // Telephonic interviews
-  CALL_DIALING: 'CALL_DIALING',
-  CALL_ANSWERED: 'CALL_ANSWERED',
-  CALL_NO_ANSWER: 'CALL_NO_ANSWER',
-  CALL_DROPPED: 'CALL_DROPPED',
-  CALL_ENDED: 'CALL_ENDED',
-};
-
-// Company picks this per InterviewSlot; copied onto the Interview at booking.
-export const INTERVIEW_MODE = {
-  ONLINE: 'ONLINE',
-  PHONE: 'PHONE',
-};
-
-// Telephonic interviews only — the phone call's lifecycle, separate from
-// InterviewStatus (which still tracks the interview itself).
-export const CALL_STATUS = {
-  PENDING: 'PENDING',
-  DIALING: 'DIALING',
-  IN_CALL: 'IN_CALL',
-  COMPLETED: 'COMPLETED',
-  NO_ANSWER: 'NO_ANSWER',
-  FAILED: 'FAILED',
 };
 
 export const INTERVIEW_REPORT_STATUS = {

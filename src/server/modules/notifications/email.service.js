@@ -95,8 +95,7 @@ export async function sendApplicationStatusEmail(application) {
 }
 
 // application/interview/slot as returned by scheduling.service.js's bookSlot.
-// export async function sendInterviewConfirmationEmail({ application, slot }) {
-export async function sendInterviewConfirmationEmail({ application, slot, phoneNumber = null }) {
+export async function sendInterviewConfirmationEmail({ application, slot }) {
   const to = application.candidate.user.email;
   const candidateName = application.candidate.fullName;
   const jobTitle = application.job.title;
@@ -120,11 +119,6 @@ export async function sendInterviewConfirmationEmail({ application, slot, phoneN
       <strong>Date:</strong> ${dateLabel}<br />
       <strong>Time:</strong> ${timeLabel}
     </p>
-    ${
-      slot.mode === 'PHONE' && phoneNumber
-        ? `<p>This is a <strong>telephonic AI interview</strong>. We will call you on <strong>${phoneNumber}</strong> at the start time — please keep your phone nearby, in a quiet place.</p>`
-        : ''
-    }
     ${viewApplicationButton(application.id)}
     <p>— The RecruitIQ team</p>
   `);

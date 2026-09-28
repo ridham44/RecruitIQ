@@ -138,31 +138,6 @@ enum InterviewEventType {
   CONNECTION_RESTORED
   INTERVIEW_STARTED
   INTERVIEW_ENDED
-  // Telephonic interviews — call lifecycle, logged by phone-agent/.
-  CALL_DIALING
-  CALL_ANSWERED
-  CALL_NO_ANSWER
-  CALL_DROPPED
-  CALL_ENDED
-}
-
-// How an interview is conducted. The company picks this per InterviewSlot;
-// booking copies it onto the Interview so later slot edits never change a
-// booked interview's mode.
-enum InterviewMode {
-  ONLINE
-  PHONE
-}
-
-// Telephonic interviews only (null for ONLINE). Driven by phone-agent/ via
-// the /interviews/:id/worker/* endpoints.
-enum CallStatus {
-  PENDING
-  DIALING
-  IN_CALL
-  COMPLETED
-  NO_ANSWER
-  FAILED
 }
 
 enum InterviewReportStatus {
@@ -463,9 +438,6 @@ model InterviewSlot {
   startTime DateTime
   endTime   DateTime
   status    InterviewSlotStatus @default(AVAILABLE)
-  // Company decides per slot whether it's an in-app (ONLINE) or telephonic
-  // (PHONE) AI interview. Existing rows default to ONLINE.
-  mode      InterviewMode       @default(ONLINE)
   createdAt DateTime            @default(now())
   updatedAt DateTime            @updatedAt
 
@@ -502,19 +474,6 @@ model Interview {
   startedAt            DateTime?
   endedAt              DateTime?
 
-  // Telephonic interviews — copied from the slot at booking. For PHONE,
-  // phoneNumber is the E.164 number phone-agent/ dials at slot time.
-  mode          InterviewMode @default(ONLINE)
-  phoneNumber   String?
-  callStatus    CallStatus?
-  callAttempts  Int           @default(0)
-  twilioCallSid String?
-  callStartedAt DateTime?
-  callEndedAt   DateTime?
-  // When phone-agent/ may try (again) — set to slot start at booking, pushed
-  // forward after a no-answer so retries are spaced out.
-  nextCallAt    DateTime?
-
   application Application         @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   slot        InterviewSlot       @relation(fields: [slotId], references: [id], onDelete: Cascade)
   questions   InterviewQuestion[]
@@ -523,7 +482,6 @@ model Interview {
 
   @@index([applicationId])
   @@index([slotId])
-  @@index([mode, callStatus])
   @@map("interviews")
 }
 

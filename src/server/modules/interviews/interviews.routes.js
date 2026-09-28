@@ -8,7 +8,6 @@ import {
   upsertInterviewConfigSchema,
   logInterviewEventSchema,
   submitAnswerSchema,
-  callStatusUpdateSchema,
 } from '../../../shared/schemas/interview.schema.js';
 
 const router = Router();
@@ -20,14 +19,6 @@ router.post('/:interviewId/worker/answer', authenticateWorker, validate(submitAn
 router.get('/:interviewId/worker/context', authenticateWorker, controller.workerGetContext);
 router.post('/:interviewId/worker/events', authenticateWorker, validate(logInterviewEventSchema), controller.workerLogEvent);
 
-// Telephonic interviews — phone-agent/ (same shared secret). /worker/answer
-// above is reused as-is for every spoken answer.
-router.get('/worker/phone-interviews/due', authenticateWorker, controller.workerListDuePhoneInterviews);
-router.get('/worker/phone-interviews/dialing', authenticateWorker, controller.workerListDialingPhoneInterviews);
-router.post('/:interviewId/worker/claim', authenticateWorker, controller.workerClaimPhoneInterview);
-router.post('/:interviewId/worker/start', authenticateWorker, controller.workerStartPhoneInterview);
-router.post('/:interviewId/worker/call-status', authenticateWorker, validate(callStatusUpdateSchema), controller.workerUpdateCallStatus);
-
 // ─── Browser routes (candidate/company JWT) ───
 router.use(authenticate);
 
@@ -37,9 +28,6 @@ router.patch('/config/:jobId', authorize(ROLES.COMPANY), validate(upsertIntervie
 
 // Company: recruiter view of interviews for a job
 router.get('/job/:jobId', authorize(ROLES.COMPANY), controller.listForJob);
-
-// Company: telephonic interview — dial now instead of waiting for slot time
-router.post('/:interviewId/call-now', authorize(ROLES.COMPANY), controller.callNow);
 
 // Shared: either the owning candidate or the owning company can read
 router.get('/:interviewId', authorize(ROLES.CANDIDATE, ROLES.COMPANY), controller.getDetail);

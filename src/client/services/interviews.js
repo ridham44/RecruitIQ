@@ -5,8 +5,6 @@ export const interviewsApi = {
   getConfig: (jobId) => api.get(`/interviews/config/${jobId}`),
   upsertConfig: (jobId, payload) => api.patch(`/interviews/config/${jobId}`, payload),
   listForJob: (jobId) => api.get(`/interviews/job/${jobId}`),
-  // Telephonic interview: dial the candidate now instead of at slot time.
-  callNow: (interviewId) => api.post(`/interviews/${interviewId}/call-now`),
 
   // Shared (company or the owning candidate)
   getDetail: (interviewId) => api.get(`/interviews/${interviewId}`),

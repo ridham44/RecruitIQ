@@ -54,12 +54,3 @@ export const submitAnswerSchema = z.object({
   durationSeconds: z.coerce.number().min(0).optional(),
   timedOut: z.boolean().default(false),
 });
-
-// phone-agent -> backend: what happened to the phone call (telephonic
-// interviews). DROPPED = candidate hung up / line cut before the interview
-// finished; COMPLETED = the call ended after the interview finished.
-export const callStatusUpdateSchema = z.object({
-  status: z.enum(['DIALING', 'IN_CALL', 'NO_ANSWER', 'FAILED', 'DROPPED', 'COMPLETED']),
-  twilioCallSid: z.string().max(64).optional(),
-  reason: z.string().max(500).optional(),
-});

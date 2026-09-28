@@ -84,13 +84,6 @@ export const env = {
     authToken: process.env.TWILIO_AUTH_TOKEN || '',
     phoneNumber: process.env.TWILIO_PHONE_NUMBER || '',
   },
-  // Telephonic interviews — the actual dialing happens in phone-agent/ (its
-  // own .env holds the Twilio credentials); this app only decides retries.
-  phoneInterview: {
-    // Total dial attempts per interview (first call + retries/redials).
-    maxCallAttempts: Number(process.env.PHONE_INTERVIEW_MAX_CALL_ATTEMPTS || 3),
-    retryDelayMinutes: Number(process.env.PHONE_INTERVIEW_RETRY_DELAY_MINUTES || 3),
-  },
 };
 
 export const isProduction = isProd;

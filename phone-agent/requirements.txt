@@ -1,9 +1,0 @@
-# Same LiveKit versions as livekit-twilow (1.6.0 is the last release that runs on CPUs without AVX2)
-livekit-agents[openai,silero]==1.6.0
-livekit-api~=1.2
-# Pinned to what livekit-twilow runs: openai 3.x swapped httpx for httpx2,
-# but livekit-agents 1.6.0 still imports httpx.
-openai==2.54.0
-httpx==0.28.1
-python-dotenv
-# aiohttp (RecruitIQ + Twilio REST calls) comes with livekit-agents
