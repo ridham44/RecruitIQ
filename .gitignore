@@ -14,3 +14,6 @@ npm-debug.log*
 Thumbs.db
 
 /uploads
+
+# Local database backups (pg_dump) — contain real candidate data, never commit
+/backups
