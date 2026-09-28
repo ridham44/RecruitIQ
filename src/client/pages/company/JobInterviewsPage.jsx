@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { Plus, Calendar, Trash2, CheckCircle2, Sparkles, X, Bot, Eye, Save, ArrowLeft } from 'lucide-react';
+// import { Plus, Calendar, Trash2, CheckCircle2, Sparkles, X, Bot, Eye, Save, ArrowLeft } from 'lucide-react';
+import { Plus, Calendar, Trash2, CheckCircle2, Sparkles, X, Bot, Eye, Save, ArrowLeft, PhoneCall } from 'lucide-react';
+import { InterviewModePicker, InterviewModeBadge, CallStatusBadge, isCallLive } from '../../components/ui/InterviewMode.jsx';
 import { schedulingApi } from '../../services/scheduling.js';
 import { jobsApi } from '../../services/jobs.js';
 import { interviewsApi } from '../../services/interviews.js';
@@ -13,7 +15,10 @@ import EmptyState from '../../components/ui/EmptyState.jsx';
 import StatusBadge from '../../components/ui/StatusBadge.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 
-const GENERATE_DEFAULTS = { date: '', startTime: '', endTime: '', durationMinutes: 15, bufferMinutes: 0 };
+// const GENERATE_DEFAULTS = { date: '', startTime: '', endTime: '', durationMinutes: 15, bufferMinutes: 0 };
+// `mode`: company decides per slot — ONLINE (in-app room) or PHONE (AI calls the candidate).
+const GENERATE_DEFAULTS = { date: '', startTime: '', endTime: '', durationMinutes: 15, bufferMinutes: 0, mode: 'ONLINE' };
+const SINGLE_SLOT_DEFAULTS = { date: '', startTime: '', endTime: '', mode: 'ONLINE' };
 const VOICE_LABELS = { FEMALE: 'Female', MALE: 'Male', NEUTRAL: 'Neutral' };
 
 // A custom question is a full sentence, not a short tag — a dedicated
@@ -103,8 +108,10 @@ export default function JobInterviewsPage() {
   const [job, setJob] = useState(null);
   const [slots, setSlots] = useState(null);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ date: '', startTime: '', endTime: '' });
+  // const [form, setForm] = useState({ date: '', startTime: '', endTime: '' });
+  const [form, setForm] = useState(SINGLE_SLOT_DEFAULTS);
   const [creating, setCreating] = useState(false);
+  const [callingId, setCallingId] = useState(null);
   const [confirmCancel, setConfirmCancel] = useState(null);
   const [cancelling, setCancelling] = useState(false);
   const [completingId, setCompletingId] = useState(null);
@@ -140,6 +147,33 @@ export default function JobInterviewsPage() {
 
   useEffect(load, [jobId]);
 
+  // Telephonic interviews: while any call is ringing or live, refresh the
+  // slot list every few seconds so the call status updates on its own.
+  const hasLiveCall = useMemo(() => (slots || []).some((slot) => isCallLive(slot.interviews?.[0]?.callStatus)), [slots]);
+  useEffect(() => {
+    if (!hasLiveCall) return undefined;
+    const timer = setInterval(() => {
+      schedulingApi
+        .listSlotsForJob(jobId)
+        .then((res) => setSlots(res.slots))
+        .catch(() => {});
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [hasLiveCall, jobId]);
+
+  const handleCallNow = async (interviewId) => {
+    setCallingId(interviewId);
+    setError('');
+    try {
+      await interviewsApi.callNow(interviewId);
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCallingId(null);
+    }
+  };
+
   const handleSaveConfig = async (e) => {
     e.preventDefault();
     setConfigSaving(true);
@@ -166,8 +200,11 @@ export default function JobInterviewsPage() {
     setError('');
     try {
       const { start, end } = resolveTimeRange(form.date, form.startTime, form.endTime);
-      await schedulingApi.createSlots(jobId, [{ startTime: start.toISOString(), endTime: end.toISOString() }]);
-      setForm({ date: '', startTime: '', endTime: '' });
+      // await schedulingApi.createSlots(jobId, [{ startTime: start.toISOString(), endTime: end.toISOString() }]);
+      // setForm({ date: '', startTime: '', endTime: '' });
+      await schedulingApi.createSlots(jobId, [{ startTime: start.toISOString(), endTime: end.toISOString(), mode: form.mode }]);
+      // Keep the chosen interview type — companies usually add several of the same kind.
+      setForm({ ...SINGLE_SLOT_DEFAULTS, mode: form.mode });
       load();
     } catch (err) {
       setError(err.message);
@@ -178,7 +215,8 @@ export default function JobInterviewsPage() {
 
   const handleGenerateSlots = async (e) => {
     e.preventDefault();
-    const { date, startTime, endTime, durationMinutes, bufferMinutes } = generateForm;
+    // const { date, startTime, endTime, durationMinutes, bufferMinutes } = generateForm;
+    const { date, startTime, endTime, durationMinutes, bufferMinutes, mode } = generateForm;
     if (!date || !startTime || !endTime) return;
     setGenerating(true);
     setGenerateError('');
@@ -190,9 +228,11 @@ export default function JobInterviewsPage() {
         rangeEnd: end.toISOString(),
         durationMinutes: Number(durationMinutes),
         bufferMinutes: Number(bufferMinutes) || 0,
+        mode,
       });
       setGenerateResult(result);
-      setGenerateForm(GENERATE_DEFAULTS);
+      // setGenerateForm(GENERATE_DEFAULTS);
+      setGenerateForm({ ...GENERATE_DEFAULTS, mode });
       load();
     } catch (err) {
       setGenerateError(err.message);
@@ -392,6 +432,9 @@ export default function JobInterviewsPage() {
 
         {showGenerate && (
           <form onSubmit={handleGenerateSlots} className="mt-5 border-t border-slate-100 pt-5">
+            <div className="mb-4">
+              <InterviewModePicker value={generateForm.mode} onChange={(mode) => setGenerateForm({ ...generateForm, mode })} />
+            </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5 lg:items-end">
               <FormField label="Date">
                 <input
@@ -467,6 +510,9 @@ export default function JobInterviewsPage() {
       <Card className="mb-6 p-5">
         <h3 className="mb-3 font-semibold text-slate-900">Add a single slot</h3>
         <form onSubmit={handleCreateSlot} className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:items-end">
+          <div className="sm:col-span-3">
+            <InterviewModePicker value={form.mode} onChange={(mode) => setForm({ ...form, mode })} />
+          </div>
           <FormField label="Date">
             <input
               type="date"
@@ -507,11 +553,13 @@ export default function JobInterviewsPage() {
         <EmptyState icon={Calendar} title="No interview slots yet" description="Add a slot above to let shortlisted candidates book an interview." />
       ) : (
         <Card className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
+          {/* <table className="w-full min-w-[640px] text-sm"> */}
+          <table className="w-full min-w-[760px] text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">Date</th>
                 <th className="px-4 py-3">Time</th>
+                <th className="px-4 py-3">Type</th>
                 <th className="px-4 py-3">Candidate</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3" />
@@ -526,12 +574,40 @@ export default function JobInterviewsPage() {
                     <td className="px-4 py-3 text-slate-600">
                       {formatTime(slot.startTime)} – {formatTime(slot.endTime)}
                     </td>
-                    <td className="px-4 py-3 text-slate-900">{interview?.application?.candidate?.fullName || '—'}</td>
                     <td className="px-4 py-3">
+                      <InterviewModeBadge mode={slot.mode} />
+                    </td>
+                    {/* <td className="px-4 py-3 text-slate-900">{interview?.application?.candidate?.fullName || '—'}</td> */}
+                    <td className="px-4 py-3 text-slate-900">
+                      {interview?.application?.candidate?.fullName || '—'}
+                      {interview?.mode === 'PHONE' && interview.phoneNumber && (
+                        <span className="block text-xs text-slate-500">{interview.phoneNumber}</span>
+                      )}
+                    </td>
+                    {/* <td className="px-4 py-3">
                       <StatusBadge status={interview ? interview.status : slot.status} />
+                    </td> */}
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <StatusBadge status={interview ? interview.status : slot.status} />
+                        {interview?.mode === 'PHONE' && <CallStatusBadge status={interview.callStatus} />}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <div className="flex justify-end gap-3">
+                      {/* <div className="flex justify-end gap-3"> */}
+                      <div className="flex flex-wrap justify-end gap-3">
+                        {interview?.mode === 'PHONE' &&
+                          ['SCHEDULED', 'IN_PROGRESS'].includes(interview.status) &&
+                          !isCallLive(interview.callStatus) && (
+                            <button
+                              onClick={() => handleCallNow(interview.id)}
+                              disabled={callingId === interview.id}
+                              className="inline-flex min-h-[44px] items-center gap-1 text-indigo-600 hover:text-indigo-700 disabled:opacity-50 sm:min-h-0"
+                              title="Ring the candidate now instead of waiting for the slot time (the phone agent must be running)."
+                            >
+                              <PhoneCall className="h-4 w-4" /> Call now
+                            </button>
+                          )}
                         {interview && ['IN_PROGRESS', 'COMPLETED'].includes(interview.status) && (
                           <Link
                             to={`/company/jobs/${jobId}/interviews/${interview.id}`}
@@ -540,7 +616,9 @@ export default function JobInterviewsPage() {
                             <Eye className="h-4 w-4" /> View
                           </Link>
                         )}
-                        {interview?.status === 'SCHEDULED' && (
+                        {/* {interview?.status === 'SCHEDULED' && ( */}
+                        {/* Human-conducted interviews only — telephonic ones complete themselves when the call ends. */}
+                        {interview?.status === 'SCHEDULED' && interview.mode !== 'PHONE' && (
                           <button
                             onClick={() => handleMarkCompleted(interview.id)}
                             disabled={completingId === interview.id}

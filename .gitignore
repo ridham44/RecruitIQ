@@ -3,8 +3,6 @@ dist
 build
 .vercel
 
-.env
-.env.*
 !.env.example
 
 *.log
@@ -14,3 +12,4 @@ npm-debug.log*
 Thumbs.db
 
 /uploads
+config.bat

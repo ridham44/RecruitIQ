@@ -7,6 +7,7 @@ import LoadingState from '../../components/ui/LoadingState.jsx';
 import ErrorState from '../../components/ui/ErrorState.jsx';
 import StatusBadge from '../../components/ui/StatusBadge.jsx';
 import ScoreRing from '../../components/ui/ScoreRing.jsx';
+import { InterviewModeBadge, CallStatusBadge } from '../../components/ui/InterviewMode.jsx';
 
 const VOICE_LABELS = { FEMALE: 'Female', MALE: 'Male', NEUTRAL: 'Neutral / default' };
 const DIFFICULTY_STYLES = { EASY: 'bg-emerald-50 text-emerald-700', MEDIUM: 'bg-amber-50 text-amber-700', HARD: 'bg-red-50 text-red-700' };
@@ -61,11 +62,34 @@ export default function InterviewDetailPage() {
           <h2 className="text-xl font-semibold text-slate-900">{interview.candidate.fullName}</h2>
           <p className="text-sm text-slate-500">{interview.job.title}</p>
         </div>
-        <div className="flex items-center gap-2">
+        {/* <div className="flex items-center gap-2"> */}
+        <div className="flex flex-wrap items-center gap-2">
+          <InterviewModeBadge mode={interview.mode} />
           <StatusBadge status={interview.status} />
           <StatusBadge status={interview.stage} />
         </div>
       </div>
+
+      {/* Telephonic interview — call details. The report below is generated
+          the same way as for an online interview. */}
+      {interview.mode === 'PHONE' && (
+        <Card className="mb-6 grid grid-cols-1 gap-4 p-6 sm:grid-cols-3">
+          <div>
+            <p className="text-xs text-slate-400">Phone number</p>
+            <p className="break-all text-sm font-medium text-slate-900">{interview.phoneNumber || '—'}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-400">Call status</p>
+            <div className="mt-0.5">
+              <CallStatusBadge status={interview.callStatus} />
+            </div>
+          </div>
+          <div>
+            <p className="text-xs text-slate-400">Call attempts</p>
+            <p className="text-sm font-medium text-slate-900">{interview.callAttempts ?? 0}</p>
+          </div>
+        </Card>
+      )}
 
       <Card className="mb-6 grid grid-cols-1 gap-4 p-6 sm:grid-cols-3">
         <div>
