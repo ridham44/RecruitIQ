@@ -76,6 +76,15 @@ export default function LoginPage() {
             placeholder="Enter your password"
           />
         </FormField>
+        {/* Forgot password */}
+        <div className="-mt-2 mb-4 text-right">
+          <Link
+            to="/auth/forgot-password"
+            className="inline-flex min-h-[44px] items-center text-sm font-medium text-brand-600 hover:text-brand-700"
+          >
+            Forgot password?
+          </Link>
+        </div>
         {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
         <Button type="submit" className="w-full" loading={loading}>
           Log in

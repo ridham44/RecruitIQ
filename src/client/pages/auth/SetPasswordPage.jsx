@@ -85,10 +85,21 @@ export default function SetPasswordPage() {
     );
   }
 
+  // Forgot-password links reuse this page with purpose RESET.
+  const isReset = info.purpose === 'RESET';
+
   return (
     <AuthShell
-      title="Set your password"
-      subtitle={info.companyName ? `Finish setting up ${info.companyName} on RecruitIQ` : 'Finish setting up your account'}
+      // title="Set your password"
+      title={isReset ? 'Reset your password' : 'Set your password'}
+      // subtitle={info.companyName ? `Finish setting up ${info.companyName} on RecruitIQ` : 'Finish setting up your account'}
+      subtitle={
+        isReset
+          ? 'Choose a new password for your account.'
+          : info.companyName
+            ? `Finish setting up ${info.companyName} on RecruitIQ`
+            : 'Finish setting up your account'
+      }
     >
       <form onSubmit={handleSubmit} noValidate>
         <FormField label="Email">

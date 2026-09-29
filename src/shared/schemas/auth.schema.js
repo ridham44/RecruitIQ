@@ -34,6 +34,11 @@ export const loginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 });
 
+// Forgot password: request a reset link by email.
+export const forgotPasswordSchema = z.object({
+  email: emailSchema,
+});
+
 // Build plan P1: set a password from an emailed invite link.
 export const setPasswordSchema = z.object({
   token: z.string().trim().min(1, 'Token is required'),

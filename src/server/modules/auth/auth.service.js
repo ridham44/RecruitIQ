@@ -3,7 +3,9 @@ import { prisma, TX_OPTIONS } from '../../config/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ROLES } from '../../../shared/constants/roles.js';
 import { signToken } from './token.util.js';
-import { findUsableToken } from './passwordToken.service.js';
+// import { findUsableToken } from './passwordToken.service.js';
+import { findUsableToken, issuePasswordToken } from './passwordToken.service.js';
+import { sendPasswordResetEmail } from '../notifications/email.service.js';
 
 const SALT_ROUNDS = 10;
 
@@ -133,6 +135,31 @@ export function assertCompanyNotSuspended(user) {
       'COMPANY_SUSPENDED'
     );
   }
+}
+
+// Forgot password. Always resolves the same way whether or not the email
+// exists, so the endpoint can't be used to discover accounts. At most 3
+// reset emails per account per 15 minutes; extra requests are silently
+// ignored.
+const RESET_TTL_HOURS = 1;
+const RESET_LIMIT = { count: 3, windowMs: 15 * 60 * 1000 };
+
+export async function requestPasswordReset({ email }) {
+  const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() }, include: USER_AUTH_INCLUDE });
+  if (!user || !user.isActive) return;
+  try {
+    assertCompanyNotSuspended(user);
+  } catch {
+    return;
+  }
+
+  const recent = await prisma.passwordToken.count({
+    where: { userId: user.id, purpose: 'RESET', createdAt: { gt: new Date(Date.now() - RESET_LIMIT.windowMs) } },
+  });
+  if (recent >= RESET_LIMIT.count) return;
+
+  const { link } = await issuePasswordToken(user.id, { purpose: 'RESET', ttlHours: RESET_TTL_HOURS });
+  await sendPasswordResetEmail({ to: user.email, link, expiresInMinutes: RESET_TTL_HOURS * 60 });
 }
 
 // Build plan P1: lets the set-password page greet the user and show which

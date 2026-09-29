@@ -8,6 +8,7 @@ import {
   registerCandidateSchema,
   loginSchema,
   setPasswordSchema,
+  forgotPasswordSchema,
 } from '../../../shared/schemas/auth.schema.js';
 
 const router = Router();
@@ -24,6 +25,8 @@ router.post('/login', validate(loginSchema), authController.login);
 // Build plan P1: invite links (admin-onboarded company owners)
 router.get('/password-token/:token', authController.getPasswordToken);
 router.post('/set-password', validate(setPasswordSchema), authController.setPassword);
+// Forgot password (uses the same set-password page with a RESET token)
+router.post('/forgot-password', validate(forgotPasswordSchema), authController.forgotPassword);
 router.post('/logout', authenticate, authController.logout);
 router.get('/me', authenticate, authController.me);
 

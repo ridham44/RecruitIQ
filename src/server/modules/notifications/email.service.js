@@ -123,6 +123,25 @@ export async function sendAccountSetupEmail({ to, companyName: rawCompanyName, l
   return sendAndLog({ to, subject, html, type: 'ACCOUNT_SETUP', applicationId: null });
 }
 
+// Forgot password: one-time reset link (see auth.service requestPasswordReset).
+export async function sendPasswordResetEmail({ to, link, expiresInMinutes = 60 }) {
+  const subject = 'Reset your RecruitIQ password';
+  const html = layout(`
+    <p>Hello,</p>
+    <p>We received a request to reset the password for your RecruitIQ account (${to}).</p>
+    <p style="margin:24px 0;">
+      <a href="${link}" style="background:#2a4bd6;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:bold;display:inline-block;">
+        Reset password
+      </a>
+    </p>
+    <p style="color:#64748b;font-size:12px;">This link works once and expires in ${expiresInMinutes} minutes.
+    If the button doesn't work, copy this link: ${link}</p>
+    <p>If you didn't ask for this, you can ignore this email — your password stays the same.</p>
+    <p>— The RecruitIQ team</p>
+  `);
+  return sendAndLog({ to, subject, html, type: 'ACCOUNT_SETUP', applicationId: null });
+}
+
 // Build plan P4: sent after a careers-portal apply. `link` is a set-password
 // link for a new guest account, or null when the email already has an
 // account (then the candidate is pointed at the login page instead).

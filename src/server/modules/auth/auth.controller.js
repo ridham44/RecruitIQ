@@ -43,6 +43,12 @@ export const getPasswordToken = asyncHandler(async (req, res) => {
   ok(res, info);
 });
 
+// Same answer whether or not the account exists.
+export const forgotPassword = asyncHandler(async (req, res) => {
+  await authService.requestPasswordReset(req.body);
+  ok(res, { message: "If an account exists for that email, we've sent a link to reset the password." });
+});
+
 export const setPassword = asyncHandler(async (req, res) => {
   const result = await authService.setPasswordWithToken(req.body);
   ok(res, result);
