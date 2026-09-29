@@ -7,15 +7,33 @@ import { findUsableToken } from './passwordToken.service.js';
 
 const SALT_ROUNDS = 10;
 
+// function serializeUser(user) {
+//   return {
+//     id: user.id,
+//     email: user.email,
+//     role: user.role,
+//     company: user.company || undefined,
+//     candidate: user.candidate || undefined,
+//   };
+// }
+// Build plan P2: adds `membership` (role + permissions inside the company)
+// for owners and recruiters; a recruiter's `company` comes via membership.
 function serializeUser(user) {
+  const membership = user.membership;
   return {
     id: user.id,
     email: user.email,
     role: user.role,
-    company: user.company || undefined,
+    company: user.company || membership?.company || undefined,
     candidate: user.candidate || undefined,
+    membership: membership
+      ? { id: membership.id, role: membership.role, permissions: membership.permissions, fullName: membership.fullName }
+      : undefined,
   };
 }
+
+// Relations every auth response needs (login, /auth/me, set-password).
+export const USER_AUTH_INCLUDE = { company: true, candidate: true, membership: { include: { company: true } } };
 
 export async function registerCompany({ email, password, companyName, website, industry, location }) {
   const normalizedEmail = email.trim().toLowerCase();
@@ -24,16 +42,33 @@ export async function registerCompany({ email, password, companyName, website, i
 
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
-  const user = await prisma.user.create({
-    data: {
-      email: normalizedEmail,
-      passwordHash,
-      role: ROLES.COMPANY,
-      company: {
-        create: { name: companyName, website: website || null, industry: industry || null, location: location || null },
+  // const user = await prisma.user.create({
+  //   data: {
+  //     email: normalizedEmail,
+  //     passwordHash,
+  //     role: ROLES.COMPANY,
+  //     company: {
+  //       create: { name: companyName, website: website || null, industry: industry || null, location: location || null },
+  //     },
+  //   },
+  //   include: { company: true },
+  // });
+  // Build plan P2: the owner also gets an OWNER CompanyMember row, in the
+  // same transaction as the user + company.
+  const user = await prisma.$transaction(async (tx) => {
+    const created = await tx.user.create({
+      data: {
+        email: normalizedEmail,
+        passwordHash,
+        role: ROLES.COMPANY,
+        company: {
+          create: { name: companyName, website: website || null, industry: industry || null, location: location || null },
+        },
       },
-    },
-    include: { company: true },
+      include: { company: true },
+    });
+    await tx.companyMember.create({ data: { companyId: created.company.id, userId: created.id, role: 'OWNER' } });
+    return created;
   });
 
   return { user: serializeUser(user), token: signToken(user) };
@@ -65,7 +100,8 @@ export async function login({ email, password }) {
   const normalizedEmail = email.trim().toLowerCase();
   const user = await prisma.user.findUnique({
     where: { email: normalizedEmail },
-    include: { company: true, candidate: true },
+    // include: { company: true, candidate: true },
+    include: USER_AUTH_INCLUDE,
   });
 
   if (!user || !user.isActive) {
@@ -85,7 +121,13 @@ export async function login({ email, password }) {
 }
 
 export function assertCompanyNotSuspended(user) {
-  if (user.role === ROLES.COMPANY && user.company?.status === 'SUSPENDED') {
+  // Build plan P2: a deactivated recruiter is treated like a wrong login.
+  if (user.role === ROLES.RECRUITER && user.membership && !user.membership.isActive) {
+    throw ApiError.unauthorized('Invalid email or password', 'INVALID_CREDENTIALS');
+  }
+  const companyStatus = user.role === ROLES.RECRUITER ? user.membership?.company?.status : user.company?.status;
+  // if (user.role === ROLES.COMPANY && user.company?.status === 'SUSPENDED') {
+  if ((user.role === ROLES.COMPANY || user.role === ROLES.RECRUITER) && companyStatus === 'SUSPENDED') {
     throw ApiError.forbidden(
       'Your company account has been suspended. Please contact the RecruitIQ administrator.',
       'COMPANY_SUSPENDED'
@@ -100,7 +142,8 @@ export async function getPasswordTokenInfo(token) {
   return {
     email: row.user.email,
     role: row.user.role,
-    companyName: row.user.company?.name,
+    // companyName: row.user.company?.name,
+    companyName: row.user.company?.name ?? row.user.membership?.company?.name,
     purpose: row.purpose,
   };
 }
@@ -131,7 +174,8 @@ export async function setPasswordWithToken({ token, password }) {
 export async function getCurrentUser(userId) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    include: { company: true, candidate: true },
+    // include: { company: true, candidate: true },
+    include: USER_AUTH_INCLUDE,
   });
   if (!user) throw ApiError.notFound('User not found');
   return serializeUser(user);

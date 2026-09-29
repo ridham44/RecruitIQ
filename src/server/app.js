@@ -15,6 +15,7 @@ import schedulingRoutes from './modules/scheduling/scheduling.routes.js';
 import interviewsRoutes from './modules/interviews/interviews.routes.js';
 import adminRoutes from './modules/admin/admin.routes.js';
 import configRoutes from './modules/config/config.routes.js';
+import recruitersRoutes from './modules/recruiters/recruiters.routes.js';
 
 export function createApp() {
   const app = express();
@@ -51,6 +52,8 @@ export function createApp() {
   // Build plan P1
   v1.use('/admin', adminRoutes);
   v1.use('/config', configRoutes);
+  // Build plan P2
+  v1.use('/recruiters', recruitersRoutes);
 
   app.use('/api/v1', v1);
 

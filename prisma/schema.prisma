@@ -179,6 +179,13 @@ enum EmailType {
   ACCOUNT_SETUP
 }
 
+// Build plan P2: a user's role inside a recruitment company. OWNER implicitly
+// has every permission; RECRUITER has only CompanyMember.permissions.
+enum MemberRole {
+  OWNER
+  RECRUITER
+}
+
 // Build plan P1: a Platform Admin can suspend a recruitment company. A
 // suspended company's users can't log in, and their existing tokens are
 // rejected by the authenticate middleware.
@@ -209,8 +216,49 @@ model User {
   candidate Candidate?
 
   passwordTokens PasswordToken[]
+  // Build plan P2: company owners and recruiters. Null for candidates/admins.
+  membership     CompanyMember?
 
   @@map("users")
+}
+
+// Build plan P2: every user who works inside a recruitment company. Existing
+// owners were backfilled as OWNER in the migration; Company.userId still
+// points at the owner and stays the fallback (see companyContext.js).
+model CompanyMember {
+  id          String     @id @default(cuid())
+  companyId   String
+  // A user belongs to at most one recruitment company.
+  userId      String     @unique
+  role        MemberRole @default(RECRUITER)
+  // Display name for recruiters (users table has no name column).
+  fullName    String?
+  // Permission keys from src/shared/constants/permissions.js — ignored for OWNER.
+  permissions String[]   @default([])
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  company        Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobAssignments JobRecruiter[]
+
+  @@index([companyId])
+  @@map("company_members")
+}
+
+// Build plan P2 (§3 "Associate Recruiter with Jobs"): which recruiters work a job.
+model JobRecruiter {
+  jobId     String
+  memberId  String
+  createdAt DateTime @default(now())
+
+  job    Job           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  member CompanyMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@id([jobId, memberId])
+  @@index([memberId])
+  @@map("job_recruiters")
 }
 
 // Build plan P1: single-use, expiring link to set a password — used when an
@@ -252,8 +300,9 @@ model Company {
   status           CompanyStatus @default(ACTIVE)
   createdByAdminId String?
 
-  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  jobs Job[]
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobs    Job[]
+  members CompanyMember[]
 
   @@index([status])
   @@map("companies")
@@ -356,6 +405,7 @@ model Job {
   applications      Application[]
   interviewSlots    InterviewSlot[]
   aiInterviewConfig AiInterviewConfig?
+  recruiters        JobRecruiter[]
 
   @@index([companyId])
   @@index([status])

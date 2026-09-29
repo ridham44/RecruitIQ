@@ -2,7 +2,9 @@ import { Router } from 'express';
 import * as schedulingController from './scheduling.controller.js';
 import { authenticate, authorize } from '../../middleware/auth.js';
 import { validate } from '../../middleware/validate.js';
-import { ROLES } from '../../../shared/constants/roles.js';
+import { ROLES, COMPANY_SIDE_ROLES } from '../../../shared/constants/roles.js';
+import { PERMISSIONS } from '../../../shared/constants/permissions.js';
+import { requirePermission } from '../../middleware/permission.js';
 import { createSlotsSchema, generateSlotsSchema, bookSlotSchema } from '../../../shared/schemas/scheduling.schema.js';
 
 const router = Router();
@@ -10,18 +12,37 @@ const router = Router();
 router.use(authenticate);
 
 // Company: manage slots for a job
-router.post('/jobs/:jobId/slots', authorize(ROLES.COMPANY), validate(createSlotsSchema), schedulingController.createSlots);
+// router.post('/jobs/:jobId/slots', authorize(ROLES.COMPANY), validate(createSlotsSchema), schedulingController.createSlots);
+// router.post(
+//   '/jobs/:jobId/slots/generate',
+//   authorize(ROLES.COMPANY),
+//   validate(generateSlotsSchema),
+//   schedulingController.generateSlots
+// );
+// router.get('/jobs/:jobId/slots', authorize(ROLES.COMPANY), schedulingController.listSlotsForJob);
+// router.delete('/jobs/:jobId/slots/:slotId', authorize(ROLES.COMPANY), schedulingController.cancelSlot);
+// router.patch(
+//   '/jobs/:jobId/interviews/:interviewId/complete',
+//   authorize(ROLES.COMPANY),
+//   schedulingController.markInterviewCompleted
+// );
+// Build plan P2: owners, and recruiters with CONFIGURE_INTERVIEWS on an assigned job.
+const configureInterviews = requirePermission(PERMISSIONS.CONFIGURE_INTERVIEWS);
+router.post('/jobs/:jobId/slots', authorize(...COMPANY_SIDE_ROLES), configureInterviews, validate(createSlotsSchema), schedulingController.createSlots);
 router.post(
   '/jobs/:jobId/slots/generate',
-  authorize(ROLES.COMPANY),
+  authorize(...COMPANY_SIDE_ROLES),
+  configureInterviews,
   validate(generateSlotsSchema),
   schedulingController.generateSlots
 );
-router.get('/jobs/:jobId/slots', authorize(ROLES.COMPANY), schedulingController.listSlotsForJob);
-router.delete('/jobs/:jobId/slots/:slotId', authorize(ROLES.COMPANY), schedulingController.cancelSlot);
+// Viewing slots only needs job access (getOwnedJob); changing them needs CONFIGURE_INTERVIEWS.
+router.get('/jobs/:jobId/slots', authorize(...COMPANY_SIDE_ROLES), schedulingController.listSlotsForJob);
+router.delete('/jobs/:jobId/slots/:slotId', authorize(...COMPANY_SIDE_ROLES), configureInterviews, schedulingController.cancelSlot);
 router.patch(
   '/jobs/:jobId/interviews/:interviewId/complete',
-  authorize(ROLES.COMPANY),
+  authorize(...COMPANY_SIDE_ROLES),
+  configureInterviews,
   schedulingController.markInterviewCompleted
 );
 
@@ -36,9 +57,15 @@ router.post(
 router.post('/applications/:applicationId/cancel', authorize(ROLES.CANDIDATE), schedulingController.cancelMyInterview);
 
 // Shared: either the owning candidate or the owning company can read it
+// router.get(
+//   '/applications/:applicationId/interview',
+//   authorize(ROLES.CANDIDATE, ROLES.COMPANY),
+//   schedulingController.getInterview
+// );
 router.get(
   '/applications/:applicationId/interview',
-  authorize(ROLES.CANDIDATE, ROLES.COMPANY),
+  authorize(ROLES.CANDIDATE, ...COMPANY_SIDE_ROLES),
+  requirePermission(PERMISSIONS.REVIEW_CANDIDATES),
   schedulingController.getInterview
 );
 

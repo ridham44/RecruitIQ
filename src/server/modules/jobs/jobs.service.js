@@ -2,18 +2,27 @@ import { prisma } from '../../config/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { JOB_STATUS } from '../../../shared/constants/statuses.js';
 import { analyzeJobDescription } from '../../ai/job-analyzer.service.js';
+import { getCompanyContext, jobScopeWhere, canAccessJob } from '../companies/companyContext.js';
 
+// async function getCompanyIdForUser(userId) {
+//   const company = await prisma.company.findUnique({ where: { userId } });
+//   if (!company) throw ApiError.notFound('Company profile not found');
+//   return company.id;
+// }
+// Build plan P2: resolved through the shared company context (member first,
+// Company.userId fallback) — same result for owners as before.
 async function getCompanyIdForUser(userId) {
-  const company = await prisma.company.findUnique({ where: { userId } });
-  if (!company) throw ApiError.notFound('Company profile not found');
-  return company.id;
+  const ctx = await getCompanyContext(userId);
+  return ctx.companyId;
 }
 
 // Creates the job immediately, then augments it with AI-extracted structured
 // requirements (Section 12). AI analysis failure should never block job
 // creation — it degrades gracefully and can be re-run later.
 export async function createJob(userId, jobData) {
-  const companyId = await getCompanyIdForUser(userId);
+  // const companyId = await getCompanyIdForUser(userId);
+  const ctx = await getCompanyContext(userId);
+  const companyId = ctx.companyId;
 
   const job = await prisma.job.create({
     data: {
@@ -40,6 +49,11 @@ export async function createJob(userId, jobData) {
       autoRejectBelowMinScore: jobData.autoRejectBelowMinScore,
     },
   });
+
+  // Build plan P2: a recruiter who creates a job is assigned to it.
+  if (!ctx.isOwner && ctx.memberId) {
+    await prisma.jobRecruiter.create({ data: { jobId: job.id, memberId: ctx.memberId } });
+  }
 
   try {
     const analysis = await analyzeJobDescription({ title: job.title, description: job.description });
@@ -91,11 +105,23 @@ export async function closeJob(userId, jobId) {
   return prisma.job.update({ where: { id: job.id }, data: { status: JOB_STATUS.CLOSED } });
 }
 
+// async function getOwnedJob(userId, jobId) {
+//   const companyId = await getCompanyIdForUser(userId);
+//   const job = await prisma.job.findUnique({ where: { id: jobId } });
+//   if (!job) throw ApiError.notFound('Job not found');
+//   if (job.companyId !== companyId) throw ApiError.forbidden('You do not own this job');
+//   return job;
+// }
+// Build plan P2: same checks for owners; a recruiter additionally needs to
+// be assigned to the job (or have created it).
 async function getOwnedJob(userId, jobId) {
-  const companyId = await getCompanyIdForUser(userId);
+  const ctx = await getCompanyContext(userId);
   const job = await prisma.job.findUnique({ where: { id: jobId } });
   if (!job) throw ApiError.notFound('Job not found');
-  if (job.companyId !== companyId) throw ApiError.forbidden('You do not own this job');
+  if (job.companyId !== ctx.companyId) throw ApiError.forbidden('You do not own this job');
+  if (!(await canAccessJob(ctx, userId, job))) {
+    throw ApiError.forbidden('You are not assigned to this job', 'JOB_NOT_ASSIGNED');
+  }
   return job;
 }
 
@@ -113,9 +139,12 @@ export async function listOpenJobs({ search } = {}) {
 }
 
 export async function listCompanyJobs(userId) {
-  const companyId = await getCompanyIdForUser(userId);
+  // const companyId = await getCompanyIdForUser(userId);
+  // Build plan P2: recruiters only see their own/assigned jobs.
+  const ctx = await getCompanyContext(userId);
   return prisma.job.findMany({
-    where: { companyId },
+    // where: { companyId },
+    where: jobScopeWhere(ctx, userId),
     include: { _count: { select: { applications: true } } },
     orderBy: { createdAt: 'desc' },
   });

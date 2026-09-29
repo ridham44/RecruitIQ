@@ -31,6 +31,8 @@ import AdminCompaniesPage from './pages/admin/CompaniesPage.jsx';
 import AdminCompanyNewPage from './pages/admin/CompanyNewPage.jsx';
 import AdminCompanyDetailPage from './pages/admin/CompanyDetailPage.jsx';
 import AdminUsersPage from './pages/admin/UsersPage.jsx';
+// Build plan P2 — recruiters
+import CompanyRecruitersPage from './pages/company/RecruitersPage.jsx';
 
 export default function App() {
   return (
@@ -55,10 +57,19 @@ export default function App() {
         <Route path="users" element={<AdminUsersPage />} />
       </Route>
 
-      <Route
+      {/* <Route
         path="/company"
         element={
           <ProtectedRoute role="COMPANY">
+            <CompanyLayout />
+          </ProtectedRoute>
+        }
+      > */}
+      {/* Build plan P2: owners and recruiters share the company area. */}
+      <Route
+        path="/company"
+        element={
+          <ProtectedRoute roles={['COMPANY', 'RECRUITER']}>
             <CompanyLayout />
           </ProtectedRoute>
         }
@@ -71,6 +82,7 @@ export default function App() {
         <Route path="jobs/:id/interviews" element={<CompanyJobInterviewsPage />} />
         <Route path="jobs/:id/interviews/:interviewId" element={<CompanyInterviewDetailPage />} />
         <Route path="jobs/:id/candidates/:candidateId" element={<CompanyCandidateDetailPage />} />
+        <Route path="recruiters" element={<CompanyRecruitersPage />} />
       </Route>
 
       <Route

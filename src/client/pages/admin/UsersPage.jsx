@@ -15,11 +15,27 @@ import { inputClass } from '../../components/ui/FormField.jsx';
 const ROLE_LABELS = { ADMIN: 'Admin', COMPANY: 'Company', CANDIDATE: 'Candidate', RECRUITER: 'Recruiter', INTERVIEWER: 'Interviewer' };
 const formatDate = (d) => new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
+// function displayName(u) {
+//   return u.company?.name || u.candidate?.fullName || '—';
+// }
+// Build plan P2: recruiters show "Name · Company".
 function displayName(u) {
+  if (u.role === 'RECRUITER') return [u.memberName, u.company?.name].filter(Boolean).join(' · ') || '—';
   return u.company?.name || u.candidate?.fullName || '—';
 }
 
 function NameCell({ u }) {
+  // Build plan P2
+  if (u.role === 'RECRUITER' && u.company) {
+    return (
+      <span>
+        <span className="text-slate-900">{u.memberName || '—'}</span>{' '}
+        <Link to={`/admin/companies/${u.company.id}`} className="text-xs text-slate-500 hover:text-brand-600">
+          · {u.company.name}
+        </Link>
+      </span>
+    );
+  }
   if (u.company) {
     return (
       <Link to={`/admin/companies/${u.company.id}`} className="text-slate-900 hover:text-brand-600">
@@ -104,7 +120,8 @@ export default function UsersPage() {
         </div>
         <select className={`${inputClass} min-h-[44px] sm:w-40`} value={filters.role} onChange={setFilter('role')} aria-label="Filter by role">
           <option value="">All roles</option>
-          {['ADMIN', 'COMPANY', 'CANDIDATE'].map((r) => (
+          {/* {['ADMIN', 'COMPANY', 'CANDIDATE'].map((r) => ( */}
+          {['ADMIN', 'COMPANY', 'RECRUITER', 'CANDIDATE'].map((r) => (
             <option key={r} value={r}>
               {ROLE_LABELS[r]}
             </option>

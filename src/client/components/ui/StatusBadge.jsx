@@ -20,6 +20,8 @@ const STYLES = {
   SUSPENDED: 'bg-red-100 text-red-700',
   INACTIVE: 'bg-slate-200 text-slate-600',
   INVITED: 'bg-amber-100 text-amber-700',
+  // Build plan P2 — company members
+  OWNER: 'bg-brand-50 text-brand-700',
 };
 
 export default function StatusBadge({ status }) {

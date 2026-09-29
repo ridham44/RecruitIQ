@@ -8,8 +8,10 @@ import LoadingState from '../../components/ui/LoadingState.jsx';
 import ErrorState from '../../components/ui/ErrorState.jsx';
 import EmptyState from '../../components/ui/EmptyState.jsx';
 import StatusBadge from '../../components/ui/StatusBadge.jsx';
+import { usePermissions } from '../../hooks/usePermissions.js';
 
 export default function JobsListPage() {
+  const { can } = usePermissions();
   const [jobs, setJobs] = useState(null);
   const [error, setError] = useState('');
 
@@ -27,11 +29,14 @@ export default function JobsListPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h2 className="text-xl font-semibold text-slate-900">Jobs</h2>
-        <Link to="/company/jobs/new">
-          <Button>
-            <Plus className="h-4 w-4" /> New Job
-          </Button>
-        </Link>
+        {/* Build plan P2: hidden for recruiters without MANAGE_JOBS */}
+        {can('MANAGE_JOBS') && (
+          <Link to="/company/jobs/new">
+            <Button>
+              <Plus className="h-4 w-4" /> New Job
+            </Button>
+          </Link>
+        )}
       </div>
 
       {error && <ErrorState message={error} onRetry={load} />}
@@ -40,11 +45,18 @@ export default function JobsListPage() {
         <EmptyState
           icon={Briefcase}
           title="No jobs yet"
-          description="Create your first job posting to start receiving applications."
+          // description="Create your first job posting to start receiving applications."
+          description={
+            can('MANAGE_JOBS')
+              ? 'Create your first job posting to start receiving applications.'
+              : "You haven't been assigned to any jobs yet. Ask your company owner."
+          }
           action={
-            <Link to="/company/jobs/new">
-              <Button>Create a job</Button>
-            </Link>
+            can('MANAGE_JOBS') && (
+              <Link to="/company/jobs/new">
+                <Button>Create a job</Button>
+              </Link>
+            )
           }
         />
       )}

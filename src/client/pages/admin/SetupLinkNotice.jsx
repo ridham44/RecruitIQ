@@ -4,7 +4,9 @@ import { Check, Copy, MailCheck } from 'lucide-react';
 // Build plan P1: shown after creating a company / resending an invite. The
 // email may not arrive (e.g. Brevo not configured in dev), so the admin can
 // always copy the link and share it directly.
-export default function SetupLinkNotice({ email, link }) {
+// export default function SetupLinkNotice({ email, link }) {
+// Build plan P2: `who` lets the recruiter invite reuse this ("the recruiter").
+export default function SetupLinkNotice({ email, link, who = 'the owner' }) {
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
@@ -24,7 +26,8 @@ export default function SetupLinkNotice({ email, link }) {
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-emerald-900">Invite sent to {email}</p>
           <p className="mt-1 text-sm text-emerald-800">
-            If the email doesn't arrive, share this link with the owner. It works once and expires in 72 hours.
+            {/* If the email doesn't arrive, share this link with the owner. It works once and expires in 72 hours. */}
+            If the email doesn't arrive, share this link with {who}. It works once and expires in 72 hours.
           </p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <input

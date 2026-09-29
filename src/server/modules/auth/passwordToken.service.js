@@ -46,7 +46,8 @@ export async function findUsableToken(token) {
   }
   const row = await prisma.passwordToken.findUnique({
     where: { tokenHash: hashToken(token) },
-    include: { user: { include: { company: true, candidate: true } } },
+    // include: { user: { include: { company: true, candidate: true } } },
+    include: { user: { include: { company: true, candidate: true, membership: { include: { company: true } } } } },
   });
   if (!row) throw ApiError.badRequest('This link is invalid', 'INVALID_TOKEN');
   if (row.usedAt) throw ApiError.badRequest('This link has already been used. Please log in.', 'TOKEN_USED');

@@ -33,12 +33,24 @@ export const authenticate = asyncHandler(async (req, res, next) => {
   // lookup per request.
   const account = await prisma.user.findUnique({
     where: { id: payload.sub },
-    select: { isActive: true, role: true, company: { select: { status: true } } },
+    // select: { isActive: true, role: true, company: { select: { status: true } } },
+    select: {
+      isActive: true,
+      role: true,
+      company: { select: { status: true } },
+      // Build plan P2: recruiters reach their company through membership.
+      membership: { select: { isActive: true, company: { select: { status: true } } } },
+    },
   });
   if (!account || !account.isActive) {
     throw ApiError.unauthorized('Your account is inactive or no longer exists', 'ACCOUNT_INACTIVE');
   }
-  if (account.role === 'COMPANY' && account.company?.status === 'SUSPENDED') {
+  if (account.role === 'RECRUITER' && !account.membership?.isActive) {
+    throw ApiError.unauthorized('Your account is inactive or no longer exists', 'ACCOUNT_INACTIVE');
+  }
+  // if (account.role === 'COMPANY' && account.company?.status === 'SUSPENDED') {
+  const companyStatus = account.role === 'RECRUITER' ? account.membership?.company?.status : account.company?.status;
+  if ((account.role === 'COMPANY' || account.role === 'RECRUITER') && companyStatus === 'SUSPENDED') {
     throw ApiError.forbidden(
       'Your company account has been suspended. Please contact the RecruitIQ administrator.',
       'COMPANY_SUSPENDED'

@@ -109,6 +109,8 @@ export async function createCompany(adminUserId, data) {
       },
       include: { company: true },
     });
+    // Build plan P2: owner membership.
+    await tx.companyMember.create({ data: { companyId: user.company.id, userId: user.id, role: 'OWNER' } });
     const invite = await issuePasswordToken(user.id, { tx });
     return { company: user.company, link: invite.link };
   });
@@ -154,6 +156,26 @@ export async function resendInvite(companyId) {
   return { setupLink: link };
 }
 
+// Build plan P2: recruiters reach their company through membership.
+const USER_LIST_SELECT = {
+  id: true,
+  email: true,
+  role: true,
+  isActive: true,
+  createdAt: true,
+  company: { select: { id: true, name: true, status: true } },
+  candidate: { select: { id: true, fullName: true } },
+  membership: { select: { fullName: true, company: { select: { id: true, name: true, status: true } } } },
+};
+
+function serializeListUser({ membership, ...user }) {
+  return {
+    ...user,
+    company: user.company || membership?.company || null,
+    memberName: membership?.fullName || null,
+  };
+}
+
 export async function listUsers({ q, role, status } = {}) {
   const search = q?.trim();
   const users = await prisma.user.findMany({
@@ -166,23 +188,18 @@ export async function listUsers({ q, role, status } = {}) {
               { email: { contains: search, mode: 'insensitive' } },
               { company: { name: { contains: search, mode: 'insensitive' } } },
               { candidate: { fullName: { contains: search, mode: 'insensitive' } } },
+              { membership: { fullName: { contains: search, mode: 'insensitive' } } },
+              { membership: { company: { name: { contains: search, mode: 'insensitive' } } } },
             ],
           }
         : {}),
     },
-    select: {
-      id: true,
-      email: true,
-      role: true,
-      isActive: true,
-      createdAt: true,
-      company: { select: { id: true, name: true, status: true } },
-      candidate: { select: { id: true, fullName: true } },
-    },
+    // select: { id, email, role, isActive, createdAt, company, candidate },
+    select: USER_LIST_SELECT,
     orderBy: { createdAt: 'desc' },
     take: 500,
   });
-  return users;
+  return users.map(serializeListUser);
 }
 
 export async function setUserStatus(adminUserId, userId, isActive) {
@@ -192,17 +209,11 @@ export async function setUserStatus(adminUserId, userId, isActive) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw ApiError.notFound('User not found');
 
-  return prisma.user.update({
+  const updated = await prisma.user.update({
     where: { id: userId },
     data: { isActive },
-    select: {
-      id: true,
-      email: true,
-      role: true,
-      isActive: true,
-      createdAt: true,
-      company: { select: { id: true, name: true, status: true } },
-      candidate: { select: { id: true, fullName: true } },
-    },
+    // select: { id, email, role, isActive, createdAt, company, candidate },
+    select: USER_LIST_SELECT,
   });
+  return serializeListUser(updated);
 }

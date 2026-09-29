@@ -1,7 +1,8 @@
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { created, ok } from '../../utils/apiResponse.js';
 import * as schedulingService from './scheduling.service.js';
-import { ROLES } from '../../../shared/constants/roles.js';
+// import { ROLES } from '../../../shared/constants/roles.js';
+import { isCompanySide } from '../../../shared/constants/roles.js';
 
 export const createSlots = asyncHandler(async (req, res) => {
   const slots = await schedulingService.createSlots(req.user.id, req.params.jobId, req.body.slots);
@@ -39,7 +40,8 @@ export const cancelMyInterview = asyncHandler(async (req, res) => {
 });
 
 export const getInterview = asyncHandler(async (req, res) => {
-  const asCompany = req.user.role === ROLES.COMPANY;
+  // const asCompany = req.user.role === ROLES.COMPANY;
+  const asCompany = isCompanySide(req.user.role);
   const interview = await schedulingService.getInterviewForApplication(req.user.id, req.params.applicationId, { asCompany });
   ok(res, { interview });
 });

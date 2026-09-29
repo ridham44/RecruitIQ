@@ -1,10 +1,16 @@
 import { prisma } from '../../config/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
+import { getCompanyContext, jobScopeWhere } from './companyContext.js';
 
+// export async function getCompanyByUserId(userId) {
+//   const company = await prisma.company.findUnique({ where: { userId } });
+//   if (!company) throw ApiError.notFound('Company profile not found');
+//   return company;
+// }
+// Build plan P2: resolved through the shared company context.
 export async function getCompanyByUserId(userId) {
-  const company = await prisma.company.findUnique({ where: { userId } });
-  if (!company) throw ApiError.notFound('Company profile not found');
-  return company;
+  const ctx = await getCompanyContext(userId);
+  return ctx.company;
 }
 
 export async function updateCompanyProfile(userId, data) {
@@ -24,11 +30,15 @@ export async function updateCompanyProfile(userId, data) {
 }
 
 export async function getDashboardOverview(userId) {
-  const company = await getCompanyByUserId(userId);
-  const companyId = company.id;
+  // const company = await getCompanyByUserId(userId);
+  // const companyId = company.id;
+  // Build plan P2: a recruiter's dashboard only counts their own/assigned jobs.
+  const ctx = await getCompanyContext(userId);
+  const company = ctx.company;
 
   const jobs = await prisma.job.findMany({
-    where: { companyId },
+    // where: { companyId },
+    where: jobScopeWhere(ctx, userId),
     include: {
       _count: {
         select: {

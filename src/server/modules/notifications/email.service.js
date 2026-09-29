@@ -96,13 +96,21 @@ export async function sendApplicationStatusEmail(application) {
 
 // Build plan P1: invite for an account someone else created (admin-onboarded
 // company owner). Not tied to an application, so applicationId stays null.
-export async function sendAccountSetupEmail({ to, companyName: rawCompanyName, link, expiresInHours = 72 }) {
-  const subject = `Set up your RecruitIQ account for ${rawCompanyName}`;
+// Build plan P2: `asRecruiter` switches the wording for recruiter invites.
+export async function sendAccountSetupEmail({ to, companyName: rawCompanyName, link, expiresInHours = 72, asRecruiter = false }) {
+  // const subject = `Set up your RecruitIQ account for ${rawCompanyName}`;
+  const subject = asRecruiter
+    ? `You've been invited to join ${rawCompanyName} on RecruitIQ`
+    : `Set up your RecruitIQ account for ${rawCompanyName}`;
   const companyName = String(rawCompanyName).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const intro = asRecruiter
+    ? `<p><strong>${companyName}</strong> has invited you to join their team on RecruitIQ as a recruiter.
+    Choose a password to start working on your assigned jobs.</p>`
+    : `<p>A RecruitIQ account has been created for <strong>${companyName}</strong> with this email address.
+    Choose a password to start posting jobs and screening candidates.</p>`;
   const html = layout(`
     <p>Hello,</p>
-    <p>A RecruitIQ account has been created for <strong>${companyName}</strong> with this email address.
-    Choose a password to start posting jobs and screening candidates.</p>
+    ${intro}
     <p style="margin:24px 0;">
       <a href="${link}" style="background:#2a4bd6;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:bold;display:inline-block;">
         Set your password

@@ -9,6 +9,8 @@ export function setToken(token) {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
+const KEEP_SESSION_CODES = new Set(['PERMISSION_DENIED', 'JOB_NOT_ASSIGNED']);
+
 // Thin fetch wrapper: every server response follows the { success, data }
 // or { success: false, message, error } envelope (Section 23), so callers
 // just get back `data` or a thrown Error with a readable message.
@@ -34,7 +36,13 @@ async function request(path, { method = 'GET', body, isFormData = false } = {}) 
 
     // Auto-evict a stale or wrong-role JWT so the user is cleanly redirected
     // to login by ProtectedRoute instead of seeing a looping 403/401 error.
-    if (response.status === 401 || response.status === 403) {
+    // if (response.status === 401 || response.status === 403) {
+    //   setToken(null);
+    // }
+    // Build plan P2: a recruiter hitting something outside their permissions
+    // or job assignments stays logged in — only that one action is refused.
+    const keepSession = response.status === 403 && KEEP_SESSION_CODES.has(json?.error);
+    if ((response.status === 401 || response.status === 403) && !keepSession) {
       setToken(null);
     }
 
@@ -48,6 +56,7 @@ export const api = {
   get: (path) => request(path),
   post: (path, body) => request(path, { method: 'POST', body }),
   patch: (path, body) => request(path, { method: 'PATCH', body }),
+  put: (path, body) => request(path, { method: 'PUT', body }),
   delete: (path) => request(path, { method: 'DELETE' }),
   upload: (path, formData) => request(path, { method: 'POST', body: formData, isFormData: true }),
 };

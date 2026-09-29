@@ -10,6 +10,8 @@ import StatusBadge from '../../components/ui/StatusBadge.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import FormField, { inputClass } from '../../components/ui/FormField.jsx';
 import TagInput from '../../components/ui/TagInput.jsx';
+import { usePermissions } from '../../hooks/usePermissions.js';
+import JobRecruitersCard from './JobRecruitersCard.jsx';
 
 const EMPLOYMENT_TYPES = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP', 'FREELANCE'];
 const WORK_MODES = ['On-site', 'Remote', 'Hybrid'];
@@ -17,6 +19,7 @@ const JOB_LEVELS = ['Junior', 'Mid', 'Senior', 'Lead'];
 const NOTICE_PERIODS = ['Immediate', '15 days', '30 days', '60 days', '90 days'];
 
 export default function JobDetailPage() {
+  const { can } = usePermissions();
   const { id } = useParams();
   const navigate = useNavigate();
   const [job, setJob] = useState(null);
@@ -262,9 +265,12 @@ export default function JobDetailPage() {
         </div>
 
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
-          <Button variant="secondary" onClick={startEdit} className="w-full sm:w-auto">
-            <Pencil className="h-4 w-4" /> Edit
-          </Button>
+          {/* Build plan P2: Edit / Close job need MANAGE_JOBS */}
+          {can('MANAGE_JOBS') && (
+            <Button variant="secondary" onClick={startEdit} className="w-full sm:w-auto">
+              <Pencil className="h-4 w-4" /> Edit
+            </Button>
+          )}
           <Link to={`/company/jobs/${id}/applications`} className="contents sm:block">
             <Button variant="secondary" className="w-full sm:w-auto">
               <Users className="h-4 w-4" /> Applications
@@ -275,7 +281,8 @@ export default function JobDetailPage() {
               <Calendar className="h-4 w-4" /> Interviews
             </Button>
           </Link>
-          {job.status !== 'CLOSED' && (
+          {/* {job.status !== 'CLOSED' && ( */}
+          {job.status !== 'CLOSED' && can('MANAGE_JOBS') && (
             <Button variant="danger" onClick={() => setConfirmClose(true)} className="w-full sm:w-auto">
               <XCircle className="h-4 w-4" /> Close job
             </Button>
@@ -324,6 +331,9 @@ export default function JobDetailPage() {
         <h3 className="mb-2 mt-4 text-sm font-semibold text-slate-900">Certifications</h3>
         <SkillTags skills={job.certifications} tone="amber" />
       </Card>
+
+      {/* Build plan P2 */}
+      {can('MANAGE_RECRUITERS') && <JobRecruitersCard jobId={id} />}
 
       <ConfirmDialog
         open={confirmClose}
