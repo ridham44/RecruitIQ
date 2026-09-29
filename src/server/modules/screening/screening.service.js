@@ -6,6 +6,7 @@ import { matchCandidateToJob } from '../../ai/candidate-matcher.service.js';
 import { computeSkillOverlap, computeExperienceScore, computeEducationScore } from './deterministic.util.js';
 import { getOwnedJob } from '../jobs/jobs.service.js';
 import { sendApplicationStatusEmail } from '../notifications/email.service.js';
+import { inviteApplication } from '../interviews/instantInterview.service.js';
 
 function blend(deterministicScore, aiScore, deterministicWeight = 0.6) {
   return Math.round(deterministicScore * deterministicWeight + aiScore * (1 - deterministicWeight));
@@ -193,7 +194,20 @@ async function screenApplication(application, precomputed = null) {
     // view, same as a manual bulk reject — notify them the same way.
     // if (newStatus === APPLICATION_STATUS.REJECTED) {
     // Build plan P4: auto-shortlist notifies too (same email as a manual shortlist).
-    if (newStatus === APPLICATION_STATUS.REJECTED || newStatus === APPLICATION_STATUS.SHORTLISTED) {
+    // Build plan P5: on an INSTANT-flow job the shortlist email is replaced
+    // by the interview-link email (falls back to the normal one on failure).
+    const instantInvite =
+      newStatus === APPLICATION_STATUS.SHORTLISTED && job.interviewFlow === 'INSTANT' && env.features.instantInterview;
+    let invited = false;
+    if (instantInvite) {
+      try {
+        const { sent } = await inviteApplication(application.id);
+        invited = sent?.sent !== false;
+      } catch (err) {
+        console.error('[screening] instant interview invite failed:', err.message);
+      }
+    }
+    if ((newStatus === APPLICATION_STATUS.REJECTED || newStatus === APPLICATION_STATUS.SHORTLISTED) && !invited) {
       await sendApplicationStatusEmail({ ...application, status: newStatus });
     }
   }

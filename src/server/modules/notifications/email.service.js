@@ -123,6 +123,31 @@ export async function sendAccountSetupEmail({ to, companyName: rawCompanyName, l
   return sendAndLog({ to, subject, html, type: 'ACCOUNT_SETUP', applicationId: null });
 }
 
+// Build plan P5: instant interview link — attend now or any time before it expires.
+export async function sendInterviewInviteEmail({ to, candidateName, jobTitle, companyName, link, expiresAt, applicationId }) {
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const until = expiresAt
+    ? new Date(expiresAt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+    : null;
+  const subject = `Your interview for ${jobTitle} at ${companyName}`;
+  const html = layout(`
+    <p>Hi ${esc(candidateName)},</p>
+    <p>Good news — you've been shortlisted for <strong>${esc(jobTitle)}</strong> at <strong>${esc(companyName)}</strong>.
+    Your AI video interview is ready whenever you are — no booking needed.</p>
+    <p style="margin:24px 0;">
+      <a href="${link}" style="background:#2a4bd6;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:bold;display:inline-block;">
+        Start your interview
+      </a>
+    </p>
+    <p>Before you start: use a quiet room, a working camera and microphone, and allow about 20–30 minutes.
+    If you get disconnected, open the same link again to continue.</p>
+    <p style="color:#64748b;font-size:12px;">${until ? `This link works until ${until}. ` : ''}Keep it private — it opens your interview.
+    If the button doesn't work, copy this link: ${link}</p>
+    <p>— The RecruitIQ team</p>
+  `);
+  return sendAndLog({ to, subject, html, type: 'INTERVIEW_INVITE', applicationId: applicationId ?? null });
+}
+
 // Forgot password: one-time reset link (see auth.service requestPasswordReset).
 export async function sendPasswordResetEmail({ to, link, expiresInMinutes = 60 }) {
   const subject = 'Reset your RecruitIQ password';

@@ -10,6 +10,7 @@ import StatusBadge from '../../components/ui/StatusBadge.jsx';
 import ScoreRing from '../../components/ui/ScoreRing.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import { getApplicationActionState } from '../../utils/applicationActions.js';
+import InstantInterviewCard from './InstantInterviewCard.jsx';
 
 export default function CandidateDetailPage() {
   const { id: jobId, candidateId } = useParams();
@@ -94,6 +95,9 @@ export default function CandidateDetailPage() {
       </div>
 
       {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+
+      {/* Build plan P5 */}
+      <InstantInterviewCard application={application} onChanged={load} />
 
       {result?.status === 'COMPLETED' && (
         <Card className="mb-6 p-6">

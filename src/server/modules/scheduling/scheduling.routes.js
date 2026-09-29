@@ -45,6 +45,13 @@ router.patch(
   configureInterviews,
   schedulingController.markInterviewCompleted
 );
+// Build plan P5: "Send instant interview link" for a shortlisted applicant.
+router.post(
+  '/applications/:applicationId/instant-interview',
+  authorize(...COMPANY_SIDE_ROLES),
+  configureInterviews,
+  schedulingController.sendInstantInterview
+);
 
 // Candidate: browse + book
 router.get('/applications/:applicationId/slots', authorize(ROLES.CANDIDATE), schedulingController.listAvailableSlots);

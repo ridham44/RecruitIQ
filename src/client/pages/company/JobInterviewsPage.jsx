@@ -11,6 +11,7 @@ import LoadingState from '../../components/ui/LoadingState.jsx';
 import ErrorState from '../../components/ui/ErrorState.jsx';
 import EmptyState from '../../components/ui/EmptyState.jsx';
 import StatusBadge from '../../components/ui/StatusBadge.jsx';
+import InterviewFlowCard from './InterviewFlowCard.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 
 const GENERATE_DEFAULTS = { date: '', startTime: '', endTime: '', durationMinutes: 15, bufferMinutes: 0 };
@@ -246,6 +247,9 @@ export default function JobInterviewsPage() {
       <p className="mb-6 text-sm text-slate-500">Configure the AI interviewer, publish slots, and review completed interviews.</p>
 
       {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+
+      {/* Build plan P5 */}
+      <InterviewFlowCard job={job} onSaved={setJob} />
 
       <Card className="mb-6 p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

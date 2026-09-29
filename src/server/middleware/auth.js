@@ -28,8 +28,19 @@ export const authenticate = asyncHandler(async (req, res, next) => {
     throw ApiError.unauthorized('Invalid or expired token', 'INVALID_TOKEN');
   }
   // Build plan P4: OTP / tracking tokens (typ claim) are not login sessions.
-  if (payload.typ || !payload.sub) {
+  // if (payload.typ || !payload.sub) {
+  // Build plan P5: except an instant-interview session, which is a candidate
+  // session limited to that one interview's /interviews/:id/* routes.
+  const isInterviewSession = payload.typ === 'interview' && payload.interviewId && payload.role === 'CANDIDATE';
+  if ((payload.typ && !isInterviewSession) || !payload.sub) {
     throw ApiError.unauthorized('Invalid or expired token', 'INVALID_TOKEN');
+  }
+  if (isInterviewSession) {
+    const scope = `/api/v1/interviews/${payload.interviewId}`;
+    const path = (req.originalUrl || '').split('?')[0];
+    if (path !== scope && !path.startsWith(`${scope}/`)) {
+      throw ApiError.unauthorized('This interview link only opens its own interview', 'INTERVIEW_SCOPE');
+    }
   }
 
   // Build plan P1: a still-valid JWT must stop working once the admin
@@ -61,7 +72,14 @@ export const authenticate = asyncHandler(async (req, res, next) => {
     );
   }
 
-  req.user = { id: payload.sub, role: payload.role, email: payload.email };
+  // req.user = { id: payload.sub, role: payload.role, email: payload.email };
+  req.user = {
+    id: payload.sub,
+    role: payload.role,
+    email: payload.email,
+    // Build plan P5: set only for instant-interview sessions.
+    ...(isInterviewSession ? { interviewId: payload.interviewId } : {}),
+  };
   next();
 });
 

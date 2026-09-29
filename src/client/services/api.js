@@ -11,12 +11,39 @@ export function setToken(token) {
 
 const KEEP_SESSION_CODES = new Set(['PERMISSION_DENIED', 'JOB_NOT_ASSIGNED']);
 
+// Build plan P5: an instant-interview link session (from /interview/:token).
+// Kept in sessionStorage and used ONLY for that interview's /interviews/:id
+// calls, so it never replaces or evicts the browser's normal login.
+const INTERVIEW_SESSION_KEY = 'recruitiq_interview_session';
+
+export function setInterviewSession(session) {
+  try {
+    if (session) sessionStorage.setItem(INTERVIEW_SESSION_KEY, JSON.stringify(session));
+    else sessionStorage.removeItem(INTERVIEW_SESSION_KEY);
+  } catch {
+    /* storage blocked — the room will ask the link page again */
+  }
+}
+
+function interviewSessionFor(path) {
+  try {
+    const s = JSON.parse(sessionStorage.getItem(INTERVIEW_SESSION_KEY) || 'null');
+    if (!s?.token || !s?.interviewId) return null;
+    const scope = `/interviews/${s.interviewId}`;
+    return path === scope || path.startsWith(`${scope}/`) ? s.token : null;
+  } catch {
+    return null;
+  }
+}
+
 // Thin fetch wrapper: every server response follows the { success, data }
 // or { success: false, message, error } envelope (Section 23), so callers
 // just get back `data` or a thrown Error with a readable message.
 async function request(path, { method = 'GET', body, isFormData = false } = {}) {
   const headers = {};
-  const token = getToken();
+  // const token = getToken();
+  const scopedToken = interviewSessionFor(path);
+  const token = scopedToken || getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
   if (!isFormData) headers['Content-Type'] = 'application/json';
 
@@ -42,8 +69,13 @@ async function request(path, { method = 'GET', body, isFormData = false } = {}) 
     // Build plan P2: a recruiter hitting something outside their permissions
     // or job assignments stays logged in — only that one action is refused.
     const keepSession = response.status === 403 && KEEP_SESSION_CODES.has(json?.error);
+    // if ((response.status === 401 || response.status === 403) && !keepSession) {
+    //   setToken(null);
+    // }
+    // Build plan P5: a failed link session only drops itself, never the normal login.
     if ((response.status === 401 || response.status === 403) && !keepSession) {
-      setToken(null);
+      if (scopedToken) setInterviewSession(null);
+      else setToken(null);
     }
 
     throw err;

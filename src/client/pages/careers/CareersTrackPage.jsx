@@ -45,6 +45,16 @@ function outcome(status) {
         body: `${matchedLine}After reviewing your CV, ${app.company.name} won't be moving forward for ${app.job.title} at this time. We've sent you an email.`,
       };
     case 'interview_scheduled':
+      // Build plan P5: instant-link interviews can start right here.
+      if (app.interview?.link) {
+        return {
+          icon: PartyPopper,
+          tone: 'emerald',
+          title: "You've been shortlisted!",
+          body: `${matchedLine}Your AI interview for ${where} is ready — start now, or later from the link in your email.`,
+        };
+      }
+      return { icon: CircleCheck, tone: 'emerald', title: 'Your interview is set up', body: `${matchedLine}Log in to see the details for ${where}.` };
     case 'interview_completed':
       return { icon: CircleCheck, tone: 'emerald', title: 'Your interview is set up', body: `${matchedLine}Log in to see the details for ${where}.` };
     default:
@@ -114,6 +124,8 @@ export default function CareersTrackPage() {
   }, [token]);
 
   const result = status?.done ? outcome(status) : null;
+  // Build plan P5
+  const interviewLink = (status?.kind === 'application' ? status.interview : status?.match?.interview)?.link;
   const companyName = status?.portalCompany?.name || status?.company?.name || status?.match?.company?.name;
 
   return (
@@ -139,6 +151,15 @@ export default function CareersTrackPage() {
           </span>
           <h1 className="text-xl font-semibold text-slate-900">{result.title}</h1>
           <p className="mx-auto mt-2 max-w-md text-sm text-slate-600">{result.body}</p>
+          {/* Build plan P5: instant interview link, right away */}
+          {interviewLink && (
+            <div className="mt-5 flex flex-col items-center gap-2">
+              <a href={interviewLink} className="w-full sm:w-auto">
+                <Button className="w-full sm:w-auto">Start your interview</Button>
+              </a>
+              <p className="text-xs text-slate-500">Not ready? The link is in your email — open it any time before it expires.</p>
+            </div>
+          )}
         </Card>
       )}
 

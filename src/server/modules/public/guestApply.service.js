@@ -16,6 +16,7 @@ import { issuePasswordToken } from '../auth/passwordToken.service.js';
 import { sendCandidateApplicationReceivedEmail } from '../notifications/email.service.js';
 import { screenApplicationById } from '../screening/screening.service.js';
 import { matchCvSubmission } from '../screening/bestMatch.service.js';
+import { interviewLinkFor } from '../interviews/instantInterview.service.js';
 
 // Build plan P4 (§6A, §6B, §7, §8) — apply on a careers portal without an
 // account. The guest becomes an ordinary CANDIDATE user (passwordSet=false)
@@ -236,18 +237,30 @@ function describeApplication(application) {
   else if (screening === SCREENING_STATUS.COMPLETED || screening === SCREENING_STATUS.FAILED) stage = 'under_review';
   else if (application.status === APPLICATION_STATUS.SCREENING) stage = 'screening';
 
+  // Build plan P5: an instant interview link, when one is ready.
+  const instant = env.features.instantInterview
+    ? (application.interviews || []).find((i) => !i.slotId && (i.status === 'SCHEDULED' || i.status === 'IN_PROGRESS'))
+    : null;
+
   return {
     applicationId: application.id,
     status: application.status,
     stage,
     job: { id: application.job.id, title: application.job.title },
     company: { name: application.job.company.name },
+    ...(instant ? { interview: { link: interviewLinkFor(instant), expiresAt: instant.inviteExpiresAt, status: instant.status } } : {}),
   };
 }
 
 export async function getTrackStatus(token) {
   const { kind, id } = readTrackToken(token);
-  const include = { job: { include: { company: { select: { name: true } } } }, screeningResult: { select: { status: true } } };
+  // const include = { job: { include: { company: { select: { name: true } } } }, screeningResult: { select: { status: true } } };
+  const include = {
+    job: { include: { company: { select: { name: true } } } },
+    screeningResult: { select: { status: true } },
+    // Build plan P5
+    interviews: { orderBy: { createdAt: 'desc' }, take: 3 },
+  };
 
   if (kind === 'application') {
     const application = await prisma.application.findUnique({ where: { id }, include });

@@ -52,6 +52,9 @@ export async function createJob(userId, jobData) {
       autoRejectBelowMinScore: jobData.autoRejectBelowMinScore,
       // Build plan P4
       autoAdvanceOnMatch: jobData.autoAdvanceOnMatch ?? false,
+      // Build plan P5
+      interviewFlow: jobData.interviewFlow ?? 'SLOT',
+      inviteValidDays: jobData.inviteValidDays ?? 7,
       ...clientLink,
     },
   });
@@ -106,6 +109,9 @@ export async function updateJob(userId, jobId, jobData) {
       autoRejectBelowMinScore: jobData.autoRejectBelowMinScore ?? job.autoRejectBelowMinScore,
       // Build plan P4
       autoAdvanceOnMatch: jobData.autoAdvanceOnMatch ?? job.autoAdvanceOnMatch,
+      // Build plan P5
+      interviewFlow: jobData.interviewFlow ?? job.interviewFlow,
+      inviteValidDays: jobData.inviteValidDays ?? job.inviteValidDays,
       ...clientLink,
     },
   });

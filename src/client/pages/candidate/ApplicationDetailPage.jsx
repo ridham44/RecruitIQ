@@ -165,7 +165,11 @@ export default function ApplicationDetailPage() {
   // canJoinNow reads the live clock directly; `now` state just forces this
   // component to re-render every 30s so the button flips on/off without a
   // page refresh once the slot's start/end time is crossed.
-  const joinable = interview?.status === 'SCHEDULED' && canJoinNow(interview.slot);
+  // const joinable = interview?.status === 'SCHEDULED' && canJoinNow(interview.slot);
+  // Build plan P5: an instant-link interview (no slot) can be joined any time.
+  const isInstant = Boolean(interview) && !interview.slot;
+  const joinable = interview?.status === 'SCHEDULED' && (isInstant || canJoinNow(interview.slot));
+  const instantJob = job?.interviewFlow === 'INSTANT';
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -234,8 +238,22 @@ export default function ApplicationDetailPage() {
         </Card>
       )}
 
+      {/* Build plan P5: instant-link jobs don't use slots */}
+      {status === 'SHORTLISTED' && !interview && instantJob && (
+        <Card className="mb-6 flex items-start gap-3 p-6">
+          <Bot className="mt-0.5 h-5 w-5 shrink-0 text-brand-600" />
+          <div>
+            <h3 className="font-semibold text-slate-900">Your interview link is on its way</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              This company sends an interview link instead of booking a slot. You'll get it by email, and it will also show here.
+            </p>
+          </div>
+        </Card>
+      )}
+
       {/* Shortlisted, no interview booked yet — AI interview ready to schedule */}
-      {status === 'SHORTLISTED' && !interview && (
+      {/* {status === 'SHORTLISTED' && !interview && ( */}
+      {status === 'SHORTLISTED' && !interview && !instantJob && (
         <Card className="mb-6 p-6">
           <div className="flex items-center gap-3">
             <div className="rounded-full bg-brand-50 p-2.5">
@@ -272,10 +290,22 @@ export default function ApplicationDetailPage() {
                     ? 'Interview in progress'
                     : 'Interview scheduled'}
               </h3>
-              <p className="text-sm text-slate-500">
+              {/* <p className="text-sm text-slate-500">
                 {formatDate(interview.slot.startTime)} · {formatTime(interview.slot.startTime)} – {formatTime(interview.slot.endTime)} ·{' '}
                 {Math.round((new Date(interview.slot.endTime) - new Date(interview.slot.startTime)) / 60000)} min
-              </p>
+              </p> */}
+              {interview.slot ? (
+                <p className="text-sm text-slate-500">
+                  {formatDate(interview.slot.startTime)} · {formatTime(interview.slot.startTime)} – {formatTime(interview.slot.endTime)} ·{' '}
+                  {Math.round((new Date(interview.slot.endTime) - new Date(interview.slot.startTime)) / 60000)} min
+                </p>
+              ) : (
+                // Build plan P5: instant-link interview
+                <p className="text-sm text-slate-500">
+                  On-demand — start any time
+                  {interview.inviteExpiresAt && interview.status === 'SCHEDULED' ? ` before ${formatDate(interview.inviteExpiresAt)}` : ''}
+                </p>
+              )}
               {application.aiInterviewConfig?.aiName && (
                 <p className="text-xs text-slate-400">
                   With {application.aiInterviewConfig.aiName}
@@ -294,14 +324,16 @@ export default function ApplicationDetailPage() {
               >
                 <Video className="h-4 w-4" /> {interview.status === 'IN_PROGRESS' ? 'Resume Interview' : 'Join Interview'}
               </Button>
-              {interview.status === 'SCHEDULED' && (
+              {/* {interview.status === 'SCHEDULED' && ( */}
+              {interview.status === 'SCHEDULED' && !isInstant && (
                 <Button variant="secondary" onClick={() => setConfirmReschedule(true)} className="w-full sm:w-auto">
                   Reschedule
                 </Button>
               )}
             </div>
           )}
-          {interview.status === 'SCHEDULED' && !joinable && (
+          {/* {interview.status === 'SCHEDULED' && !joinable && ( */}
+          {interview.status === 'SCHEDULED' && !joinable && interview.slot && (
             <p className="mt-2 text-xs text-slate-400">
               The join button unlocks at {formatTime(interview.slot.startTime)} on {formatDate(interview.slot.startTime)}.
             </p>

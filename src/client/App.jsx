@@ -43,6 +43,8 @@ import CareersJobPage from './pages/careers/CareersJobPage.jsx';
 import CareersSubmitCvPage from './pages/careers/CareersSubmitCvPage.jsx';
 import CareersTrackPage from './pages/careers/CareersTrackPage.jsx';
 import CompanyCvPoolPage from './pages/company/CvPoolPage.jsx';
+// Build plan P5
+import InterviewLinkPage from './pages/careers/InterviewLinkPage.jsx';
 
 export default function App() {
   return (
@@ -58,6 +60,8 @@ export default function App() {
       <Route path="/careers/:slug" element={<CareersPage />} />
       <Route path="/careers/:slug/jobs/:jobId" element={<CareersJobPage />} />
       <Route path="/careers/:slug/submit-cv" element={<CareersSubmitCvPage />} />
+      {/* Build plan P5 — instant interview link (no login; the link is the key) */}
+      <Route path="/interview/:token" element={<InterviewLinkPage />} />
 
       <Route
         path="/admin"

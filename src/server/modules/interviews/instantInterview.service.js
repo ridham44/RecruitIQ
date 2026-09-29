@@ -1,0 +1,220 @@
+import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
+import { prisma, TX_OPTIONS } from '../../config/prisma.js';
+import { env } from '../../config/env.js';
+import { ApiError } from '../../utils/ApiError.js';
+import { APPLICATION_STATUS, INTERVIEW_STATUS } from '../../../shared/constants/statuses.js';
+import { sendInterviewInviteEmail } from '../notifications/email.service.js';
+import { smsDriver } from '../notifications/sms/index.js';
+import { maskPhone } from '../../utils/phone.js';
+
+// Build plan P5 (§9) — instant interview link: attend now or later, no slot.
+//
+// The link token is HMAC(server secret, interview id + inviteNonce): it can
+// be recomputed to re-send or show the same link, and only its SHA-256 hash
+// is stored for lookup. Rotating inviteNonce revokes every earlier link.
+// Opening the link exchanges it for a short-lived candidate JWT scoped to
+// this one interview (see middleware/auth.js), then the existing interview
+// room / engine / LiveKit / report run completely unchanged.
+
+const SESSION_TTL = '3h';
+const SEND_LIMIT = { count: 3, windowMs: 60 * 60 * 1000 };
+const ACTIVE = [INTERVIEW_STATUS.SCHEDULED, INTERVIEW_STATUS.IN_PROGRESS];
+
+const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
+
+function tokenFor(interview) {
+  return crypto.createHmac('sha256', env.jwtSecret).update(`interview-link:${interview.id}:${interview.inviteNonce}`).digest('hex');
+}
+
+export function interviewLinkFor(interview) {
+  if (!interview?.inviteNonce) return null;
+  return `${env.clientUrl.split(',')[0].trim()}/interview/${tokenFor(interview)}`;
+}
+
+function assertEnabled() {
+  if (!env.features.instantInterview) {
+    throw ApiError.notFound('Instant interview links are not enabled', 'FEATURE_DISABLED');
+  }
+}
+
+const INCLUDE = {
+  application: {
+    include: {
+      job: { include: { company: { select: { name: true, logoUrl: true } } } },
+      candidate: { include: { user: { select: { id: true, email: true, isActive: true } } } },
+    },
+  },
+};
+
+// Creates (or refreshes) the instant interview for a shortlisted
+// application. Returns { interview, link }.
+//   rotate: true → new link, old ones stop working
+export async function createOrRefreshInstantInterview(applicationId, { rotate = false } = {}) {
+  assertEnabled();
+  const application = await prisma.application.findUnique({
+    where: { id: applicationId },
+    include: { job: true, interviews: { where: { status: { in: ACTIVE } }, orderBy: { createdAt: 'desc' } } },
+  });
+  if (!application) throw ApiError.notFound('Application not found');
+
+  const active = application.interviews[0];
+  if (active?.slotId) {
+    throw ApiError.conflict('This candidate already has a booked interview slot', 'SLOT_INTERVIEW_EXISTS');
+  }
+  if (!active && application.status !== APPLICATION_STATUS.SHORTLISTED) {
+    throw ApiError.badRequest('Only shortlisted candidates can get an interview link', 'NOT_SHORTLISTED');
+  }
+
+  const expiresAt = new Date(Date.now() + application.job.inviteValidDays * 24 * 3600 * 1000);
+
+  if (active) {
+    const needsNewExpiry = !active.inviteExpiresAt || active.inviteExpiresAt <= new Date();
+    if (!rotate && !needsNewExpiry && active.inviteNonce) {
+      return { interview: active, link: interviewLinkFor(active) };
+    }
+    const inviteNonce = rotate || !active.inviteNonce ? crypto.randomBytes(16).toString('hex') : active.inviteNonce;
+    const draft = { ...active, inviteNonce };
+    const updated = await prisma.interview.update({
+      where: { id: active.id },
+      data: { inviteNonce, accessTokenHash: sha256(tokenFor(draft)), inviteExpiresAt: needsNewExpiry ? expiresAt : active.inviteExpiresAt },
+    });
+    return { interview: updated, link: interviewLinkFor(updated) };
+  }
+
+  const interview = await prisma.$transaction(async (tx) => {
+    const created = await tx.interview.create({
+      data: { applicationId, status: INTERVIEW_STATUS.SCHEDULED, inviteNonce: crypto.randomBytes(16).toString('hex') },
+    });
+    await tx.application.update({ where: { id: applicationId }, data: { status: APPLICATION_STATUS.INTERVIEW_SCHEDULED } });
+    return tx.interview.update({
+      where: { id: created.id },
+      data: { accessTokenHash: sha256(tokenFor(created)), inviteExpiresAt: expiresAt },
+    });
+  }, TX_OPTIONS);
+
+  return { interview, link: interviewLinkFor(interview) };
+}
+
+async function findByToken(token) {
+  if (!/^[a-f0-9]{64}$/.test(String(token || ''))) throw ApiError.notFound('This interview link is invalid', 'INVITE_INVALID');
+  const interview = await prisma.interview.findUnique({ where: { accessTokenHash: sha256(token) }, include: INCLUDE });
+  if (!interview) throw ApiError.notFound('This interview link is invalid or has been replaced by a newer one', 'INVITE_INVALID');
+  return interview;
+}
+
+// Why a link can't be used right now (or null when it can).
+function blocker(interview) {
+  if (interview.status === INTERVIEW_STATUS.COMPLETED) {
+    return { code: 'INTERVIEW_COMPLETED', message: "You've already completed this interview. Thank you!" };
+  }
+  if (interview.status === INTERVIEW_STATUS.CANCELLED) {
+    return { code: 'INTERVIEW_CANCELLED', message: 'This interview has been cancelled.' };
+  }
+  // An interview already in progress can always be rejoined (dropped connection).
+  if (interview.status === INTERVIEW_STATUS.SCHEDULED && interview.inviteExpiresAt && interview.inviteExpiresAt <= new Date()) {
+    return { code: 'INVITE_EXPIRED', message: 'This interview link has expired. Please contact the recruiter for a new one.' };
+  }
+  if (!interview.application.candidate.user.isActive) {
+    return { code: 'ACCOUNT_INACTIVE', message: 'This account is inactive.' };
+  }
+  return null;
+}
+
+function publicSummary(interview) {
+  const { job, candidate } = interview.application;
+  const b = blocker(interview);
+  return {
+    interviewId: interview.id,
+    status: interview.status,
+    canJoin: !b,
+    ...(b ? { reason: b.code, message: b.message } : {}),
+    expiresAt: interview.inviteExpiresAt,
+    candidateName: candidate.fullName,
+    job: { title: job.title },
+    company: { name: job.company.name, logoUrl: job.company.logoUrl },
+    channels: {
+      email: candidate.user.email.replace(/^(.{2}).*(@.*)$/, '$1•••$2'),
+      sms: candidate.phone ? maskPhone(candidate.phone) : null,
+    },
+  };
+}
+
+export async function getInvite(token) {
+  assertEnabled();
+  return publicSummary(await findByToken(token));
+}
+
+// Link → 3-hour candidate JWT that only works on /interviews/:thisId/*.
+export async function createSession(token) {
+  assertEnabled();
+  const interview = await findByToken(token);
+  const b = blocker(interview);
+  if (b) throw ApiError.badRequest(b.message, b.code);
+  const user = interview.application.candidate.user;
+  const sessionToken = jwt.sign(
+    { sub: user.id, role: 'CANDIDATE', email: user.email, typ: 'interview', interviewId: interview.id },
+    env.jwtSecret,
+    { expiresIn: SESSION_TTL }
+  );
+  return { sessionToken, interviewId: interview.id, ...publicSummary(interview) };
+}
+
+// Sends the link to the candidate's OWN email or phone (never to an address
+// supplied in the request). At most 3 sends per interview per hour.
+async function deliver(interview, channel) {
+  const now = Date.now();
+  const inWindow = interview.inviteSendWindowAt && now - interview.inviteSendWindowAt.getTime() < SEND_LIMIT.windowMs;
+  if (inWindow && interview.inviteSendCount >= SEND_LIMIT.count) {
+    throw new ApiError(429, 'INVITE_SEND_LIMIT', 'The link was sent several times already. Please check your inbox or try again later.');
+  }
+
+  const { job, candidate } = interview.application;
+  const link = interviewLinkFor(interview);
+  if (channel === 'sms') {
+    if (!candidate.phone) throw ApiError.badRequest('No phone number on file', 'NO_PHONE');
+    try {
+      await smsDriver.send({ to: candidate.phone, body: `Your ${job.company.name} interview for ${job.title}: ${link}` });
+    } catch (err) {
+      console.error('[instant-interview] SMS failed:', err.message);
+      throw new ApiError(502, 'SMS_FAILED', "We couldn't send the SMS. Please try email instead.");
+    }
+  } else {
+    await sendInterviewInviteEmail({
+      to: candidate.user.email,
+      candidateName: candidate.fullName,
+      jobTitle: job.title,
+      companyName: job.company.name,
+      link,
+      expiresAt: interview.inviteExpiresAt,
+      applicationId: interview.applicationId,
+    });
+  }
+
+  await prisma.interview.update({
+    where: { id: interview.id },
+    data: {
+      inviteSentAt: new Date(),
+      inviteSendCount: inWindow ? { increment: 1 } : 1,
+      ...(inWindow ? {} : { inviteSendWindowAt: new Date() }),
+    },
+  });
+  return { sent: true, channel, to: channel === 'sms' ? maskPhone(candidate.phone) : publicSummary(interview).channels.email };
+}
+
+export async function sendInviteByToken(token, channel) {
+  assertEnabled();
+  const interview = await findByToken(token);
+  const b = blocker(interview);
+  if (b) throw ApiError.badRequest(b.message, b.code);
+  return deliver(interview, channel);
+}
+
+// Used after auto-advance (P4) and by the recruiter's "Send interview link"
+// button: create/refresh the link, then email it.
+export async function inviteApplication(applicationId, { rotate = false } = {}) {
+  const { interview, link } = await createOrRefreshInstantInterview(applicationId, { rotate });
+  const full = await prisma.interview.findUnique({ where: { id: interview.id }, include: INCLUDE });
+  const sent = await deliver(full, 'email').catch((err) => ({ sent: false, error: err.message }));
+  return { interview: full, link, sent };
+}

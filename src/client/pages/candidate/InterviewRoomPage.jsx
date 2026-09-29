@@ -84,8 +84,13 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export default function InterviewRoomPage() {
-  const { interviewId } = useParams();
+// export default function InterviewRoomPage() {
+//   const { interviewId } = useParams();
+// Build plan P5: the instant-interview link page renders this same room with
+// interviewIdOverride (no /candidate route, no login) and its own end action.
+export default function InterviewRoomPage({ interviewIdOverride, onDone, doneLabel } = {}) {
+  const params = useParams();
+  const interviewId = interviewIdOverride || params.interviewId;
   const navigate = useNavigate();
   const videoRef = useRef(null);
   const roomRef = useRef(null);
@@ -461,8 +466,11 @@ export default function InterviewRoomPage() {
         </div>
         <h2 className="text-xl font-semibold text-slate-900">Interview complete</h2>
         <p className="mt-2 text-sm text-slate-500">Thanks for taking the time to interview with us. The company will follow up on next steps.</p>
-        <Button className="mt-6" onClick={() => navigate(`/candidate/applications`)}>
+        {/* <Button className="mt-6" onClick={() => navigate(`/candidate/applications`)}>
           Back to my applications
+        </Button> */}
+        <Button className="mt-6" onClick={() => (onDone ? onDone() : navigate(`/candidate/applications`))}>
+          {doneLabel || 'Back to my applications'}
         </Button>
       </div>
     );

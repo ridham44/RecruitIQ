@@ -11,6 +11,8 @@ router.get('/public', (req, res) => {
     allowCompanySelfRegister: env.features.allowCompanySelfRegister,
     // Build plan P4
     guestApply: env.features.guestApply,
+    // Build plan P5
+    instantInterview: env.features.instantInterview,
   });
 });
 

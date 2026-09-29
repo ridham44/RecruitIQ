@@ -177,6 +177,16 @@ enum EmailType {
   // Build plan P1: "set your password" link for accounts created by someone
   // else (admin-onboarded company owners; recruiters/HR in later phases).
   ACCOUNT_SETUP
+  // Build plan P5: instant interview link (attend now or later).
+  INTERVIEW_INVITE
+}
+
+// Build plan P5: how a job's candidates get to their interview. SLOT (the
+// only flow before P5) = book a time slot; INSTANT = a secure link they can
+// open right away or later, no slot needed.
+enum InterviewFlow {
+  SLOT
+  INSTANT
 }
 
 // Build plan P4: how an application was created. DIRECT = logged-in
@@ -506,6 +516,10 @@ model Job {
   // away and moves to SHORTLISTED (score ≥ minAcceptableScore) or REJECTED.
   // Off by default — existing jobs keep the manual shortlist/reject flow.
   autoAdvanceOnMatch      Boolean @default(false)
+  // Build plan P5 (§9): SLOT keeps today's booking flow for every existing job.
+  interviewFlow           InterviewFlow @default(SLOT)
+  // How long an instant interview link stays valid.
+  inviteValidDays         Int           @default(7)
 
   createdBy String
   createdAt DateTime @default(now())
@@ -742,7 +756,10 @@ model InterviewSlot {
 model Interview {
   id            String          @id @default(cuid())
   applicationId String
-  slotId        String
+  // slotId        String
+  // Build plan P5: null for instant (link-based) interviews. Every interview
+  // created before P5 has a slot, so existing rows are unaffected.
+  slotId        String?
   status        InterviewStatus @default(SCHEDULED)
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
@@ -756,8 +773,20 @@ model Interview {
   startedAt            DateTime?
   endedAt              DateTime?
 
+  // Build plan P5 — instant interview link. The link token is derived from
+  // inviteNonce with the server secret (so it can be re-sent without
+  // changing it); only its SHA-256 hash is used for lookup. Rotating the
+  // nonce revokes the old link.
+  accessTokenHash    String?   @unique
+  inviteNonce        String?
+  inviteExpiresAt    DateTime?
+  inviteSentAt       DateTime?
+  inviteSendCount    Int       @default(0)
+  inviteSendWindowAt DateTime?
+
   application Application         @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  slot        InterviewSlot       @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  // slot        InterviewSlot       @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  slot        InterviewSlot?      @relation(fields: [slotId], references: [id], onDelete: Cascade)
   questions   InterviewQuestion[]
   events      InterviewEvent[]
   report      InterviewReport?

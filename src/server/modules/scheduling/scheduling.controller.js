@@ -46,6 +46,14 @@ export const getInterview = asyncHandler(async (req, res) => {
   ok(res, { interview });
 });
 
+// Build plan P5
+export const sendInstantInterview = asyncHandler(async (req, res) => {
+  const result = await schedulingService.sendInstantInterview(req.user.id, req.params.applicationId, {
+    rotate: req.body?.rotate === true,
+  });
+  ok(res, result);
+});
+
 export const markInterviewCompleted = asyncHandler(async (req, res) => {
   await schedulingService.markInterviewCompleted(req.user.id, req.params.jobId, req.params.interviewId);
   ok(res, {});
