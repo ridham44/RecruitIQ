@@ -814,6 +814,11 @@ model AiInterviewConfig {
   ttsVoiceId         String?
   // Section 5: adaptive by default; FIXED keeps every question at MEDIUM.
   difficultyStrategy DifficultyStrategy @default(ADAPTIVE)
+  // Build plan P6 (§10, §11): recruiter guidance. Null/empty = prompts are
+  // exactly what they were before P6.
+  interviewInstructions  String?
+  evaluationInstructions String?
+  focusSkills            String[]           @default([])
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
@@ -908,6 +913,9 @@ model InterviewReport {
   areasForImprovement String[]              @default([])
   questionAnalysis    Json?
   resumeAlignment     Json?
+  // Build plan P6: [{ criterion, verdict: MET|PARTLY|NOT_MET, evidence }] —
+  // only when the recruiter set evaluation instructions.
+  criteriaAssessment  Json?
   reasoning           String?
   aiModel             String?
   errorMessage        String?

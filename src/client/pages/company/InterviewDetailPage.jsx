@@ -179,6 +179,33 @@ export default function InterviewDetailPage() {
           )}
         </Card>
       )}
+      {/* Build plan P6: verdicts on the recruiter's own evaluation criteria */}
+      {report?.status === 'COMPLETED' && Array.isArray(report.criteriaAssessment) && report.criteriaAssessment.length > 0 && (
+        <Card className="mb-6 p-4 sm:p-6">
+          <h3 className="mb-1 font-semibold text-slate-900">Recruiter criteria</h3>
+          <p className="mb-4 text-xs text-slate-400">How the candidate did against the evaluation instructions set for this job.</p>
+          <ul className="space-y-3">
+            {report.criteriaAssessment.map((c, idx) => {
+              const tone =
+                c.verdict === 'MET'
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : c.verdict === 'NOT_MET'
+                    ? 'bg-red-100 text-red-700'
+                    : 'bg-amber-100 text-amber-700';
+              const label = c.verdict === 'MET' ? 'Met' : c.verdict === 'NOT_MET' ? 'Not met' : 'Partly met';
+              return (
+                <li key={idx} className="rounded-lg border border-slate-100 p-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <p className="text-sm font-medium text-slate-900">{c.criterion}</p>
+                    <span className={`inline-flex w-fit shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${tone}`}>{label}</span>
+                  </div>
+                  {c.evidence && <p className="mt-1 text-sm text-slate-600">{c.evidence}</p>}
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
       {report && report.status === 'FAILED' && (
         <Card className="mb-6 p-6">
           <p className="text-sm text-red-600">Report generation failed: {report.errorMessage}</p>

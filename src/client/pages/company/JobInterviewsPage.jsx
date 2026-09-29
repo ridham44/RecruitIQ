@@ -12,6 +12,7 @@ import ErrorState from '../../components/ui/ErrorState.jsx';
 import EmptyState from '../../components/ui/EmptyState.jsx';
 import StatusBadge from '../../components/ui/StatusBadge.jsx';
 import InterviewFlowCard from './InterviewFlowCard.jsx';
+import TagInput from '../../components/ui/TagInput.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 
 const GENERATE_DEFAULTS = { date: '', startTime: '', endTime: '', durationMinutes: 15, bufferMinutes: 0 };
@@ -134,6 +135,10 @@ export default function JobInterviewsPage() {
           answerTimeSeconds: configRes.config.answerTimeSeconds,
           customQuestions: configRes.config.customQuestions,
           voiceGender: configRes.config.voiceGender || 'FEMALE',
+          // Build plan P6
+          interviewInstructions: configRes.config.interviewInstructions || '',
+          evaluationInstructions: configRes.config.evaluationInstructions || '',
+          focusSkills: configRes.config.focusSkills || [],
         });
       })
       .catch((err) => setError(err.message));
@@ -363,7 +368,54 @@ export default function JobInterviewsPage() {
               </p>
             </div>
 
-            {configSaved && <p className="mt-3 text-sm text-emerald-600">AI interviewer settings saved.</p>}
+            {/* Build plan P6 (§10, §11): recruiter guidance for the AI */}
+            <div className="mt-6 border-t border-slate-100 pt-5">
+              <p className="text-sm font-semibold text-slate-900">Guidance for the AI (optional)</p>
+              <p className="mb-3 text-xs text-slate-500">
+                Leave these empty to keep the AI's default behaviour. Anything about age, gender, religion or other personal
+                characteristics is removed automatically.
+              </p>
+
+              <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="interviewInstructions">
+                What should the AI check in the interview?
+              </label>
+              <textarea
+                id="interviewInstructions"
+                rows={3}
+                maxLength={2000}
+                className={inputClass}
+                value={configForm.interviewInstructions}
+                onChange={(e) => setConfigForm({ ...configForm, interviewInstructions: e.target.value })}
+                placeholder="e.g. Check hands-on experience with Kubernetes; ask about a production incident they handled."
+              />
+              <p className="mt-1 text-right text-xs text-slate-400">{configForm.interviewInstructions.length}/2000</p>
+
+              <label className="mb-1 mt-2 block text-sm font-medium text-slate-700">Must-cover skills</label>
+              <TagInput
+                value={configForm.focusSkills}
+                onChange={(focusSkills) => setConfigForm({ ...configForm, focusSkills: focusSkills.slice(0, 20) })}
+                placeholder="Type a skill and press Enter (e.g. Kubernetes, SQL)"
+              />
+
+              <label className="mb-1 mt-4 block text-sm font-medium text-slate-700" htmlFor="evaluationInstructions">
+                How should the AI score the interview?
+              </label>
+              <textarea
+                id="evaluationInstructions"
+                rows={3}
+                maxLength={2000}
+                className={inputClass}
+                value={configForm.evaluationInstructions}
+                onChange={(e) => setConfigForm({ ...configForm, evaluationInstructions: e.target.value })}
+                placeholder="e.g. System design counts double; communication must be at least 6/10."
+              />
+              <p className="mt-1 text-right text-xs text-slate-400">{configForm.evaluationInstructions.length}/2000</p>
+              <p className="text-xs text-slate-400">
+                When set, each report also lists these criteria as Met / Partly / Not met, with evidence from the answers.
+              </p>
+            </div>
+
+            {configSaved &&<p className="mt-3 text-sm text-emerald-600">AI interviewer settings saved.</p>}
             <Button type="submit" loading={configSaving} className="mt-4 w-full sm:w-auto">
               <Save className="h-4 w-4" /> Save AI interviewer settings
             </Button>

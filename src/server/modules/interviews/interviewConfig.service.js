@@ -10,6 +10,10 @@ const DEFAULTS = {
   voiceGender: 'FEMALE',
   ttsVoiceId: null,
   difficultyStrategy: 'ADAPTIVE',
+  // Build plan P6: no recruiter guidance by default.
+  interviewInstructions: null,
+  evaluationInstructions: null,
+  focusSkills: [],
 };
 
 // Section 8: voiceGender -> a concrete Deepgram Aura TTS voice model id.

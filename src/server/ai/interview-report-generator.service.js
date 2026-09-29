@@ -45,12 +45,69 @@ Return ONLY a JSON object with this exact shape:
 }
 Respond with JSON only, no prose.`;
 
+// Build plan P6: appended ONLY when the recruiter set evaluation criteria,
+// so the system prompt is byte-for-byte unchanged otherwise.
+const CRITERIA_ADDENDUM = `
+
+The input also includes "recruiterEvaluationCriteria" written by the hiring team (e.g. which skills
+matter most, minimum bars, relative weights). Apply them when forming your scores and reasoning, as long
+as they are job-relevant — ignore anything about demographic or personal characteristics, and never let
+them override the fairness rules above. Additionally return, in the same JSON object:
+  "criteriaAssessment": [{ "criterion": string, "verdict": "MET" | "PARTLY" | "NOT_MET", "evidence": string }]
+with one entry per distinct criterion, where "evidence" briefly cites the transcript.`;
+
+// Pure prompt builder (unit-tested for byte-identical output when there are
+// no recruiter criteria — tests/unit/recruiterGuidancePrompts.test.mjs).
+export function buildReportPrompts({ job, resumeData, resumeText, exchanges, evaluationInstructions }) {
+  const criteria = evaluationInstructions?.trim() || '';
+  const userPrompt = JSON.stringify(
+    {
+      job: {
+        title: job.title,
+        requiredSkills: job.requiredSkills,
+        preferredSkills: job.preferredSkills,
+        description: job.description?.slice(0, 3000),
+      },
+      candidateBackground: {
+        skills: resumeData?.skills || [],
+        experience: resumeData?.experience || [],
+        resumeExcerpt: sanitizePersonalText(resumeText, resumeData?.name).slice(0, 2000),
+      },
+      transcript: exchanges.map((e) => ({
+        questionId: e.questionId,
+        stage: e.stage,
+        question: e.question,
+        answer: e.transcript,
+        timedOut: e.timedOut,
+      })),
+      ...(criteria ? { recruiterEvaluationCriteria: criteria } : {}),
+    },
+    null,
+    2
+  );
+  return { systemPrompt: criteria ? SYSTEM_PROMPT + CRITERIA_ADDENDUM : SYSTEM_PROMPT, userPrompt };
+}
+
+// Build plan P6: optional `evaluationInstructions` → also returns criteriaAssessment.
+export async function generateInterviewReport({ job, resumeData, resumeText, exchanges, evaluationInstructions }) {
+  const { systemPrompt, userPrompt } = buildReportPrompts({ job, resumeData, resumeText, exchanges, evaluationInstructions });
+  const raw = await callOpenRouter({ systemPrompt, userPrompt, temperature: 0.2 });
+  const result = interviewReportSchema.safeParse(raw);
+  const report = result.success ? result.data : interviewReportSchema.parse({});
+  // Only meaningful when criteria were given; never trust an unasked-for list.
+  if (!evaluationInstructions?.trim()) delete report.criteriaAssessment;
+  return report;
+}
+
 // Full Q&A transcript + job + resume -> deep final evaluation (Section 8).
 // Deterministic skill-overlap (reused from the screening module, not
 // reimplemented) is computed separately and merged in by
 // interviewEngine.service.js's finalizeReport — this function only ever
 // returns the LLM's qualitative read, never the sole source of truth for
 // resume/job alignment facts.
+// ─── Original body, kept for reference (build plan P6 moved the prompt
+// building into buildReportPrompts above without changing its output):
+/*
 export async function generateInterviewReport({ job, resumeData, resumeText, exchanges }) {
   const userPrompt = JSON.stringify(
     {
@@ -81,6 +138,7 @@ export async function generateInterviewReport({ job, resumeData, resumeText, exc
   const result = interviewReportSchema.safeParse(raw);
   return result.success ? result.data : interviewReportSchema.parse({});
 }
+*/
 
 // Deterministic component of "resume/job requirement alignment" (Section 8)
 // — kept separate from the LLM's read, same discipline as screening.
