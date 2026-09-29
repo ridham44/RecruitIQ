@@ -50,6 +50,8 @@ export async function createJob(userId, jobData) {
       status: jobData.status,
       minAcceptableScore: jobData.minAcceptableScore,
       autoRejectBelowMinScore: jobData.autoRejectBelowMinScore,
+      // Build plan P4
+      autoAdvanceOnMatch: jobData.autoAdvanceOnMatch ?? false,
       ...clientLink,
     },
   });
@@ -102,6 +104,8 @@ export async function updateJob(userId, jobId, jobData) {
       status: jobData.status ?? job.status,
       minAcceptableScore: jobData.minAcceptableScore ?? job.minAcceptableScore,
       autoRejectBelowMinScore: jobData.autoRejectBelowMinScore ?? job.autoRejectBelowMinScore,
+      // Build plan P4
+      autoAdvanceOnMatch: jobData.autoAdvanceOnMatch ?? job.autoAdvanceOnMatch,
       ...clientLink,
     },
   });

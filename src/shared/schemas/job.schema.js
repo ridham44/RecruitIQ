@@ -25,6 +25,8 @@ export const createJobSchema = z.object({
   // never auto-shortlists.
   minAcceptableScore: z.coerce.number().min(0).max(100).default(75),
   autoRejectBelowMinScore: z.boolean().default(false),
+  // Build plan P4 (§8): screen on apply and shortlist/reject on the score.
+  autoAdvanceOnMatch: z.boolean().default(false),
   // Build plan P3 (§5): optional Client → Department → HR person link. null
   // clears it; omitted leaves it unchanged. The chain is checked server-side.
   clientCompanyId: z.string().trim().min(1).nullable().optional(),

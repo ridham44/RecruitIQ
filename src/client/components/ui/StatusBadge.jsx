@@ -22,6 +22,10 @@ const STYLES = {
   INVITED: 'bg-amber-100 text-amber-700',
   // Build plan P2 — company members
   OWNER: 'bg-brand-50 text-brand-700',
+  // Build plan P4 — CV pool
+  MATCHED: 'bg-emerald-100 text-emerald-700',
+  NO_MATCH: 'bg-slate-200 text-slate-600',
+  MATCHING: 'bg-amber-100 text-amber-700',
 };
 
 export default function StatusBadge({ status }) {

@@ -163,7 +163,9 @@ export async function setPasswordWithToken({ token, password }) {
       data: { usedAt: new Date() },
     });
     if (count === 0) return false;
-    await tx.user.update({ where: { id: row.userId }, data: { passwordHash } });
+    // await tx.user.update({ where: { id: row.userId }, data: { passwordHash } });
+    // Build plan P4: guest candidates become full accounts here.
+    await tx.user.update({ where: { id: row.userId }, data: { passwordHash, passwordSet: true } });
     return true;
   }, TX_OPTIONS);
   if (!consumed) throw ApiError.badRequest('This link has already been used. Please log in.', 'TOKEN_USED');

@@ -9,6 +9,8 @@ const router = Router();
 router.get('/public', (req, res) => {
   ok(res, {
     allowCompanySelfRegister: env.features.allowCompanySelfRegister,
+    // Build plan P4
+    guestApply: env.features.guestApply,
   });
 });
 

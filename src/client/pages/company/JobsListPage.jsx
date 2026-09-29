@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { clientsApi } from '../../services/clients.js';
 import { inputClass } from '../../components/ui/FormField.jsx';
+import CareersLinkCard from './CareersLinkCard.jsx';
 import { Plus, Briefcase } from 'lucide-react';
 import { jobsApi } from '../../services/jobs.js';
 import Card from '../../components/ui/Card.jsx';
@@ -61,6 +62,9 @@ export default function JobsListPage() {
           </Link>
         )}
       </div>
+
+      {/* Build plan P4 */}
+      <CareersLinkCard />
 
       {/* Build plan P3 */}
       {clients.length > 0 && (

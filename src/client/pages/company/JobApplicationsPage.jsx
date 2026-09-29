@@ -137,6 +137,8 @@ export default function JobApplicationsPage() {
         setSettings({
           minAcceptableScore: jobRes.job.minAcceptableScore,
           autoRejectBelowMinScore: jobRes.job.autoRejectBelowMinScore,
+          // Build plan P4
+          autoAdvanceOnMatch: Boolean(jobRes.job.autoAdvanceOnMatch),
         });
         setApplications(appsRes.applications);
         setSelected(new Set());
@@ -252,6 +254,8 @@ export default function JobApplicationsPage() {
       const { job: updated } = await jobsApi.update(jobId, {
         minAcceptableScore: Number(settings.minAcceptableScore),
         autoRejectBelowMinScore: settings.autoRejectBelowMinScore,
+        // Build plan P4
+        autoAdvanceOnMatch: settings.autoAdvanceOnMatch,
       });
       setJob(updated);
       setSettingsSaved(true);
@@ -367,6 +371,15 @@ export default function JobApplicationsPage() {
             />
             Automatically reject candidates below this score
           </label>
+          {/* Build plan P4 (§8) */}
+          <label className="flex min-h-[44px] items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={settings.autoAdvanceOnMatch}
+              onChange={(e) => setSettings({ ...settings, autoAdvanceOnMatch: e.target.checked })}
+            />
+            Auto-advance: screen every new application and shortlist or reject it on this score
+          </label>
           <Button variant="secondary" onClick={handleSaveSettings} loading={settingsSaving} className="sm:ml-auto">
             <Save className="h-4 w-4" /> Save
           </Button>
@@ -385,6 +398,12 @@ export default function JobApplicationsPage() {
           When enabled, screened applications scoring below this threshold are auto-marked Rejected. When disabled
           (default), all screened applications stay available for manual review — use the checkboxes below to
           Shortlist or Reject in bulk.
+        </p>
+        {/* Build plan P4 */}
+        <p className="mt-1 text-xs text-slate-400">
+          Auto-advance (off by default): each new application — from logged-in candidates or your careers page — is
+          screened right away and moved to Shortlisted (score at or above the minimum) or Rejected, and the candidate
+          is emailed.
         </p>
       </Card>
 

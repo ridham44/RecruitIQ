@@ -179,6 +179,15 @@ enum EmailType {
   ACCOUNT_SETUP
 }
 
+// Build plan P4: how an application was created. DIRECT = logged-in
+// candidate (the only kind before P4), GUEST = careers-portal apply with
+// phone OTP, AUTO_MATCH = CV-only submission placed on its best-matching job.
+enum ApplicationSource {
+  DIRECT
+  GUEST
+  AUTO_MATCH
+}
+
 // Build plan P2: a user's role inside a recruitment company. OWNER implicitly
 // has every permission; RECRUITER has only CompanyMember.permissions.
 enum MemberRole {
@@ -211,6 +220,9 @@ model User {
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  // Build plan P4: false for guest candidates created by a careers-portal
+  // apply until they set a password from the emailed link.
+  passwordSet  Boolean  @default(true)
 
   company   Company?
   candidate Candidate?
@@ -383,11 +395,16 @@ model Company {
   // that registered themselves.
   status           CompanyStatus @default(ACTIVE)
   createdByAdminId String?
+  // Build plan P4: public careers portal URL (/careers/:slug). Generated
+  // from the name the first time the owner opens their careers link.
+  slug             String?       @unique
 
   user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   jobs    Job[]
   members CompanyMember[]
   clients ClientCompany[]
+  // Build plan P4: CV-only submissions made through this company's portal.
+  cvSubmissions CvSubmission[]
 
   @@index([status])
   @@map("companies")
@@ -409,10 +426,14 @@ model Candidate {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  resumes      Resume[]
-  applications Application[]
-  educations   Education[]
+  // Build plan P4: set when the candidate confirms `phone` with an OTP.
+  phoneVerifiedAt DateTime?
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resumes       Resume[]
+  applications  Application[]
+  educations    Education[]
+  cvSubmissions CvSubmission[]
 
   @@map("candidates")
 }
@@ -481,6 +502,10 @@ model Job {
   // NEVER auto-shortlists; only auto-reject is opt-in.
   minAcceptableScore      Float   @default(75)
   autoRejectBelowMinScore Boolean @default(false)
+  // Build plan P4 (§8): when true, every new application is screened right
+  // away and moves to SHORTLISTED (score ≥ minAcceptableScore) or REJECTED.
+  // Off by default — existing jobs keep the manual shortlist/reject flow.
+  autoAdvanceOnMatch      Boolean @default(false)
 
   createdBy String
   createdAt DateTime @default(now())
@@ -529,11 +554,80 @@ model Resume {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  candidate    Candidate     @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  applications Application[]
+  candidate     Candidate      @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  applications  Application[]
+  cvSubmissions CvSubmission[]
 
   @@index([candidateId])
   @@map("resumes")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Build plan P4 — careers portal: guest apply, phone OTP, CV-only matching
+// ─────────────────────────────────────────────────────────────
+
+// One-time phone codes. Only a bcrypt hash of the code is stored. Rows also
+// back the rate limits (per phone and per IP), so they are kept, not deleted.
+model PhoneOtp {
+  id         String    @id @default(cuid())
+  // E.164, e.g. +919876543210
+  phone      String
+  codeHash   String
+  purpose    String    @default("APPLY")
+  attempts   Int       @default(0)
+  ip         String?
+  expiresAt  DateTime
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([phone, createdAt])
+  @@index([ip, createdAt])
+  @@map("phone_otps")
+}
+
+// A CV uploaded on the careers portal before the candidate account exists.
+// The file bytes are stored through the normal resume storage driver; the
+// upload becomes a real Resume when the guest submits their application.
+model GuestUpload {
+  id         String    @id @default(cuid())
+  storageKey String
+  storageUrl String?
+  fileName   String
+  fileType   String
+  fileSize   Int
+  rawText    String?
+  parsedData Json?
+  consumedAt DateTime?
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+
+  @@map("guest_uploads")
+}
+
+// §6 Option B: a CV submitted without choosing a job. The AI places it on
+// the best-matching OPEN job (across all companies — see the P4 decisions)
+// or marks it NO_MATCH. matchResults keeps every scored job for transparency.
+model CvSubmission {
+  id            String   @id @default(cuid())
+  // The recruitment company whose careers portal was used.
+  companyId     String
+  candidateId   String
+  resumeId      String
+  // PENDING | MATCHED | NO_MATCH | FAILED
+  status        String   @default("PENDING")
+  matchResults  Json?
+  applicationId String?  @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  candidate   Candidate    @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  resume      Resume       @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  application Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([candidateId])
+  @@map("cv_submissions")
 }
 
 // Backs the "database" storage driver (src/server/resume/storage/database.driver.js)
@@ -561,12 +655,15 @@ model Application {
   status      ApplicationStatus @default(APPLIED)
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
+  // Build plan P4: existing rows are DIRECT (logged-in candidate apply).
+  source      ApplicationSource @default(DIRECT)
 
   candidate       Candidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   job             Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
   resume          Resume           @relation(fields: [resumeId], references: [id], onDelete: Cascade)
   screeningResult ScreeningResult?
   interviews      Interview[]
+  cvSubmission    CvSubmission?
 
   @@unique([candidateId, jobId])
   @@index([jobId])

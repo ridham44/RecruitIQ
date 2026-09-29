@@ -11,11 +11,44 @@ function blend(deterministicScore, aiScore, deterministicWeight = 0.6) {
   return Math.round(deterministicScore * deterministicWeight + aiScore * (1 - deterministicWeight));
 }
 
-// Job + candidate resume -> deterministic checks + AI semantic match ->
-// persisted ScreeningResult (Section 13). This is the single place the two
-// signals are combined, so the composition is transparent and easy to tune.
-async function screenApplication(application) {
-  const { job, resume, candidate } = application;
+// ─── Original single-function version, kept for reference (build plan P4
+// split it into computeMatch + screenApplication without changing the math):
+//
+// async function screenApplication(application) {
+//   const { job, resume, candidate } = application;
+//   const resumeData = resume.parsedData || {};
+//
+//   const skillOverlap = computeSkillOverlap(resumeData.skills, [...job.requiredSkills, ...job.preferredSkills]);
+//   const requiredOverlap = computeSkillOverlap(resumeData.skills, job.requiredSkills);
+//   const experienceCheck = computeExperienceScore(
+//     resumeData.totalExperienceYears,
+//     job.minimumExperience,
+//     job.maximumExperience
+//   );
+//   const educationCheck = computeEducationScore(resumeData.education, job.educationRequirements);
+//
+//   let ai;
+//   try {
+//     ai = await matchCandidateToJob({ job, resumeData, resumeText: resume.rawText });
+//   } catch (err) {
+//     return prisma.screeningResult.upsert({ …status: FAILED, errorMessage: err.message… });
+//   }
+//
+//   const skillMatchScore = blend(skillOverlap.score, ai.skillMatchScore);
+//   const experienceMatchScore = blend(experienceCheck.score, ai.experienceMatchScore);
+//   const educationMatchScore = blend(educationCheck.score, ai.educationMatchScore);
+//   const overallScore = Math.round(skillMatchScore * 0.5 + experienceMatchScore * 0.3 + educationMatchScore * 0.2);
+//
+//   const matchedSkills = Array.from(new Set([...skillOverlap.matched, ...ai.matchedSkills]));
+//   const missingSkills = Array.from(new Set([...requiredOverlap.missing, ...ai.missingSkills]));
+//   …persist exactly as below…
+// }
+
+// Job + resume -> deterministic checks + AI semantic match -> scores. The
+// single place the two signals are combined (Section 13). Throws when the AI
+// call fails. Build plan P4: also used by best-job matching for CV-only
+// submissions, which have no Application yet.
+export async function computeMatch(job, resume) {
   const resumeData = resume.parsedData || {};
 
   const skillOverlap = computeSkillOverlap(resumeData.skills, [...job.requiredSkills, ...job.preferredSkills]);
@@ -27,9 +60,40 @@ async function screenApplication(application) {
   );
   const educationCheck = computeEducationScore(resumeData.education, job.educationRequirements);
 
-  let ai;
+  const ai = await matchCandidateToJob({ job, resumeData, resumeText: resume.rawText });
+
+  const skillMatchScore = blend(skillOverlap.score, ai.skillMatchScore);
+  const experienceMatchScore = blend(experienceCheck.score, ai.experienceMatchScore);
+  const educationMatchScore = blend(educationCheck.score, ai.educationMatchScore);
+  const overallScore = Math.round(skillMatchScore * 0.5 + experienceMatchScore * 0.3 + educationMatchScore * 0.2);
+
+  const matchedSkills = Array.from(new Set([...skillOverlap.matched, ...ai.matchedSkills]));
+  const missingSkills = Array.from(new Set([...requiredOverlap.missing, ...ai.missingSkills]));
+
+  return {
+    ai,
+    skillOverlap,
+    requiredOverlap,
+    experienceCheck,
+    educationCheck,
+    skillMatchScore,
+    experienceMatchScore,
+    educationMatchScore,
+    overallScore,
+    matchedSkills,
+    missingSkills,
+  };
+}
+
+// Persists a ScreeningResult and applies the job's decision settings.
+// `precomputed` (build plan P4) lets best-job matching reuse the score it
+// already paid an AI call for instead of scoring the same pair twice.
+async function screenApplication(application, precomputed = null) {
+  const { job, resume } = application;
+
+  let match;
   try {
-    ai = await matchCandidateToJob({ job, resumeData, resumeText: resume.rawText });
+    match = precomputed ?? (await computeMatch(job, resume));
   } catch (err) {
     return prisma.screeningResult.upsert({
       where: { applicationId: application.id },
@@ -42,13 +106,19 @@ async function screenApplication(application) {
     });
   }
 
-  const skillMatchScore = blend(skillOverlap.score, ai.skillMatchScore);
-  const experienceMatchScore = blend(experienceCheck.score, ai.experienceMatchScore);
-  const educationMatchScore = blend(educationCheck.score, ai.educationMatchScore);
-  const overallScore = Math.round(skillMatchScore * 0.5 + experienceMatchScore * 0.3 + educationMatchScore * 0.2);
-
-  const matchedSkills = Array.from(new Set([...skillOverlap.matched, ...ai.matchedSkills]));
-  const missingSkills = Array.from(new Set([...requiredOverlap.missing, ...ai.missingSkills]));
+  const {
+    ai,
+    skillOverlap,
+    requiredOverlap,
+    experienceCheck,
+    educationCheck,
+    skillMatchScore,
+    experienceMatchScore,
+    educationMatchScore,
+    overallScore,
+    matchedSkills,
+    missingSkills,
+  } = match;
 
   const result = await prisma.screeningResult.upsert({
     where: { applicationId: application.id },
@@ -104,20 +174,45 @@ async function screenApplication(application) {
   // overwritten by (re-)screening, so re-running screening after tweaking
   // these settings can't silently undo a company's prior decision.
   if (application.status !== APPLICATION_STATUS.SHORTLISTED) {
-    const newStatus =
-      job.autoRejectBelowMinScore && overallScore < job.minAcceptableScore
+    // const newStatus =
+    //   job.autoRejectBelowMinScore && overallScore < job.minAcceptableScore
+    //     ? APPLICATION_STATUS.REJECTED
+    //     : APPLICATION_STATUS.SCREENING;
+    // Build plan P4 (§8): a job that opted into autoAdvanceOnMatch decides
+    // both ways on the score. Every other job keeps the rule above verbatim.
+    const newStatus = job.autoAdvanceOnMatch
+      ? overallScore >= job.minAcceptableScore
+        ? APPLICATION_STATUS.SHORTLISTED
+        : APPLICATION_STATUS.REJECTED
+      : job.autoRejectBelowMinScore && overallScore < job.minAcceptableScore
         ? APPLICATION_STATUS.REJECTED
         : APPLICATION_STATUS.SCREENING;
     await prisma.application.update({ where: { id: application.id }, data: { status: newStatus } });
 
     // Auto-reject is a real status change from the candidate's point of
     // view, same as a manual bulk reject — notify them the same way.
-    if (newStatus === APPLICATION_STATUS.REJECTED) {
+    // if (newStatus === APPLICATION_STATUS.REJECTED) {
+    // Build plan P4: auto-shortlist notifies too (same email as a manual shortlist).
+    if (newStatus === APPLICATION_STATUS.REJECTED || newStatus === APPLICATION_STATUS.SHORTLISTED) {
       await sendApplicationStatusEmail({ ...application, status: newStatus });
     }
   }
 
   return result;
+}
+
+// Build plan P4: screen one application without a company user (auto
+// screening on apply, guest apply, best-job placement). Idempotent: an
+// application that already has a COMPLETED result, or was decided
+// (SHORTLISTED/REJECTED), is left alone.
+export async function screenApplicationById(applicationId, { precomputed = null } = {}) {
+  const application = await fetchApplicationForScreening(applicationId);
+  if (application.screeningResult?.status === SCREENING_STATUS.COMPLETED) return application.screeningResult;
+  if (application.status === APPLICATION_STATUS.SHORTLISTED || application.status === APPLICATION_STATUS.REJECTED) {
+    return application.screeningResult;
+  }
+  await prisma.application.update({ where: { id: application.id }, data: { status: APPLICATION_STATUS.SCREENING } });
+  return screenApplication({ ...application, status: APPLICATION_STATUS.SCREENING }, precomputed);
 }
 
 async function fetchApplicationForScreening(applicationId) {

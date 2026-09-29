@@ -17,6 +17,8 @@ import adminRoutes from './modules/admin/admin.routes.js';
 import configRoutes from './modules/config/config.routes.js';
 import recruitersRoutes from './modules/recruiters/recruiters.routes.js';
 import clientsRoutes from './modules/clients/clients.routes.js';
+import publicRoutes from './modules/public/public.routes.js';
+import cvPoolRoutes from './modules/cvPool/cvPool.routes.js';
 
 export function createApp() {
   const app = express();
@@ -29,6 +31,10 @@ export function createApp() {
   // architecture the deployed frontend and API always share one origin, so
   // this mainly matters for local development and any future external
   // client calling the API directly.
+  // Build plan P4: one proxy hop (Vercel / Vite dev proxy) so req.ip is the
+  // real client for the OTP per-IP limit. Nothing else reads req.ip.
+  app.set('trust proxy', 1);
+
   const allowedOrigins = env.clientUrl.split(',').map((origin) => origin.trim());
   app.use(cors({ origin: allowedOrigins }));
   app.use(express.json({ limit: '2mb' }));
@@ -57,6 +63,9 @@ export function createApp() {
   v1.use('/recruiters', recruitersRoutes);
   // Build plan P3
   v1.use('/clients', clientsRoutes);
+  // Build plan P4
+  v1.use('/public', publicRoutes);
+  v1.use('/cv-pool', cvPoolRoutes);
 
   app.use('/api/v1', v1);
 

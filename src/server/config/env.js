@@ -94,6 +94,11 @@ export const env = {
     phoneNumber: process.env.TWILIO_PHONE_NUMBER || '',
   },
 
+  // Build plan P4 — phone OTP. "console" prints codes in the server log.
+  smsDriver: (process.env.SMS_DRIVER || 'console').trim().toLowerCase(),
+  // Numbers typed without a country code (e.g. 9876543210) get this prefix.
+  defaultPhoneCountryCode: (process.env.DEFAULT_PHONE_COUNTRY_CODE || '+91').trim(),
+
   // Pending-features build plan (docs/implementation-plan.html). Every flag
   // defaults to today's behavior, so new functionality stays off until it's
   // explicitly turned on per environment.

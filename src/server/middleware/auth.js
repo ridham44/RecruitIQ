@@ -27,6 +27,10 @@ export const authenticate = asyncHandler(async (req, res, next) => {
   } catch {
     throw ApiError.unauthorized('Invalid or expired token', 'INVALID_TOKEN');
   }
+  // Build plan P4: OTP / tracking tokens (typ claim) are not login sessions.
+  if (payload.typ || !payload.sub) {
+    throw ApiError.unauthorized('Invalid or expired token', 'INVALID_TOKEN');
+  }
 
   // Build plan P1: a still-valid JWT must stop working once the admin
   // deactivates the user or suspends their company. One small indexed

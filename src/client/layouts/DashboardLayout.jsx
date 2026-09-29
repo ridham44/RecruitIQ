@@ -74,14 +74,21 @@ export default function DashboardLayout({ navItems }) {
             key={to}
             to={to}
             end={end}
+            // className={({ isActive }) =>
+            //   `flex flex-1 flex-col items-center gap-0.5 py-2.5 text-xs font-medium ${
+            //     isActive ? 'text-brand-600' : 'text-slate-500'
+            //   }`
+            // }
+            // Build plan P4: up to 5 tabs — min-w-0 + truncate keep 320px screens from overflowing.
             className={({ isActive }) =>
-              `flex flex-1 flex-col items-center gap-0.5 py-2.5 text-xs font-medium ${
+              `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 py-2.5 text-xs font-medium ${
                 isActive ? 'text-brand-600' : 'text-slate-500'
               }`
             }
           >
-            <Icon className="h-5 w-5" />
-            {label}
+            <Icon className="h-5 w-5 shrink-0" />
+            {/* {label} */}
+            <span className="w-full truncate text-center">{label}</span>
           </NavLink>
         ))}
       </nav>

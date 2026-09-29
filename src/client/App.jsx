@@ -36,6 +36,12 @@ import CompanyRecruitersPage from './pages/company/RecruitersPage.jsx';
 // Build plan P3 — clients
 import CompanyClientsPage from './pages/company/ClientsPage.jsx';
 import CompanyClientDetailPage from './pages/company/ClientDetailPage.jsx';
+// Build plan P4 — careers portal + CV pool
+import CareersPage from './pages/careers/CareersPage.jsx';
+import CareersJobPage from './pages/careers/CareersJobPage.jsx';
+import CareersSubmitCvPage from './pages/careers/CareersSubmitCvPage.jsx';
+import CareersTrackPage from './pages/careers/CareersTrackPage.jsx';
+import CompanyCvPoolPage from './pages/company/CvPoolPage.jsx';
 
 export default function App() {
   return (
@@ -44,6 +50,12 @@ export default function App() {
       <Route path="/auth/login" element={<LoginPage />} />
       <Route path="/auth/register" element={<RegisterPage />} />
       <Route path="/auth/set-password" element={<SetPasswordPage />} />
+
+      {/* Build plan P4 — public careers portal (no login) */}
+      <Route path="/careers/track" element={<CareersTrackPage />} />
+      <Route path="/careers/:slug" element={<CareersPage />} />
+      <Route path="/careers/:slug/jobs/:jobId" element={<CareersJobPage />} />
+      <Route path="/careers/:slug/submit-cv" element={<CareersSubmitCvPage />} />
 
       <Route
         path="/admin"
@@ -88,6 +100,7 @@ export default function App() {
         <Route path="recruiters" element={<CompanyRecruitersPage />} />
         <Route path="clients" element={<CompanyClientsPage />} />
         <Route path="clients/:id" element={<CompanyClientDetailPage />} />
+        <Route path="cv-pool" element={<CompanyCvPoolPage />} />
       </Route>
 
       <Route

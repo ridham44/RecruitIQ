@@ -123,6 +123,33 @@ export async function sendAccountSetupEmail({ to, companyName: rawCompanyName, l
   return sendAndLog({ to, subject, html, type: 'ACCOUNT_SETUP', applicationId: null });
 }
 
+// Build plan P4: sent after a careers-portal apply. `link` is a set-password
+// link for a new guest account, or null when the email already has an
+// account (then the candidate is pointed at the login page instead).
+export async function sendCandidateApplicationReceivedEmail({ to, fullName, companyName, jobTitle, link, trackUrl }) {
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const what = jobTitle ? `your application for <strong>${esc(jobTitle)}</strong>` : 'your CV';
+  const subject = jobTitle ? `We received your application for ${jobTitle}` : `We received your CV — ${companyName}`;
+  const loginUrl = `${env.clientUrl.split(',')[0].trim()}/auth/login`;
+  const action = link
+    ? `<p>Set a password to track your application and attend interviews from your RecruitIQ account.</p>
+       <p style="margin:24px 0;">
+         <a href="${link}" style="background:#2a4bd6;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:bold;display:inline-block;">
+           Set your password
+         </a>
+       </p>
+       <p style="color:#64748b;font-size:12px;">This link works once and expires in 72 hours. If the button doesn't work, copy this link: ${link}</p>`
+    : `<p>You already have a RecruitIQ account with this email — <a href="${loginUrl}">log in</a> to track it.</p>`;
+  const html = layout(`
+    <p>Hi ${esc(fullName)},</p>
+    <p>Thanks — <strong>${esc(companyName)}</strong> has received ${what}. Our AI is reviewing it now.</p>
+    ${trackUrl ? `<p>You can check the status any time: <a href="${trackUrl}">${trackUrl}</a></p>` : ''}
+    ${action}
+    <p>— The RecruitIQ team</p>
+  `);
+  return sendAndLog({ to, subject, html, type: 'ACCOUNT_SETUP', applicationId: null });
+}
+
 // application/interview/slot as returned by scheduling.service.js's bookSlot.
 export async function sendInterviewConfirmationEmail({ application, slot }) {
   const to = application.candidate.user.email;
