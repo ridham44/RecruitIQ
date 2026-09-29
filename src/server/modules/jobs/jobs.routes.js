@@ -20,6 +20,8 @@ router.get('/', listOrPublic);
 // router.delete('/:id', authenticate, authorize(ROLES.COMPANY), jobsController.closeJob);
 // Build plan P2: owners and recruiters.
 router.get('/company/mine', authenticate, authorize(...COMPANY_SIDE_ROLES), jobsController.listCompanyJobs);
+// Build plan P3
+router.get('/:id/client-link', authenticate, authorize(...COMPANY_SIDE_ROLES), jobsController.getJobClientLink);
 // router.post('/', authenticate, authorize(...COMPANY_SIDE_ROLES), validate(createJobSchema), jobsController.createJob);
 // router.patch('/:id', authenticate, authorize(...COMPANY_SIDE_ROLES), validate(updateJobSchema), jobsController.updateJob);
 // router.delete('/:id', authenticate, authorize(...COMPANY_SIDE_ROLES), jobsController.closeJob);

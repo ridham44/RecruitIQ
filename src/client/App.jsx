@@ -33,6 +33,9 @@ import AdminCompanyDetailPage from './pages/admin/CompanyDetailPage.jsx';
 import AdminUsersPage from './pages/admin/UsersPage.jsx';
 // Build plan P2 — recruiters
 import CompanyRecruitersPage from './pages/company/RecruitersPage.jsx';
+// Build plan P3 — clients
+import CompanyClientsPage from './pages/company/ClientsPage.jsx';
+import CompanyClientDetailPage from './pages/company/ClientDetailPage.jsx';
 
 export default function App() {
   return (
@@ -83,6 +86,8 @@ export default function App() {
         <Route path="jobs/:id/interviews/:interviewId" element={<CompanyInterviewDetailPage />} />
         <Route path="jobs/:id/candidates/:candidateId" element={<CompanyCandidateDetailPage />} />
         <Route path="recruiters" element={<CompanyRecruitersPage />} />
+        <Route path="clients" element={<CompanyClientsPage />} />
+        <Route path="clients/:id" element={<CompanyClientDetailPage />} />
       </Route>
 
       <Route

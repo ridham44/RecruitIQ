@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import { prisma } from '../../config/prisma.js';
+import { prisma, TX_OPTIONS } from '../../config/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ROLES } from '../../../shared/constants/roles.js';
 import { ASSIGNABLE_PERMISSIONS } from '../../../shared/constants/permissions.js';
@@ -15,6 +15,8 @@ import { sendAccountSetupEmail } from '../notifications/email.service.js';
 const MEMBER_INCLUDE = {
   user: { select: { id: true, email: true, isActive: true, createdAt: true } },
   jobAssignments: { include: { job: { select: { id: true, title: true, status: true } } } },
+  // Build plan P3
+  clientAssignments: { include: { clientCompany: { select: { id: true, name: true, isActive: true } } } },
 };
 
 async function serializeMember(member) {
@@ -28,6 +30,7 @@ async function serializeMember(member) {
     isActive: member.isActive && member.user.isActive,
     permissions: member.role === 'OWNER' ? ASSIGNABLE_PERMISSIONS : member.permissions,
     jobs: member.jobAssignments.map((a) => a.job),
+    clients: (member.clientAssignments || []).map((a) => a.clientCompany),
     pendingInvite: member.role === 'OWNER' ? false : await hasPendingInvite(member.userId),
     createdAt: member.createdAt,
   };
@@ -91,7 +94,7 @@ export async function inviteRecruiter(userId, { email, fullName, permissions, jo
     }
     const invite = await issuePasswordToken(user.id, { tx });
     return { memberId: member.id, link: invite.link };
-  });
+  }, TX_OPTIONS);
 
   await sendAccountSetupEmail({ to: normalizedEmail, companyName: ctx.company.name, link, asRecruiter: true });
 

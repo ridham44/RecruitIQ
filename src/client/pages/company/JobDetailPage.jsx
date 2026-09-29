@@ -12,6 +12,7 @@ import FormField, { inputClass } from '../../components/ui/FormField.jsx';
 import TagInput from '../../components/ui/TagInput.jsx';
 import { usePermissions } from '../../hooks/usePermissions.js';
 import JobRecruitersCard from './JobRecruitersCard.jsx';
+import ClientLinkFields, { clientLinkPayload, EMPTY_CLIENT_LINK } from './ClientLinkFields.jsx';
 
 const EMPLOYMENT_TYPES = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP', 'FREELANCE'];
 const WORK_MODES = ['On-site', 'Remote', 'Hybrid'];
@@ -30,12 +31,20 @@ export default function JobDetailPage() {
   const [confirmClose, setConfirmClose] = useState(false);
   const [closing, setClosing] = useState(false);
 
+  // Build plan P3: Client → Department → HR person (company-side endpoint).
+  const [link, setLink] = useState(null);
+  const [clientLink, setClientLink] = useState(EMPTY_CLIENT_LINK);
+
   const load = () => {
     setError('');
     jobsApi
       .get(id)
       .then((data) => setJob(data.job))
       .catch((err) => setError(err.message));
+    jobsApi
+      .getClientLink(id)
+      .then((data) => setLink(data.link))
+      .catch(() => setLink(null));
   };
 
   useEffect(load, [id]);
@@ -59,6 +68,11 @@ export default function JobDetailPage() {
       languagesRequired: job.languagesRequired || [],
       certifications: job.certifications || [],
     });
+    setClientLink({
+      clientCompanyId: link?.clientCompany?.id || '',
+      departmentId: link?.department?.id || '',
+      hiringPersonId: link?.hiringPerson?.id || '',
+    });
     setEditing(true);
   };
 
@@ -73,8 +87,13 @@ export default function JobDetailPage() {
         minimumExperience: Number(form.minimumExperience),
         salaryRange: form.salaryRange?.trim() || null,
         noticePeriod: form.noticePeriod?.trim() || null,
+        ...clientLinkPayload(clientLink),
       });
       setJob(updated);
+      jobsApi
+        .getClientLink(id)
+        .then((data) => setLink(data.link))
+        .catch(() => {});
       setEditing(false);
     } catch (err) {
       setError(err.message);
@@ -118,6 +137,13 @@ export default function JobDetailPage() {
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
               />
             </FormField>
+
+            {/* Build plan P3 */}
+            <ClientLinkFields value={clientLink} onChange={setClientLink} initial={{
+              clientCompanyId: link?.clientCompany?.id || '',
+              departmentId: link?.department?.id || '',
+              hiringPersonId: link?.hiringPerson?.id || '',
+            }} />
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <FormField label="Work mode">
@@ -297,6 +323,40 @@ export default function JobDetailPage() {
         <StatChip icon={IndianRupee} iconBg="bg-emerald-50 text-emerald-600" label="Salary Range" value={job.salaryRange || 'Not disclosed'} />
         <StatChip icon={Clock3} iconBg="bg-amber-50 text-amber-600" label="Notice Period" value={job.noticePeriod || 'Negotiable'} />
       </div>
+
+      {/* Build plan P3: who this job is for */}
+      {link?.clientCompany && (
+        <Card className="mb-6 p-5">
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">Client</h3>
+          <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="min-w-0">
+              <dt className="text-xs text-slate-500">Company</dt>
+              <dd className="mt-0.5 text-sm">
+                <Link to={`/company/clients/${link.clientCompany.id}`} className="font-medium text-brand-600 hover:underline">
+                  {link.clientCompany.name}
+                </Link>
+              </dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="text-xs text-slate-500">Department</dt>
+              <dd className="mt-0.5 text-sm text-slate-900">{link.department?.name || '—'}</dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="text-xs text-slate-500">HR / hiring person</dt>
+              <dd className="mt-0.5 break-words text-sm text-slate-900">
+                {link.hiringPerson ? (
+                  <>
+                    {link.hiringPerson.fullName}
+                    <span className="block text-xs text-slate-500">{link.hiringPerson.email}</span>
+                  </>
+                ) : (
+                  '—'
+                )}
+              </dd>
+            </div>
+          </dl>
+        </Card>
+      )}
 
       <Card className="mb-6 p-5">
         <h3 className="mb-2 text-sm font-semibold text-slate-900">Description</h3>

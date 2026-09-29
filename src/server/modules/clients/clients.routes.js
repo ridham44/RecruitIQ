@@ -1,0 +1,42 @@
+import { Router } from 'express';
+import * as controller from './clients.controller.js';
+import { authenticate, authorize } from '../../middleware/auth.js';
+import { validate } from '../../middleware/validate.js';
+import { requirePermission } from '../../middleware/permission.js';
+import { COMPANY_SIDE_ROLES } from '../../../shared/constants/roles.js';
+import { PERMISSIONS } from '../../../shared/constants/permissions.js';
+import {
+  createClientSchema,
+  updateClientSchema,
+  activeStatusSchema,
+  departmentSchema,
+  createHiringPersonSchema,
+  updateHiringPersonSchema,
+  clientRecruitersSchema,
+} from '../../../shared/schemas/client.schema.js';
+
+// Build plan P3 — client companies → departments → HR / hiring persons.
+// Reading is open to the company side (a recruiter without MANAGE_CLIENTS
+// only sees clients assigned to them — see clientScopeWhere); every change
+// needs MANAGE_CLIENTS (the owner always has it).
+const router = Router();
+const manageClients = requirePermission(PERMISSIONS.MANAGE_CLIENTS);
+
+router.use(authenticate, authorize(...COMPANY_SIDE_ROLES));
+
+router.get('/', controller.list);
+router.post('/', manageClients, validate(createClientSchema), controller.create);
+
+router.patch('/departments/:departmentId', manageClients, validate(departmentSchema), controller.updateDepartment);
+router.patch('/departments/:departmentId/status', manageClients, validate(activeStatusSchema), controller.setDepartmentStatus);
+router.post('/departments/:departmentId/hiring-persons', manageClients, validate(createHiringPersonSchema), controller.createHiringPerson);
+router.patch('/hiring-persons/:personId', manageClients, validate(updateHiringPersonSchema), controller.updateHiringPerson);
+router.patch('/hiring-persons/:personId/status', manageClients, validate(activeStatusSchema), controller.setHiringPersonStatus);
+
+router.get('/:id', controller.get);
+router.patch('/:id', manageClients, validate(updateClientSchema), controller.update);
+router.patch('/:id/status', manageClients, validate(activeStatusSchema), controller.setStatus);
+router.put('/:id/recruiters', requirePermission(PERMISSIONS.MANAGE_RECRUITERS), manageClients, validate(clientRecruitersSchema), controller.setRecruiters);
+router.post('/:id/departments', manageClients, validate(departmentSchema), controller.createDepartment);
+
+export default router;

@@ -16,6 +16,7 @@ import interviewsRoutes from './modules/interviews/interviews.routes.js';
 import adminRoutes from './modules/admin/admin.routes.js';
 import configRoutes from './modules/config/config.routes.js';
 import recruitersRoutes from './modules/recruiters/recruiters.routes.js';
+import clientsRoutes from './modules/clients/clients.routes.js';
 
 export function createApp() {
   const app = express();
@@ -54,6 +55,8 @@ export function createApp() {
   v1.use('/config', configRoutes);
   // Build plan P2
   v1.use('/recruiters', recruitersRoutes);
+  // Build plan P3
+  v1.use('/clients', clientsRoutes);
 
   app.use('/api/v1', v1);
 

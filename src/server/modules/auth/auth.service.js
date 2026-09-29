@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { prisma } from '../../config/prisma.js';
+import { prisma, TX_OPTIONS } from '../../config/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ROLES } from '../../../shared/constants/roles.js';
 import { signToken } from './token.util.js';
@@ -69,7 +69,7 @@ export async function registerCompany({ email, password, companyName, website, i
     });
     await tx.companyMember.create({ data: { companyId: created.company.id, userId: created.id, role: 'OWNER' } });
     return created;
-  });
+  }, TX_OPTIONS);
 
   return { user: serializeUser(user), token: signToken(user) };
 }
@@ -165,7 +165,7 @@ export async function setPasswordWithToken({ token, password }) {
     if (count === 0) return false;
     await tx.user.update({ where: { id: row.userId }, data: { passwordHash } });
     return true;
-  });
+  }, TX_OPTIONS);
   if (!consumed) throw ApiError.badRequest('This link has already been used. Please log in.', 'TOKEN_USED');
 
   return { user: serializeUser(row.user), token: signToken(row.user) };

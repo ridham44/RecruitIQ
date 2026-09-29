@@ -239,12 +239,96 @@ model CompanyMember {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
-  company        Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  jobAssignments JobRecruiter[]
+  company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobAssignments    JobRecruiter[]
+  // Build plan P3: clients this recruiter works for (sees all their jobs).
+  clientAssignments ClientRecruiter[]
 
   @@index([companyId])
   @@map("company_members")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Build plan P3 — Client companies (the recruitment company's customers),
+// their departments and HR / hiring persons. Deactivated, never deleted, so
+// old jobs and submissions keep their links.
+// ─────────────────────────────────────────────────────────────
+
+model ClientCompany {
+  id           String   @id @default(cuid())
+  // The recruitment company that owns this client.
+  companyId    String
+  name         String
+  description  String?
+  website      String?
+  industry     String?
+  contactName  String?
+  contactEmail String?
+  contactPhone String?
+  address      String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  departments Department[]
+  recruiters  ClientRecruiter[]
+  jobs        Job[]
+
+  @@index([companyId])
+  @@map("client_companies")
+}
+
+model Department {
+  id              String   @id @default(cuid())
+  clientCompanyId String
+  // IT, Finance, Sales…
+  name            String
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  clientCompany ClientCompany  @relation(fields: [clientCompanyId], references: [id], onDelete: Cascade)
+  hiringPersons HiringPerson[]
+  jobs          Job[]
+
+  @@unique([clientCompanyId, name])
+  @@map("departments")
+}
+
+model HiringPerson {
+  id           String   @id @default(cuid())
+  departmentId String
+  fullName     String
+  email        String
+  phone        String?
+  designation  String?
+  // Filled in P8 when the person is invited to the client HR portal.
+  userId       String?  @unique
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  jobs       Job[]
+
+  @@index([departmentId])
+  @@map("hiring_persons")
+}
+
+// §4: which recruiters work for which client.
+model ClientRecruiter {
+  clientCompanyId String
+  memberId        String
+  createdAt       DateTime @default(now())
+
+  clientCompany ClientCompany @relation(fields: [clientCompanyId], references: [id], onDelete: Cascade)
+  member        CompanyMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@id([clientCompanyId, memberId])
+  @@index([memberId])
+  @@map("client_recruiters")
 }
 
 // Build plan P2 (§3 "Associate Recruiter with Jobs"): which recruiters work a job.
@@ -303,6 +387,7 @@ model Company {
   user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   jobs    Job[]
   members CompanyMember[]
+  clients ClientCompany[]
 
   @@index([status])
   @@map("companies")
@@ -401,14 +486,24 @@ model Job {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Build plan P3 (§5): optional Client → Department → HR person link.
+  // Null for every job created before P3 and for jobs not tied to a client.
+  clientCompanyId String?
+  departmentId    String?
+  hiringPersonId  String?
+
   company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
   applications      Application[]
   interviewSlots    InterviewSlot[]
   aiInterviewConfig AiInterviewConfig?
   recruiters        JobRecruiter[]
+  clientCompany     ClientCompany?     @relation(fields: [clientCompanyId], references: [id], onDelete: SetNull)
+  department        Department?        @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  hiringPerson      HiringPerson?      @relation(fields: [hiringPersonId], references: [id], onDelete: SetNull)
 
   @@index([companyId])
   @@index([status])
+  @@index([clientCompanyId])
   @@map("jobs")
 }
 

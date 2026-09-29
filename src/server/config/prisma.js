@@ -15,3 +15,9 @@ export const prisma =
 if (env.nodeEnv !== 'production') {
   globalForPrisma.__prisma = prisma;
 }
+
+// Options for interactive prisma.$transaction(async (tx) => …) calls. Prisma's
+// defaults (2s to get a connection, 5s to finish) are too tight for a remote
+// Neon database waking from scale-to-zero, which surfaces as "Transaction not
+// found" errors.
+export const TX_OPTIONS = { maxWait: 15000, timeout: 30000 };

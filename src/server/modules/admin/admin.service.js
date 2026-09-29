@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import { prisma } from '../../config/prisma.js';
+import { prisma, TX_OPTIONS } from '../../config/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ROLES } from '../../../shared/constants/roles.js';
 import { issuePasswordToken, hasPendingInvite } from '../auth/passwordToken.service.js';
@@ -113,7 +113,7 @@ export async function createCompany(adminUserId, data) {
     await tx.companyMember.create({ data: { companyId: user.company.id, userId: user.id, role: 'OWNER' } });
     const invite = await issuePasswordToken(user.id, { tx });
     return { company: user.company, link: invite.link };
-  });
+  }, TX_OPTIONS);
 
   // Never throws — a failed send is logged in EmailLog, and the admin still
   // gets the link below to share by hand.

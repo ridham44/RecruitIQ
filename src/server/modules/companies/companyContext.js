@@ -43,11 +43,17 @@ export async function getCompanyContext(userId) {
 // Prisma `where` for the jobs this user may see. The owner sees every job
 // of the company (unchanged); a recruiter sees jobs assigned to them plus
 // jobs they created themselves.
+// Build plan P3: plus every job of a client the recruiter is assigned to.
 export function jobScopeWhere(ctx, userId) {
   if (ctx.isOwner) return { companyId: ctx.companyId };
   return {
     companyId: ctx.companyId,
-    OR: [{ createdBy: userId }, { recruiters: { some: { memberId: ctx.memberId } } }],
+    // OR: [{ createdBy: userId }, { recruiters: { some: { memberId: ctx.memberId } } }],
+    OR: [
+      { createdBy: userId },
+      { recruiters: { some: { memberId: ctx.memberId } } },
+      { clientCompany: { recruiters: { some: { memberId: ctx.memberId } } } },
+    ],
   };
 }
 
@@ -58,5 +64,19 @@ export async function canAccessJob(ctx, userId, job) {
   const assignment = await prisma.jobRecruiter.findUnique({
     where: { jobId_memberId: { jobId: job.id, memberId: ctx.memberId } },
   });
-  return Boolean(assignment);
+  // return Boolean(assignment);
+  if (assignment) return true;
+  // Build plan P3: assigned to the job's client.
+  if (!job.clientCompanyId) return false;
+  const clientAssignment = await prisma.clientRecruiter.findUnique({
+    where: { clientCompanyId_memberId: { clientCompanyId: job.clientCompanyId, memberId: ctx.memberId } },
+  });
+  return Boolean(clientAssignment);
+}
+
+// Build plan P3: owners and MANAGE_CLIENTS recruiters see every client; other
+// recruiters only the clients assigned to them.
+export function clientScopeWhere(ctx) {
+  if (ctx.isOwner || ctx.permissions.includes('MANAGE_CLIENTS')) return { companyId: ctx.companyId };
+  return { companyId: ctx.companyId, recruiters: { some: { memberId: ctx.memberId } } };
 }

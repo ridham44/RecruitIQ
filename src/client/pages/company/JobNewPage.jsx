@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+// import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ChevronDown, ChevronUp } from 'lucide-react';
+import ClientLinkFields, { clientLinkPayload, EMPTY_CLIENT_LINK } from './ClientLinkFields.jsx';
 import { jobsApi } from '../../services/jobs.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
@@ -13,6 +16,7 @@ const NOTICE_PERIODS = ['Immediate', '15 days', '30 days', '60 days', '90 days']
 
 export default function JobNewPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -33,6 +37,9 @@ export default function JobNewPage() {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // Build plan P3: ?clientId= pre-selects a client (e.g. from the client page).
+  const [clientLink, setClientLink] = useState({ ...EMPTY_CLIENT_LINK, clientCompanyId: searchParams.get('clientId') || '' });
+  const [showMore, setShowMore] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -46,6 +53,7 @@ export default function JobNewPage() {
         minimumExperience: Number(form.minimumExperience),
         salaryRange: form.salaryRange?.trim() || null,
         noticePeriod: form.noticePeriod?.trim() || null,
+        ...clientLinkPayload(clientLink),
       });
       navigate(`/company/jobs/${job.id}`);
     } catch (err) {
@@ -81,6 +89,23 @@ export default function JobNewPage() {
             />
           </FormField>
 
+          {/* Build plan P3 (§5): optional Client → Department → HR link */}
+          <ClientLinkFields value={clientLink} onChange={setClientLink} />
+
+          {/* Build plan P3 (§5): a job only needs a title + description; the
+              structured fields below are optional and have sensible defaults. */}
+          <button
+            type="button"
+            onClick={() => setShowMore((v) => !v)}
+            aria-expanded={showMore}
+            className="mb-4 flex min-h-[44px] w-full items-center justify-between rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            <span>More details (optional)</span>
+            {showMore ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+
+          {showMore && (
+          <div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="Work mode">
               <select
@@ -235,6 +260,8 @@ export default function JobNewPage() {
               placeholder="e.g. B.Tech Computer Science, BCA"
             />
           </FormField>
+          </div>
+          )}
 
           {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 

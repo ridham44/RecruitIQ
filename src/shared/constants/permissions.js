@@ -7,8 +7,9 @@ export const PERMISSIONS = {
   REVIEW_CANDIDATES: 'REVIEW_CANDIDATES',
   CONFIGURE_INTERVIEWS: 'CONFIGURE_INTERVIEWS',
   MANAGE_RECRUITERS: 'MANAGE_RECRUITERS',
-  // Reserved for later phases (P3 clients, P7 submissions) — not enforced yet.
+  // Build plan P3: client companies, departments and HR persons.
   MANAGE_CLIENTS: 'MANAGE_CLIENTS',
+  // Reserved for P7 submissions — not enforced yet.
   SUBMIT_CANDIDATES: 'SUBMIT_CANDIDATES',
 };
 
@@ -18,6 +19,8 @@ export const PERMISSION_OPTIONS = [
   { key: PERMISSIONS.REVIEW_CANDIDATES, label: 'Review candidates', description: 'Applicants, AI screening, shortlist/reject, interview results' },
   { key: PERMISSIONS.CONFIGURE_INTERVIEWS, label: 'Configure interviews', description: 'AI interviewer settings and interview slots' },
   { key: PERMISSIONS.MANAGE_RECRUITERS, label: 'Manage recruiters', description: 'Invite recruiters, set permissions and job assignments' },
+  // Build plan P3
+  { key: PERMISSIONS.MANAGE_CLIENTS, label: 'Manage clients', description: 'Client companies, departments and HR contacts' },
 ];
 
 export const ASSIGNABLE_PERMISSIONS = PERMISSION_OPTIONS.map((p) => p.key);

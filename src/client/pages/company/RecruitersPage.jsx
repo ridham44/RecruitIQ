@@ -239,8 +239,17 @@ export default function RecruitersPage() {
       <span className="text-xs text-slate-400">No permissions</span>
     );
 
-  const JobsText = ({ m }) =>
-    m.role === 'OWNER' ? 'All jobs' : m.jobs.length ? m.jobs.map((j) => j.title).join(', ') : 'No jobs assigned';
+  // const JobsText = ({ m }) =>
+  //   m.role === 'OWNER' ? 'All jobs' : m.jobs.length ? m.jobs.map((j) => j.title).join(', ') : 'No jobs assigned';
+  // Build plan P3: client assignments count too ("All jobs of <client>").
+  const JobsText = ({ m }) => {
+    if (m.role === 'OWNER') return 'All jobs';
+    const parts = [...(m.clients || []).map((c) => `All ${c.name} jobs`), ...m.jobs.map((j) => j.title)];
+    return parts.length ? parts.join(', ') : 'No jobs assigned';
+  };
+
+  // Owners have no stored name — show "Company owner" instead of the email twice.
+  const displayName = (m) => m.fullName || (m.role === 'OWNER' ? 'Company owner' : m.email);
 
   return (
     <div>
@@ -280,7 +289,8 @@ export default function RecruitersPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate font-medium text-slate-900">
-                      {m.fullName || m.email} {isSelf(m) && <span className="text-xs text-slate-400">(you)</span>}
+                      {/* {m.fullName || m.email} */}
+                      {displayName(m)} {isSelf(m) && <span className="text-xs text-slate-400">(you)</span>}
                     </p>
                     <p className="truncate text-sm text-slate-500">{m.email}</p>
                   </div>
@@ -316,7 +326,8 @@ export default function RecruitersPage() {
                   <tr key={m.id} className="align-top hover:bg-slate-50">
                     <td className="px-5 py-3">
                       <p className="font-medium text-slate-900">
-                        {m.fullName || m.email} {isSelf(m) && <span className="text-xs font-normal text-slate-400">(you)</span>}
+                        {/* {m.fullName || m.email} */}
+                        {displayName(m)} {isSelf(m) && <span className="text-xs font-normal text-slate-400">(you)</span>}
                       </p>
                       <p className="text-xs text-slate-500">{m.email}</p>
                     </td>

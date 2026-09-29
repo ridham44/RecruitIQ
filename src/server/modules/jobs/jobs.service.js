@@ -3,6 +3,7 @@ import { ApiError } from '../../utils/ApiError.js';
 import { JOB_STATUS } from '../../../shared/constants/statuses.js';
 import { analyzeJobDescription } from '../../ai/job-analyzer.service.js';
 import { getCompanyContext, jobScopeWhere, canAccessJob } from '../companies/companyContext.js';
+import { resolveJobClientLink } from '../clients/clients.service.js';
 
 // async function getCompanyIdForUser(userId) {
 //   const company = await prisma.company.findUnique({ where: { userId } });
@@ -23,6 +24,8 @@ export async function createJob(userId, jobData) {
   // const companyId = await getCompanyIdForUser(userId);
   const ctx = await getCompanyContext(userId);
   const companyId = ctx.companyId;
+  // Build plan P3: optional Client → Department → HR link, validated as a chain.
+  const clientLink = await resolveJobClientLink(companyId, jobData);
 
   const job = await prisma.job.create({
     data: {
@@ -47,6 +50,7 @@ export async function createJob(userId, jobData) {
       status: jobData.status,
       minAcceptableScore: jobData.minAcceptableScore,
       autoRejectBelowMinScore: jobData.autoRejectBelowMinScore,
+      ...clientLink,
     },
   });
 
@@ -74,6 +78,8 @@ export async function createJob(userId, jobData) {
 
 export async function updateJob(userId, jobId, jobData) {
   const job = await getOwnedJob(userId, jobId);
+  // Build plan P3: {} when the request doesn't touch the client link.
+  const clientLink = await resolveJobClientLink(job.companyId, jobData, job);
   return prisma.job.update({
     where: { id: job.id },
     data: {
@@ -96,8 +102,23 @@ export async function updateJob(userId, jobId, jobData) {
       status: jobData.status ?? job.status,
       minAcceptableScore: jobData.minAcceptableScore ?? job.minAcceptableScore,
       autoRejectBelowMinScore: jobData.autoRejectBelowMinScore ?? job.autoRejectBelowMinScore,
+      ...clientLink,
     },
   });
+}
+
+// Build plan P3: company-side view of a job's client link.
+export async function getJobClientLink(userId, jobId) {
+  const job = await getOwnedJob(userId, jobId);
+  const full = await prisma.job.findUnique({
+    where: { id: job.id },
+    select: {
+      clientCompany: { select: { id: true, name: true, isActive: true } },
+      department: { select: { id: true, name: true, isActive: true } },
+      hiringPerson: { select: { id: true, fullName: true, email: true, designation: true, isActive: true } },
+    },
+  });
+  return full;
 }
 
 export async function closeJob(userId, jobId) {
@@ -138,14 +159,22 @@ export async function listOpenJobs({ search } = {}) {
   });
 }
 
-export async function listCompanyJobs(userId) {
+// export async function listCompanyJobs(userId) {
+export async function listCompanyJobs(userId, { clientId } = {}) {
   // const companyId = await getCompanyIdForUser(userId);
   // Build plan P2: recruiters only see their own/assigned jobs.
   const ctx = await getCompanyContext(userId);
+  // Build plan P3: optional client filter; "none" = jobs without a client.
+  const clientFilter = clientId === 'none' ? { clientCompanyId: null } : clientId ? { clientCompanyId: clientId } : {};
   return prisma.job.findMany({
     // where: { companyId },
-    where: jobScopeWhere(ctx, userId),
-    include: { _count: { select: { applications: true } } },
+    where: { AND: [jobScopeWhere(ctx, userId), clientFilter] },
+    // include: { _count: { select: { applications: true } } },
+    include: {
+      _count: { select: { applications: true } },
+      clientCompany: { select: { id: true, name: true } },
+      department: { select: { id: true, name: true } },
+    },
     orderBy: { createdAt: 'desc' },
   });
 }
