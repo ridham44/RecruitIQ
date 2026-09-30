@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { companiesApi } from '../../services/companies.js';
 import { useAuth } from '../../hooks/useAuth.jsx';
+import { usePermissions } from '../../hooks/usePermissions.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import LoadingState from '../../components/ui/LoadingState.jsx';
@@ -102,6 +103,7 @@ const EVALUATION_CATEGORIES = [
 
 export default function CompanyDashboardPage() {
   const { user } = useAuth();
+  const { can } = usePermissions();
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -166,12 +168,15 @@ export default function CompanyDashboardPage() {
             <RefreshCw className="h-3.5 w-3.5" />
             Refresh
           </Button>
-          <Link to="/company/jobs/new">
-            <Button className="text-xs">
-              <Plus className="h-4 w-4" />
-              New Job Posting
-            </Button>
-          </Link>
+          {/* Build plan P2: hidden for recruiters without MANAGE_JOBS */}
+          {can('MANAGE_JOBS') && (
+            <Link to="/company/jobs/new">
+              <Button className="text-xs">
+                <Plus className="h-4 w-4" />
+                New Job Posting
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -312,7 +317,14 @@ export default function CompanyDashboardPage() {
                             ? 'bg-blue-500'
                             : stage.key === 'REJECTED'
                               ? 'bg-red-400'
-                              : 'bg-slate-400'
+                              : // Build plan P7
+                                stage.key === 'QUALIFIED'
+                                ? 'bg-teal-500'
+                                : stage.key === 'SUBMITTED_TO_CLIENT'
+                                  ? 'bg-violet-500'
+                                  : stage.key === 'NOT_QUALIFIED'
+                                    ? 'bg-orange-400'
+                                    : 'bg-slate-400'
                     }`}
                     style={{ width: `${Math.max(stage.percentage, stage.count > 0 ? 4 : 0)}%` }}
                   />

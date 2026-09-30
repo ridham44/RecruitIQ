@@ -9,6 +9,10 @@ import { evaluateAnswer } from '../../ai/interview-answer-evaluator.service.js';
 import { generateInterviewReport, computeResumeAlignment } from '../../ai/interview-report-generator.service.js';
 import { normalizeTranscript } from '../../ai/transcript-normalizer.service.js';
 import { nextDifficulty, bucketAnswerStrength } from './interviewDifficulty.util.js';
+import { sanitizeRecruiterGuidance } from '../../ai/sanitize.util.js';
+import { generateClosingReply } from '../../ai/interview-closing.service.js';
+import { computeFinalScore } from '../submissions/finalScore.service.js';
+import { autoSubmit } from '../submissions/submissions.service.js';
 
 const STAGE_QUESTION_TYPE = {
   RESUME_QUESTIONS: 'RESUME_BASED',
@@ -184,6 +188,16 @@ async function createIntroductionQuestion(interview) {
   });
 }
 
+// Build plan P6: the recruiter's interview guidance, with any sentence about
+// demographic / protected characteristics removed before it reaches a prompt.
+// Returns null when nothing is left, so the prompt stays exactly as before.
+function recruiterGuidanceFrom(config) {
+  const { text } = sanitizeRecruiterGuidance(config?.interviewInstructions || '');
+  const focusSkills = (config?.focusSkills || []).filter((s) => !sanitizeRecruiterGuidance(s).removed);
+  if (!text && !focusSkills.length) return null;
+  return { instructions: text, focusSkills };
+}
+
 async function createPlannedQuestion(interview, plannedIndex, config, stagePlan, difficulty) {
   const stage = stagePlan[plannedIndex];
   const alreadyAskedCustom = interview.questions.filter((q) => q.type === 'CUSTOM').length;
@@ -205,6 +219,8 @@ async function createPlannedQuestion(interview, plannedIndex, config, stagePlan,
       resumeText: interview.application.resume.rawText,
       previousExchanges: exchangesFor(interview),
       difficulty,
+      // Build plan P6: recruiter guidance (null when not set → prompt unchanged).
+      recruiterGuidance: recruiterGuidanceFrom(config),
     });
     type = STAGE_QUESTION_TYPE[stage];
   }
@@ -293,6 +309,8 @@ export async function getCurrentStateForWorker(interviewId) {
     aiName: config.aiName,
     aiTitle: config.aiTitle,
     ttsVoiceId: resolveTtsVoiceId(config),
+    // Build plan P6: so a voice/phone worker can follow the same guidance.
+    recruiterGuidance: recruiterGuidanceFrom(config),
   };
 }
 
@@ -421,6 +439,21 @@ async function advanceInterviewCore(interview, params) {
   const stagePlan = buildStagePlan(config, followUpsUsedSoFar);
 
   if (nextPlannedIndex >= stagePlan.length) {
+    // return finalizeInterview(interviewId);
+    // The closing turn ("any questions for us?"): reply briefly from the job /
+    // company info, keep that reply with the answer, then finish as before.
+    if (question.stage === 'CANDIDATE_QUESTIONS') {
+      const closingMessage = await generateClosingReply({
+        job: interview.application.job,
+        company: interview.application.job.company,
+        candidateText: evaluationTranscript || rawTranscript,
+      });
+      await prisma.interviewAnswer
+        .update({ where: { questionId: question.id }, data: { evaluation: { ...(evaluation || {}), closingReply: closingMessage } } })
+        .catch(() => {});
+      const finished = await finalizeInterview(interviewId);
+      return { ...finished, closingMessage };
+    }
     return finalizeInterview(interviewId);
   }
 
@@ -505,10 +538,15 @@ async function generateFinalReport(interviewId) {
   const exchanges = exchangesFor(interview);
 
   try {
+    // Build plan P6: recruiter evaluation criteria (sanitized; '' = unchanged prompt).
+    const config = await getEffectiveConfig(job.id);
+    const evaluationInstructions = sanitizeRecruiterGuidance(config.evaluationInstructions || '').text;
     const [report, resumeAlignment] = await Promise.all([
-      generateInterviewReport({ job, resumeData: resume.parsedData, resumeText: resume.rawText, exchanges }),
+      // generateInterviewReport({ job, resumeData: resume.parsedData, resumeText: resume.rawText, exchanges }),
+      generateInterviewReport({ job, resumeData: resume.parsedData, resumeText: resume.rawText, exchanges, evaluationInstructions }),
       Promise.resolve(computeResumeAlignment(resume.parsedData, job)),
     ]);
+    const criteria = report.criteriaAssessment?.length ? { criteriaAssessment: report.criteriaAssessment } : {};
 
     await prisma.interviewReport.upsert({
       where: { interviewId },
@@ -524,6 +562,7 @@ async function generateFinalReport(interviewId) {
         resumeAlignment,
         reasoning: report.reasoning,
         generatedAt: new Date(),
+        ...criteria,
       },
       update: {
         status: 'COMPLETED',
@@ -537,8 +576,18 @@ async function generateFinalReport(interviewId) {
         reasoning: report.reasoning,
         errorMessage: null,
         generatedAt: new Date(),
+        ...criteria,
       },
     });
+
+    // Build plan P7: final score (+ QUALIFIED/NOT_QUALIFIED when the job has a
+    // threshold, + optional auto-submit). Its own try/catch — a failure here
+    // must never turn a good report into FAILED.
+    try {
+      await computeFinalScore(interview.applicationId, { onQualified: (app) => autoSubmit(app.id) });
+    } catch (scoreErr) {
+      console.error('[interviews] final score failed:', scoreErr.message);
+    }
   } catch (err) {
     await prisma.interviewReport.upsert({
       where: { interviewId },
@@ -577,7 +626,14 @@ export async function getInterviewDetailForCompany(userId, interviewId) {
 
 export async function getInterviewDetailForCandidate(userId, interviewId) {
   const interview = await authorizeCandidate(userId, interviewId);
-  return getFullDetail(interview);
+  // return getFullDetail(interview);
+  // Build plan P6: the recruiter's criteria verdicts are for the company only.
+  const detail = await getFullDetail(interview);
+  if (detail.report) {
+    const { criteriaAssessment, ...report } = detail.report;
+    detail.report = report;
+  }
+  return detail;
 }
 
 async function getFullDetail(interview) {

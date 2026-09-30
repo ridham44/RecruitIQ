@@ -2,6 +2,7 @@ import { prisma } from '../../config/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { APPLICATION_STATUS, INTERVIEW_SLOT_STATUS, INTERVIEW_STATUS } from '../../../shared/constants/statuses.js';
 import { getOwnedJob } from '../jobs/jobs.service.js';
+import { inviteApplication } from '../interviews/instantInterview.service.js';
 import { sendInterviewConfirmationEmail } from '../notifications/email.service.js';
 
 async function getCandidateIdForUser(userId) {
@@ -196,9 +197,17 @@ export async function cancelMyInterview(userId, applicationId) {
   });
   if (!interview) throw ApiError.notFound('No scheduled interview to cancel');
 
+  // await prisma.$transaction([
+  //   prisma.interview.update({ where: { id: interview.id }, data: { status: INTERVIEW_STATUS.CANCELLED } }),
+  //   prisma.interviewSlot.update({ where: { id: interview.slotId }, data: { status: INTERVIEW_SLOT_STATUS.AVAILABLE } }),
+  //   prisma.application.update({ where: { id: applicationId }, data: { status: APPLICATION_STATUS.SHORTLISTED } }),
+  // ]);
+  // Build plan P5: instant (link) interviews have no slot to free.
   await prisma.$transaction([
     prisma.interview.update({ where: { id: interview.id }, data: { status: INTERVIEW_STATUS.CANCELLED } }),
-    prisma.interviewSlot.update({ where: { id: interview.slotId }, data: { status: INTERVIEW_SLOT_STATUS.AVAILABLE } }),
+    ...(interview.slotId
+      ? [prisma.interviewSlot.update({ where: { id: interview.slotId }, data: { status: INTERVIEW_SLOT_STATUS.AVAILABLE } })]
+      : []),
     prisma.application.update({ where: { id: applicationId }, data: { status: APPLICATION_STATUS.SHORTLISTED } }),
   ]);
 }
@@ -231,12 +240,31 @@ export async function getInterviewForApplication(userId, applicationId, { asComp
   });
 }
 
+// Build plan P5: recruiter sends (or re-sends) an instant interview link to
+// a shortlisted applicant. rotate=true issues a new link and revokes the old.
+export async function sendInstantInterview(userId, applicationId, { rotate = false } = {}) {
+  const application = await prisma.application.findUnique({ where: { id: applicationId } });
+  if (!application) throw ApiError.notFound('Application not found');
+  await getOwnedJob(userId, application.jobId);
+  const { interview, link, sent } = await inviteApplication(applicationId, { rotate });
+  return {
+    interviewId: interview.id,
+    link,
+    expiresAt: interview.inviteExpiresAt,
+    emailed: sent?.sent !== false,
+    ...(sent?.sent === false ? { emailError: sent.error } : {}),
+  };
+}
+
 // Company marks an interview as completed once it's taken place.
 export async function markInterviewCompleted(userId, jobId, interviewId) {
   await getOwnedJob(userId, jobId);
 
-  const interview = await prisma.interview.findUnique({ where: { id: interviewId }, include: { slot: true } });
-  if (!interview || interview.slot.jobId !== jobId) throw ApiError.notFound('Interview not found');
+  // const interview = await prisma.interview.findUnique({ where: { id: interviewId }, include: { slot: true } });
+  // if (!interview || interview.slot.jobId !== jobId) throw ApiError.notFound('Interview not found');
+  // Build plan P5: instant interviews have no slot — check the job via the application.
+  const interview = await prisma.interview.findUnique({ where: { id: interviewId }, include: { slot: true, application: true } });
+  if (!interview || interview.application.jobId !== jobId) throw ApiError.notFound('Interview not found');
 
   await prisma.$transaction([
     prisma.interview.update({ where: { id: interviewId }, data: { status: INTERVIEW_STATUS.COMPLETED } }),

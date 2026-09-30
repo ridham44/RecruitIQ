@@ -84,8 +84,13 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export default function InterviewRoomPage() {
-  const { interviewId } = useParams();
+// export default function InterviewRoomPage() {
+//   const { interviewId } = useParams();
+// Build plan P5: the instant-interview link page renders this same room with
+// interviewIdOverride (no /candidate route, no login) and its own end action.
+export default function InterviewRoomPage({ interviewIdOverride, onDone, doneLabel } = {}) {
+  const params = useParams();
+  const interviewId = interviewIdOverride || params.interviewId;
   const navigate = useNavigate();
   const videoRef = useRef(null);
   const roomRef = useRef(null);
@@ -108,6 +113,8 @@ export default function InterviewRoomPage() {
   const [aiName, setAiName] = useState('');
   const [aiTitle, setAiTitle] = useState('');
   const [voiceGender, setVoiceGender] = useState('FEMALE');
+  // The AI's reply to the candidate's closing questions (shown on the end screen).
+  const [closingMessage, setClosingMessage] = useState('');
   const [voices, setVoices] = useState([]);
   const [questionNumber, setQuestionNumber] = useState(null);
   const [totalQuestions, setTotalQuestions] = useState(null);
@@ -398,7 +405,19 @@ export default function InterviewRoomPage() {
         // Guard: if the user clicked "End Interview" while submitAnswer was
         // in flight, cleanupAll has already run — don't try to advance UI.
         if (isEndedRef.current) return;
+        // if (result.done) {
+        //   cleanupAll();
+        //   setPhase('ended');
+        // } else {
         if (result.done) {
+          // Closing turn: the AI answers the candidate's question(s), then the
+          // interview ends on its own — no "End Interview" click needed.
+          if (result.closingMessage) {
+            setClosingMessage(result.closingMessage);
+            setAiSpeaking(true);
+            await speak(result.closingMessage, pickVoiceForGender(voices, voiceGender), isEndedRef);
+            setAiSpeaking(false);
+          }
           cleanupAll();
           setPhase('ended');
         } else {
@@ -413,7 +432,8 @@ export default function InterviewRoomPage() {
         setSending(false);
       }
     },
-    [question, sending, interviewId, stopRecording, askQuestion, cleanupAll]
+    // [question, sending, interviewId, stopRecording, askQuestion, cleanupAll]
+    [question, sending, interviewId, stopRecording, askQuestion, cleanupAll, voices, voiceGender]
   );
 
   // ─── Countdown for the current question's answer window — auto-sends
@@ -460,9 +480,15 @@ export default function InterviewRoomPage() {
           <Bot className="h-8 w-8 text-emerald-600" />
         </div>
         <h2 className="text-xl font-semibold text-slate-900">Interview complete</h2>
+        {closingMessage && (
+          <p className="mt-3 rounded-lg bg-slate-50 px-4 py-3 text-left text-sm text-slate-700">{closingMessage}</p>
+        )}
         <p className="mt-2 text-sm text-slate-500">Thanks for taking the time to interview with us. The company will follow up on next steps.</p>
-        <Button className="mt-6" onClick={() => navigate(`/candidate/applications`)}>
+        {/* <Button className="mt-6" onClick={() => navigate(`/candidate/applications`)}>
           Back to my applications
+        </Button> */}
+        <Button className="mt-6" onClick={() => (onDone ? onDone() : navigate(`/candidate/applications`))}>
+          {doneLabel || 'Back to my applications'}
         </Button>
       </div>
     );
@@ -663,7 +689,9 @@ export default function InterviewRoomPage() {
                   disabled={aiSpeaking || sending || showCorrectionBox || !effectiveTranscript.trim()}
                   loading={sending}
                 >
-                  <Send className="h-4 w-4" /> Send
+                  {/* <Send className="h-4 w-4" /> Send */}
+                  {!sending && <Send className="h-4 w-4" />}
+                  {sending && question?.type === 'CANDIDATE_QUESTION' ? 'Wrapping up…' : 'Send'}
                 </Button>
                 <Button variant="danger" onClick={() => setConfirmEnd(true)}>
                   <PhoneOff className="h-4 w-4" /> End Interview

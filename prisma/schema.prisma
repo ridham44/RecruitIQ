@@ -27,6 +27,8 @@ enum Role {
   CANDIDATE
   RECRUITER
   INTERVIEWER
+  // Build plan P8: a client's HR / hiring person using the client portal.
+  CLIENT_HR
 }
 
 enum JobStatus {
@@ -52,6 +54,12 @@ enum ApplicationStatus {
   INTERVIEW_SCHEDULED
   // Phase 2: set by the company once the interview has taken place.
   INTERVIEW_COMPLETED
+  // Build plan P7: only ever set when the job has a finalThreshold — the
+  // final score (CV × weight + interview × weight) is ≥ / < the threshold.
+  QUALIFIED
+  NOT_QUALIFIED
+  // Build plan P7: the candidate package was sent to the client's HR.
+  SUBMITTED_TO_CLIENT
   // Future statuses (OFFERED, HIRED, etc.) can be appended here later
   // without breaking existing rows.
 }
@@ -174,6 +182,45 @@ enum EmailType {
   APPLICATION_SHORTLISTED
   APPLICATION_REJECTED
   INTERVIEW_CONFIRMATION
+  // Build plan P1: "set your password" link for accounts created by someone
+  // else (admin-onboarded company owners; recruiters/HR in later phases).
+  ACCOUNT_SETUP
+  // Build plan P5: instant interview link (attend now or later).
+  INTERVIEW_INVITE
+  // Build plan P7: candidate package sent to a client HR / hiring person.
+  CLIENT_SUBMISSION
+}
+
+// Build plan P5: how a job's candidates get to their interview. SLOT (the
+// only flow before P5) = book a time slot; INSTANT = a secure link they can
+// open right away or later, no slot needed.
+enum InterviewFlow {
+  SLOT
+  INSTANT
+}
+
+// Build plan P4: how an application was created. DIRECT = logged-in
+// candidate (the only kind before P4), GUEST = careers-portal apply with
+// phone OTP, AUTO_MATCH = CV-only submission placed on its best-matching job.
+enum ApplicationSource {
+  DIRECT
+  GUEST
+  AUTO_MATCH
+}
+
+// Build plan P2: a user's role inside a recruitment company. OWNER implicitly
+// has every permission; RECRUITER has only CompanyMember.permissions.
+enum MemberRole {
+  OWNER
+  RECRUITER
+}
+
+// Build plan P1: a Platform Admin can suspend a recruitment company. A
+// suspended company's users can't log in, and their existing tokens are
+// rejected by the authenticate middleware.
+enum CompanyStatus {
+  ACTIVE
+  SUSPENDED
 }
 
 enum EmailStatus {
@@ -193,11 +240,201 @@ model User {
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  // Build plan P4: false for guest candidates created by a careers-portal
+  // apply until they set a password from the emailed link.
+  passwordSet  Boolean  @default(true)
 
   company   Company?
   candidate Candidate?
 
+  passwordTokens PasswordToken[]
+  // Build plan P2: company owners and recruiters. Null for candidates/admins.
+  membership     CompanyMember?
+  // Build plan P8: set for CLIENT_HR users (the HR person they log in as).
+  hiringPerson   HiringPerson?
+
   @@map("users")
+}
+
+// Build plan P2: every user who works inside a recruitment company. Existing
+// owners were backfilled as OWNER in the migration; Company.userId still
+// points at the owner and stays the fallback (see companyContext.js).
+model CompanyMember {
+  id          String     @id @default(cuid())
+  companyId   String
+  // A user belongs to at most one recruitment company.
+  userId      String     @unique
+  role        MemberRole @default(RECRUITER)
+  // Display name for recruiters (users table has no name column).
+  fullName    String?
+  // Permission keys from src/shared/constants/permissions.js — ignored for OWNER.
+  permissions String[]   @default([])
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobAssignments    JobRecruiter[]
+  // Build plan P3: clients this recruiter works for (sees all their jobs).
+  clientAssignments ClientRecruiter[]
+
+  @@index([companyId])
+  @@map("company_members")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Build plan P3 — Client companies (the recruitment company's customers),
+// their departments and HR / hiring persons. Deactivated, never deleted, so
+// old jobs and submissions keep their links.
+// ─────────────────────────────────────────────────────────────
+
+model ClientCompany {
+  id           String   @id @default(cuid())
+  // The recruitment company that owns this client.
+  companyId    String
+  name         String
+  description  String?
+  website      String?
+  industry     String?
+  contactName  String?
+  contactEmail String?
+  contactPhone String?
+  address      String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  departments Department[]
+  recruiters  ClientRecruiter[]
+  jobs        Job[]
+  submissions ClientSubmission[]
+
+  @@index([companyId])
+  @@map("client_companies")
+}
+
+model Department {
+  id              String   @id @default(cuid())
+  clientCompanyId String
+  // IT, Finance, Sales…
+  name            String
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  clientCompany ClientCompany  @relation(fields: [clientCompanyId], references: [id], onDelete: Cascade)
+  hiringPersons HiringPerson[]
+  jobs          Job[]
+
+  @@unique([clientCompanyId, name])
+  @@map("departments")
+}
+
+model HiringPerson {
+  id           String   @id @default(cuid())
+  departmentId String
+  fullName     String
+  email        String
+  phone        String?
+  designation  String?
+  // Filled in P8 when the person is invited to the client HR portal.
+  userId       String?  @unique
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  department  Department         @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  jobs        Job[]
+  submissions ClientSubmission[]
+  // Build plan P8: the portal login (userId existed since P3, now a real FK).
+  user        User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([departmentId])
+  @@map("hiring_persons")
+}
+
+// Build plan P7 (§13): a candidate package sent to a client's HR / hiring
+// person. `snapshot` freezes everything that was sent (scores, report,
+// contact details), so later re-screening or report changes never alter
+// what the client received. The HR person opens it with a secure read-only
+// link (only the token's hash is stored); P8 adds a logged-in portal.
+model ClientSubmission {
+  id              String    @id @default(cuid())
+  applicationId   String
+  // Null when a job without a client was sent to a hand-typed HR email.
+  clientCompanyId String?
+  departmentId    String?
+  hiringPersonId  String?
+  recipientName   String
+  recipientEmail  String
+  // User id of the recruiter, or "SYSTEM" for auto-submission.
+  submittedById   String
+  note            String?
+  snapshot        Json
+  // SENT | VIEWED
+  status          String    @default("SENT")
+  viewedAt        DateTime?
+  accessTokenHash String    @unique
+  createdAt       DateTime  @default(now())
+
+  application   Application    @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  clientCompany ClientCompany? @relation(fields: [clientCompanyId], references: [id], onDelete: SetNull)
+  hiringPerson  HiringPerson?  @relation(fields: [hiringPersonId], references: [id], onDelete: SetNull)
+
+  @@index([applicationId])
+  @@index([hiringPersonId])
+  @@index([clientCompanyId])
+  @@map("client_submissions")
+}
+
+// §4: which recruiters work for which client.
+model ClientRecruiter {
+  clientCompanyId String
+  memberId        String
+  createdAt       DateTime @default(now())
+
+  clientCompany ClientCompany @relation(fields: [clientCompanyId], references: [id], onDelete: Cascade)
+  member        CompanyMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@id([clientCompanyId, memberId])
+  @@index([memberId])
+  @@map("client_recruiters")
+}
+
+// Build plan P2 (§3 "Associate Recruiter with Jobs"): which recruiters work a job.
+model JobRecruiter {
+  jobId     String
+  memberId  String
+  createdAt DateTime @default(now())
+
+  job    Job           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  member CompanyMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@id([jobId, memberId])
+  @@index([memberId])
+  @@map("job_recruiters")
+}
+
+// Build plan P1: single-use, expiring link to set a password — used when an
+// account is created on someone's behalf (admin onboarding a company owner
+// now; recruiter and client-HR invites in later phases). Only the SHA-256
+// hash of the token is stored, never the token itself.
+model PasswordToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  // INVITE for now; RESET can reuse this table later.
+  purpose   String    @default("INVITE")
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_tokens")
 }
 
 model Company {
@@ -213,9 +450,23 @@ model Company {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  jobs Job[]
+  // Build plan P1 — Platform Admin management. Existing companies become
+  // ACTIVE via the column default; createdByAdminId is null for companies
+  // that registered themselves.
+  status           CompanyStatus @default(ACTIVE)
+  createdByAdminId String?
+  // Build plan P4: public careers portal URL (/careers/:slug). Generated
+  // from the name the first time the owner opens their careers link.
+  slug             String?       @unique
 
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobs    Job[]
+  members CompanyMember[]
+  clients ClientCompany[]
+  // Build plan P4: CV-only submissions made through this company's portal.
+  cvSubmissions CvSubmission[]
+
+  @@index([status])
   @@map("companies")
 }
 
@@ -235,10 +486,14 @@ model Candidate {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  resumes      Resume[]
-  applications Application[]
-  educations   Education[]
+  // Build plan P4: set when the candidate confirms `phone` with an OTP.
+  phoneVerifiedAt DateTime?
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resumes       Resume[]
+  applications  Application[]
+  educations    Education[]
+  cvSubmissions CvSubmission[]
 
   @@map("candidates")
 }
@@ -307,18 +562,45 @@ model Job {
   // NEVER auto-shortlists; only auto-reject is opt-in.
   minAcceptableScore      Float   @default(75)
   autoRejectBelowMinScore Boolean @default(false)
+  // Build plan P4 (§8): when true, every new application is screened right
+  // away and moves to SHORTLISTED (score ≥ minAcceptableScore) or REJECTED.
+  // Off by default — existing jobs keep the manual shortlist/reject flow.
+  autoAdvanceOnMatch      Boolean @default(false)
+  // Build plan P5 (§9): SLOT keeps today's booking flow for every existing job.
+  interviewFlow           InterviewFlow @default(SLOT)
+  // How long an instant interview link stays valid.
+  inviteValidDays         Int           @default(7)
+  // Build plan P7 (§12, §13): final score = CV × cvWeight + interview ×
+  // interviewWeight (normalized). finalThreshold null = feature off for the
+  // job, so nothing changes status. autoSubmitToClient sends QUALIFIED
+  // candidates to the job's HR person automatically.
+  finalThreshold          Float?
+  cvWeight                Float         @default(0.3)
+  interviewWeight         Float         @default(0.7)
+  autoSubmitToClient      Boolean       @default(false)
 
   createdBy String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Build plan P3 (§5): optional Client → Department → HR person link.
+  // Null for every job created before P3 and for jobs not tied to a client.
+  clientCompanyId String?
+  departmentId    String?
+  hiringPersonId  String?
+
   company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
   applications      Application[]
   interviewSlots    InterviewSlot[]
   aiInterviewConfig AiInterviewConfig?
+  recruiters        JobRecruiter[]
+  clientCompany     ClientCompany?     @relation(fields: [clientCompanyId], references: [id], onDelete: SetNull)
+  department        Department?        @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  hiringPerson      HiringPerson?      @relation(fields: [hiringPersonId], references: [id], onDelete: SetNull)
 
   @@index([companyId])
   @@index([status])
+  @@index([clientCompanyId])
   @@map("jobs")
 }
 
@@ -344,11 +626,80 @@ model Resume {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  candidate    Candidate     @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  applications Application[]
+  candidate     Candidate      @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  applications  Application[]
+  cvSubmissions CvSubmission[]
 
   @@index([candidateId])
   @@map("resumes")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Build plan P4 — careers portal: guest apply, phone OTP, CV-only matching
+// ─────────────────────────────────────────────────────────────
+
+// One-time phone codes. Only a bcrypt hash of the code is stored. Rows also
+// back the rate limits (per phone and per IP), so they are kept, not deleted.
+model PhoneOtp {
+  id         String    @id @default(cuid())
+  // E.164, e.g. +919876543210
+  phone      String
+  codeHash   String
+  purpose    String    @default("APPLY")
+  attempts   Int       @default(0)
+  ip         String?
+  expiresAt  DateTime
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([phone, createdAt])
+  @@index([ip, createdAt])
+  @@map("phone_otps")
+}
+
+// A CV uploaded on the careers portal before the candidate account exists.
+// The file bytes are stored through the normal resume storage driver; the
+// upload becomes a real Resume when the guest submits their application.
+model GuestUpload {
+  id         String    @id @default(cuid())
+  storageKey String
+  storageUrl String?
+  fileName   String
+  fileType   String
+  fileSize   Int
+  rawText    String?
+  parsedData Json?
+  consumedAt DateTime?
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+
+  @@map("guest_uploads")
+}
+
+// §6 Option B: a CV submitted without choosing a job. The AI places it on
+// the best-matching OPEN job (across all companies — see the P4 decisions)
+// or marks it NO_MATCH. matchResults keeps every scored job for transparency.
+model CvSubmission {
+  id            String   @id @default(cuid())
+  // The recruitment company whose careers portal was used.
+  companyId     String
+  candidateId   String
+  resumeId      String
+  // PENDING | MATCHED | NO_MATCH | FAILED
+  status        String   @default("PENDING")
+  matchResults  Json?
+  applicationId String?  @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  candidate   Candidate    @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  resume      Resume       @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  application Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([candidateId])
+  @@map("cv_submissions")
 }
 
 // Backs the "database" storage driver (src/server/resume/storage/database.driver.js)
@@ -376,12 +727,20 @@ model Application {
   status      ApplicationStatus @default(APPLIED)
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
+  // Build plan P4: existing rows are DIRECT (logged-in candidate apply).
+  source      ApplicationSource @default(DIRECT)
+  // Build plan P7: CV match + interview combined (0-100).
+  finalScore    Float?
+  finalScoredAt DateTime?
 
   candidate       Candidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   job             Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
   resume          Resume           @relation(fields: [resumeId], references: [id], onDelete: Cascade)
   screeningResult ScreeningResult?
   interviews      Interview[]
+  cvSubmission    CvSubmission?
+  // Build plan P7
+  clientSubmissions ClientSubmission[]
 
   @@unique([candidateId, jobId])
   @@index([jobId])
@@ -460,7 +819,10 @@ model InterviewSlot {
 model Interview {
   id            String          @id @default(cuid())
   applicationId String
-  slotId        String
+  // slotId        String
+  // Build plan P5: null for instant (link-based) interviews. Every interview
+  // created before P5 has a slot, so existing rows are unaffected.
+  slotId        String?
   status        InterviewStatus @default(SCHEDULED)
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
@@ -474,8 +836,20 @@ model Interview {
   startedAt            DateTime?
   endedAt              DateTime?
 
+  // Build plan P5 — instant interview link. The link token is derived from
+  // inviteNonce with the server secret (so it can be re-sent without
+  // changing it); only its SHA-256 hash is used for lookup. Rotating the
+  // nonce revokes the old link.
+  accessTokenHash    String?   @unique
+  inviteNonce        String?
+  inviteExpiresAt    DateTime?
+  inviteSentAt       DateTime?
+  inviteSendCount    Int       @default(0)
+  inviteSendWindowAt DateTime?
+
   application Application         @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  slot        InterviewSlot       @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  // slot        InterviewSlot       @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  slot        InterviewSlot?      @relation(fields: [slotId], references: [id], onDelete: Cascade)
   questions   InterviewQuestion[]
   events      InterviewEvent[]
   report      InterviewReport?
@@ -503,6 +877,11 @@ model AiInterviewConfig {
   ttsVoiceId         String?
   // Section 5: adaptive by default; FIXED keeps every question at MEDIUM.
   difficultyStrategy DifficultyStrategy @default(ADAPTIVE)
+  // Build plan P6 (§10, §11): recruiter guidance. Null/empty = prompts are
+  // exactly what they were before P6.
+  interviewInstructions  String?
+  evaluationInstructions String?
+  focusSkills            String[]           @default([])
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
@@ -597,6 +976,9 @@ model InterviewReport {
   areasForImprovement String[]              @default([])
   questionAnalysis    Json?
   resumeAlignment     Json?
+  // Build plan P6: [{ criterion, verdict: MET|PARTLY|NOT_MET, evidence }] —
+  // only when the recruiter set evaluation instructions.
+  criteriaAssessment  Json?
   reasoning           String?
   aiModel             String?
   errorMessage        String?

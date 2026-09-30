@@ -1,6 +1,7 @@
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ok } from '../../utils/apiResponse.js';
-import { ROLES } from '../../../shared/constants/roles.js';
+// import { ROLES } from '../../../shared/constants/roles.js';
+import { isCompanySide } from '../../../shared/constants/roles.js';
 import * as configService from './interviewConfig.service.js';
 import * as engine from './interviewEngine.service.js';
 
@@ -21,7 +22,8 @@ export const listForJob = asyncHandler(async (req, res) => {
 
 export const getDetail = asyncHandler(async (req, res) => {
   const detail =
-    req.user.role === ROLES.COMPANY
+    // req.user.role === ROLES.COMPANY
+    isCompanySide(req.user.role)
       ? await engine.getInterviewDetailForCompany(req.user.id, req.params.interviewId)
       : await engine.getInterviewDetailForCandidate(req.user.id, req.params.interviewId);
   ok(res, { interview: detail });
@@ -33,7 +35,8 @@ export const start = asyncHandler(async (req, res) => {
 });
 
 export const getState = asyncHandler(async (req, res) => {
-  const state = await engine.getCurrentState(req.user.id, req.params.interviewId, { asCompany: req.user.role === ROLES.COMPANY });
+  // const state = await engine.getCurrentState(req.user.id, req.params.interviewId, { asCompany: req.user.role === ROLES.COMPANY });
+  const state = await engine.getCurrentState(req.user.id, req.params.interviewId, { asCompany: isCompanySide(req.user.role) });
   ok(res, { state });
 });
 

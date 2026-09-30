@@ -1,9 +1,10 @@
 import { prisma } from '../../config/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
-import { APPLICATION_STATUS, JOB_STATUS } from '../../../shared/constants/statuses.js';
+import { APPLICATION_STATUS, JOB_STATUS, candidateFacingStatus } from '../../../shared/constants/statuses.js';
 import { getOwnedJob } from '../jobs/jobs.service.js';
 import { sendApplicationStatusEmail } from '../notifications/email.service.js';
 import { getEffectiveConfig } from '../interviews/interviewConfig.service.js';
+import { screenApplicationById } from '../screening/screening.service.js';
 
 async function getCandidateIdForUser(userId) {
   const candidate = await prisma.candidate.findUnique({ where: { userId } });
@@ -29,19 +30,43 @@ export async function applyToJob(userId, { jobId, resumeId }) {
   });
   if (existing) throw ApiError.conflict('You have already applied to this job', 'ALREADY_APPLIED');
 
-  return prisma.application.create({
+  // return prisma.application.create({
+  //   data: { candidateId, jobId, resumeId, status: APPLICATION_STATUS.APPLIED },
+  //   include: { job: true, resume: true },
+  // });
+  const application = await prisma.application.create({
     data: { candidateId, jobId, resumeId, status: APPLICATION_STATUS.APPLIED },
     include: { job: true, resume: true },
   });
+
+  // Build plan P4 (§8): only jobs that opted into autoAdvanceOnMatch screen on
+  // apply. Every other job returns exactly as before (status APPLIED, the
+  // company runs screening). A screening failure never fails the apply.
+  if (!job.autoAdvanceOnMatch) return application;
+  try {
+    await screenApplicationById(application.id);
+  } catch (err) {
+    console.error('[applications] auto-screening on apply failed:', err.message);
+  }
+  return prisma.application.findUnique({ where: { id: application.id }, include: { job: true, resume: true } });
+}
+
+// Build plan P7: candidates see post-interview decisions (qualified / not
+// qualified / submitted to client) as INTERVIEW_COMPLETED, and never the
+// combined final score.
+function forCandidate({ finalScore, finalScoredAt, ...application }) {
+  return { ...application, status: candidateFacingStatus(application.status) };
 }
 
 export async function listMyApplications(userId) {
   const candidateId = await getCandidateIdForUser(userId);
-  return prisma.application.findMany({
+  // return prisma.application.findMany({
+  const applications = await prisma.application.findMany({
     where: { candidateId },
     include: { job: { include: { company: { select: { name: true, logoUrl: true } } } }, screeningResult: true },
     orderBy: { createdAt: 'desc' },
   });
+  return applications.map(forCandidate);
 }
 
 // Candidate-facing AI interviewer persona (Section 4: "AI Interview —
@@ -58,7 +83,8 @@ export async function getMyApplicationById(userId, applicationId) {
     throw ApiError.notFound('Application not found');
   }
   const { aiName, aiTitle } = await getEffectiveConfig(application.jobId);
-  return { ...application, aiInterviewConfig: { aiName, aiTitle } };
+  // return { ...application, aiInterviewConfig: { aiName, aiTitle } };
+  return { ...forCandidate(application), aiInterviewConfig: { aiName, aiTitle } };
 }
 
 export async function listApplicationsForJob(userId, jobId) {

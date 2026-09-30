@@ -53,4 +53,21 @@ export const interviewReportSchema = z.object({
     )
     .default([]),
   reasoning: z.string().default(''),
+  // Build plan P6: only requested when the recruiter set evaluation criteria.
+  // Optional (no default) so reports without criteria are unchanged.
+  criteriaAssessment: z
+    .array(
+      z.object({
+        criterion: z.string().default(''),
+        verdict: z
+          .string()
+          .transform((v) => String(v).toUpperCase().replace(/[\s-]+/g, '_'))
+          .pipe(z.enum(['MET', 'PARTLY', 'NOT_MET']))
+          .catch('PARTLY'),
+        evidence: z.string().default(''),
+      })
+    )
+    .max(20)
+    .optional()
+    .catch(undefined),
 });

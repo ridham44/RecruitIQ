@@ -25,6 +25,21 @@ export const createJobSchema = z.object({
   // never auto-shortlists.
   minAcceptableScore: z.coerce.number().min(0).max(100).default(75),
   autoRejectBelowMinScore: z.boolean().default(false),
+  // Build plan P4 (§8): screen on apply and shortlist/reject on the score.
+  autoAdvanceOnMatch: z.boolean().default(false),
+  // Build plan P5 (§9): SLOT = book a time slot (default), INSTANT = interview link.
+  interviewFlow: z.enum(['SLOT', 'INSTANT']).default('SLOT'),
+  inviteValidDays: z.coerce.number().int().min(1).max(60).default(7),
+  // Build plan P7 (§12): null threshold = final-score decisions off for the job.
+  finalThreshold: z.coerce.number().min(0).max(100).nullable().optional(),
+  cvWeight: z.coerce.number().min(0).max(1).optional(),
+  interviewWeight: z.coerce.number().min(0).max(1).optional(),
+  autoSubmitToClient: z.boolean().optional(),
+  // Build plan P3 (§5): optional Client → Department → HR person link. null
+  // clears it; omitted leaves it unchanged. The chain is checked server-side.
+  clientCompanyId: z.string().trim().min(1).nullable().optional(),
+  departmentId: z.string().trim().min(1).nullable().optional(),
+  hiringPersonId: z.string().trim().min(1).nullable().optional(),
 });
 
 export const updateJobSchema = createJobSchema.partial();

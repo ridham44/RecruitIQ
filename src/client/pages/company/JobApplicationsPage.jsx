@@ -11,6 +11,7 @@ import ErrorState from '../../components/ui/ErrorState.jsx';
 import EmptyState from '../../components/ui/EmptyState.jsx';
 import StatusBadge from '../../components/ui/StatusBadge.jsx';
 import ScoreRing from '../../components/ui/ScoreRing.jsx';
+import FinalScoreSettingsCard from './FinalScoreSettingsCard.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import { inputClass } from '../../components/ui/FormField.jsx';
 import { getApplicationActionState } from '../../utils/applicationActions.js';
@@ -32,7 +33,20 @@ const EXPERIENCE_PRESETS = [
   { key: '3', label: '3+ yrs' },
 ];
 
-const STATUS_OPTIONS = ['APPLIED', 'SCREENING', 'SHORTLISTED', 'REJECTED', 'INTERVIEW_SCHEDULED', 'INTERVIEW_COMPLETED'];
+// const STATUS_OPTIONS = ['APPLIED', 'SCREENING', 'SHORTLISTED', 'REJECTED', 'INTERVIEW_SCHEDULED', 'INTERVIEW_COMPLETED'];
+// Build plan P7: + qualified / not qualified / submitted to client.
+const STATUS_OPTIONS = [
+  'APPLIED',
+  'SCREENING',
+  'SHORTLISTED',
+  'REJECTED',
+  'INTERVIEW_SCHEDULED',
+  'INTERVIEW_COMPLETED',
+  'QUALIFIED',
+  'NOT_QUALIFIED',
+  'SUBMITTED_TO_CLIENT',
+];
+const POST_INTERVIEW = ['QUALIFIED', 'NOT_QUALIFIED', 'SUBMITTED_TO_CLIENT'];
 
 const SORT_OPTIONS = [
   { key: 'score', label: 'AI Score' },
@@ -137,6 +151,8 @@ export default function JobApplicationsPage() {
         setSettings({
           minAcceptableScore: jobRes.job.minAcceptableScore,
           autoRejectBelowMinScore: jobRes.job.autoRejectBelowMinScore,
+          // Build plan P4
+          autoAdvanceOnMatch: Boolean(jobRes.job.autoAdvanceOnMatch),
         });
         setApplications(appsRes.applications);
         setSelected(new Set());
@@ -155,14 +171,24 @@ export default function JobApplicationsPage() {
   // SHORTLISTED decision (screening never revisits those — see
   // screening.service.js).
   const rerunnableCount = useMemo(
-    () => (applications || []).filter((a) => a.screeningResult?.status === 'COMPLETED' && a.status !== 'SHORTLISTED').length,
+    // () => (applications || []).filter((a) => a.screeningResult?.status === 'COMPLETED' && a.status !== 'SHORTLISTED').length,
+    // Build plan P7: post-interview decisions are never re-screened either.
+    () =>
+      (applications || []).filter(
+        (a) => a.screeningResult?.status === 'COMPLETED' && a.status !== 'SHORTLISTED' && !POST_INTERVIEW.includes(a.status)
+      ).length,
     [applications]
   );
 
   const screenedNotShortlistedIds = useMemo(
     () =>
       (applications || [])
-        .filter((a) => a.screeningResult?.status === 'COMPLETED' && !['SHORTLISTED', 'REJECTED', 'INTERVIEW_SCHEDULED', 'INTERVIEW_COMPLETED'].includes(a.status))
+        // .filter((a) => a.screeningResult?.status === 'COMPLETED' && !['SHORTLISTED', 'REJECTED', 'INTERVIEW_SCHEDULED', 'INTERVIEW_COMPLETED'].includes(a.status))
+        .filter(
+          (a) =>
+            a.screeningResult?.status === 'COMPLETED' &&
+            !['SHORTLISTED', 'REJECTED', 'INTERVIEW_SCHEDULED', 'INTERVIEW_COMPLETED', ...POST_INTERVIEW].includes(a.status)
+        )
         .map((a) => a.id),
     [applications]
   );
@@ -252,6 +278,8 @@ export default function JobApplicationsPage() {
       const { job: updated } = await jobsApi.update(jobId, {
         minAcceptableScore: Number(settings.minAcceptableScore),
         autoRejectBelowMinScore: settings.autoRejectBelowMinScore,
+        // Build plan P4
+        autoAdvanceOnMatch: settings.autoAdvanceOnMatch,
       });
       setJob(updated);
       setSettingsSaved(true);
@@ -367,6 +395,15 @@ export default function JobApplicationsPage() {
             />
             Automatically reject candidates below this score
           </label>
+          {/* Build plan P4 (§8) */}
+          <label className="flex min-h-[44px] items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={settings.autoAdvanceOnMatch}
+              onChange={(e) => setSettings({ ...settings, autoAdvanceOnMatch: e.target.checked })}
+            />
+            Auto-advance: screen every new application and shortlist or reject it on this score
+          </label>
           <Button variant="secondary" onClick={handleSaveSettings} loading={settingsSaving} className="sm:ml-auto">
             <Save className="h-4 w-4" /> Save
           </Button>
@@ -386,7 +423,22 @@ export default function JobApplicationsPage() {
           (default), all screened applications stay available for manual review — use the checkboxes below to
           Shortlist or Reject in bulk.
         </p>
+        {/* Build plan P4 */}
+        <p className="mt-1 text-xs text-slate-400">
+          Auto-advance (off by default): each new application — from logged-in candidates or your careers page — is
+          screened right away and moved to Shortlisted (score at or above the minimum) or Rejected, and the candidate
+          is emailed.
+        </p>
       </Card>
+
+      {/* Build plan P7 */}
+      <FinalScoreSettingsCard
+        job={job}
+        onSaved={(updated) => {
+          setJob(updated);
+          load();
+        }}
+      />
 
       {/* Filters */}
       <Card className="mb-6 p-5">
@@ -532,6 +584,8 @@ export default function JobApplicationsPage() {
                 <th className="px-4 py-3">Rank</th>
                 <th className="px-4 py-3">Candidate</th>
                 <th className="px-4 py-3">Match</th>
+                {/* Build plan P7 */}
+                <th className="px-4 py-3">Final</th>
                 <th className="px-4 py-3">Experience</th>
                 <th className="px-4 py-3">Education</th>
                 <th className="px-4 py-3">Matched skills</th>
@@ -553,6 +607,22 @@ export default function JobApplicationsPage() {
                     </td>
                     <td className="px-4 py-3">
                       {getScore(app) != null ? <ScoreRing score={getScore(app)} size={36} /> : <span className="text-slate-400">—</span>}
+                    </td>
+                    {/* Build plan P7: CV + interview combined */}
+                    <td className="px-4 py-3">
+                      {app.finalScore != null ? (
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                            job.finalThreshold != null && app.finalScore < job.finalThreshold
+                              ? 'bg-orange-50 text-orange-700'
+                              : 'bg-emerald-50 text-emerald-700'
+                          }`}
+                        >
+                          {Math.round(app.finalScore)}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-slate-600">{getExperience(app)} yrs</td>
                     <td className="max-w-[160px] px-4 py-3 text-slate-600">{getDegree(app) || '—'}</td>

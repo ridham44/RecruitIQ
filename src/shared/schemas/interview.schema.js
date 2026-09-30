@@ -18,6 +18,12 @@ export const upsertInterviewConfigSchema = z
     ttsVoiceId: z.string().max(100).nullable().optional(),
     // Section 5: adaptive by default; FIXED holds every question at MEDIUM.
     difficultyStrategy: z.enum(['FIXED', 'ADAPTIVE']).default('ADAPTIVE'),
+    // Build plan P6 (§10, §11): recruiter guidance. Optional with no default,
+    // so a client that doesn't send them leaves the saved values untouched.
+    // '' / null clear them.
+    interviewInstructions: z.string().trim().max(2000, 'Keep interview instructions under 2000 characters').nullable().optional(),
+    evaluationInstructions: z.string().trim().max(2000, 'Keep evaluation instructions under 2000 characters').nullable().optional(),
+    focusSkills: z.array(z.string().trim().min(1).max(60)).max(20).optional(),
   })
   // Custom questions are mandatory and must ALL be asked (Section 1: "the
   // AI must ask") — one slot is always reserved for the closing "any

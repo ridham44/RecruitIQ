@@ -94,6 +94,142 @@ export async function sendApplicationStatusEmail(application) {
   }
 }
 
+// Build plan P1: invite for an account someone else created (admin-onboarded
+// company owner). Not tied to an application, so applicationId stays null.
+// Build plan P2: `asRecruiter` switches the wording for recruiter invites.
+// Build plan P8: `asClientHr` (+ partnerName) for client HR portal invites.
+export async function sendAccountSetupEmail({
+  to,
+  companyName: rawCompanyName,
+  link,
+  expiresInHours = 72,
+  asRecruiter = false,
+  asClientHr = false,
+  partnerName,
+}) {
+  // const subject = `Set up your RecruitIQ account for ${rawCompanyName}`;
+  const subject = asClientHr
+    ? `${partnerName || 'Your recruitment partner'} invited you to review candidates on RecruitIQ`
+    : asRecruiter
+      ? `You've been invited to join ${rawCompanyName} on RecruitIQ`
+      : `Set up your RecruitIQ account for ${rawCompanyName}`;
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const companyName = esc(rawCompanyName);
+  const intro = asClientHr
+    ? `<p><strong>${esc(partnerName)}</strong> uses RecruitIQ to send you candidates for <strong>${companyName}</strong>.
+    Choose a password to see every candidate shared with you — CVs, scores and interview evaluations — in one place.</p>`
+    : asRecruiter
+      ? `<p><strong>${companyName}</strong> has invited you to join their team on RecruitIQ as a recruiter.
+    Choose a password to start working on your assigned jobs.</p>`
+      : `<p>A RecruitIQ account has been created for <strong>${companyName}</strong> with this email address.
+    Choose a password to start posting jobs and screening candidates.</p>`;
+  const html = layout(`
+    <p>Hello,</p>
+    ${intro}
+    <p style="margin:24px 0;">
+      <a href="${link}" style="background:#2a4bd6;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:bold;display:inline-block;">
+        Set your password
+      </a>
+    </p>
+    <p style="color:#64748b;font-size:12px;">This link works once and expires in ${expiresInHours} hours.
+    If the button doesn't work, copy this link: ${link}</p>
+    <p>— The RecruitIQ team</p>
+  `);
+  return sendAndLog({ to, subject, html, type: 'ACCOUNT_SETUP', applicationId: null });
+}
+
+// Build plan P5: instant interview link — attend now or any time before it expires.
+export async function sendInterviewInviteEmail({ to, candidateName, jobTitle, companyName, link, expiresAt, applicationId }) {
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const until = expiresAt
+    ? new Date(expiresAt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+    : null;
+  const subject = `Your interview for ${jobTitle} at ${companyName}`;
+  const html = layout(`
+    <p>Hi ${esc(candidateName)},</p>
+    <p>Good news — you've been shortlisted for <strong>${esc(jobTitle)}</strong> at <strong>${esc(companyName)}</strong>.
+    Your AI video interview is ready whenever you are — no booking needed.</p>
+    <p style="margin:24px 0;">
+      <a href="${link}" style="background:#2a4bd6;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:bold;display:inline-block;">
+        Start your interview
+      </a>
+    </p>
+    <p>Before you start: use a quiet room, a working camera and microphone, and allow about 20–30 minutes.
+    If you get disconnected, open the same link again to continue.</p>
+    <p style="color:#64748b;font-size:12px;">${until ? `This link works until ${until}. ` : ''}Keep it private — it opens your interview.
+    If the button doesn't work, copy this link: ${link}</p>
+    <p>— The RecruitIQ team</p>
+  `);
+  return sendAndLog({ to, subject, html, type: 'INTERVIEW_INVITE', applicationId: applicationId ?? null });
+}
+
+// Build plan P7 (§13): candidate package for a client HR / hiring person.
+export async function sendClientSubmissionEmail({ to, recipientName, candidateName, jobTitle, recruitmentCompany, finalScore, note, link, applicationId }) {
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const subject = `Candidate for ${jobTitle}: ${candidateName}`;
+  const html = layout(`
+    <p>Hi ${esc(recipientName)},</p>
+    <p><strong>${esc(recruitmentCompany)}</strong> has shared a candidate with you for <strong>${esc(jobTitle)}</strong>:
+    <strong>${esc(candidateName)}</strong>${finalScore != null ? ` — overall score <strong>${Math.round(finalScore)}/100</strong>` : ''}.</p>
+    ${note ? `<p style="background:#f1f5f9;border-radius:8px;padding:12px 16px;margin:16px 0;">${esc(note)}</p>` : ''}
+    <p>The profile includes the CV, contact details, the AI CV match and the interview evaluation.</p>
+    <p style="margin:24px 0;">
+      <a href="${link}" style="background:#2a4bd6;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:bold;display:inline-block;">
+        View candidate
+      </a>
+    </p>
+    <p style="color:#64748b;font-size:12px;">This link is private to you — please don't forward it. If the button doesn't work, copy this link: ${link}</p>
+    <p>— The RecruitIQ team</p>
+  `);
+  return sendAndLog({ to, subject, html, type: 'CLIENT_SUBMISSION', applicationId: applicationId ?? null });
+}
+
+// Forgot password: one-time reset link (see auth.service requestPasswordReset).
+export async function sendPasswordResetEmail({ to, link, expiresInMinutes = 60 }) {
+  const subject = 'Reset your RecruitIQ password';
+  const html = layout(`
+    <p>Hello,</p>
+    <p>We received a request to reset the password for your RecruitIQ account (${to}).</p>
+    <p style="margin:24px 0;">
+      <a href="${link}" style="background:#2a4bd6;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:bold;display:inline-block;">
+        Reset password
+      </a>
+    </p>
+    <p style="color:#64748b;font-size:12px;">This link works once and expires in ${expiresInMinutes} minutes.
+    If the button doesn't work, copy this link: ${link}</p>
+    <p>If you didn't ask for this, you can ignore this email — your password stays the same.</p>
+    <p>— The RecruitIQ team</p>
+  `);
+  return sendAndLog({ to, subject, html, type: 'ACCOUNT_SETUP', applicationId: null });
+}
+
+// Build plan P4: sent after a careers-portal apply. `link` is a set-password
+// link for a new guest account, or null when the email already has an
+// account (then the candidate is pointed at the login page instead).
+export async function sendCandidateApplicationReceivedEmail({ to, fullName, companyName, jobTitle, link, trackUrl }) {
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const what = jobTitle ? `your application for <strong>${esc(jobTitle)}</strong>` : 'your CV';
+  const subject = jobTitle ? `We received your application for ${jobTitle}` : `We received your CV — ${companyName}`;
+  const loginUrl = `${env.clientUrl.split(',')[0].trim()}/auth/login`;
+  const action = link
+    ? `<p>Set a password to track your application and attend interviews from your RecruitIQ account.</p>
+       <p style="margin:24px 0;">
+         <a href="${link}" style="background:#2a4bd6;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:bold;display:inline-block;">
+           Set your password
+         </a>
+       </p>
+       <p style="color:#64748b;font-size:12px;">This link works once and expires in 72 hours. If the button doesn't work, copy this link: ${link}</p>`
+    : `<p>You already have a RecruitIQ account with this email — <a href="${loginUrl}">log in</a> to track it.</p>`;
+  const html = layout(`
+    <p>Hi ${esc(fullName)},</p>
+    <p>Thanks — <strong>${esc(companyName)}</strong> has received ${what}. Our AI is reviewing it now.</p>
+    ${trackUrl ? `<p>You can check the status any time: <a href="${trackUrl}">${trackUrl}</a></p>` : ''}
+    ${action}
+    <p>— The RecruitIQ team</p>
+  `);
+  return sendAndLog({ to, subject, html, type: 'ACCOUNT_SETUP', applicationId: null });
+}
+
 // application/interview/slot as returned by scheduling.service.js's bookSlot.
 export async function sendInterviewConfirmationEmail({ application, slot }) {
   const to = application.candidate.user.email;

@@ -23,8 +23,17 @@ export const listOpenJobs = asyncHandler(async (req, res) => {
 });
 
 export const listCompanyJobs = asyncHandler(async (req, res) => {
-  const jobs = await jobsService.listCompanyJobs(req.user.id);
+  // const jobs = await jobsService.listCompanyJobs(req.user.id);
+  // Build plan P3: optional ?clientId= filter ("none" = jobs without a client).
+  const jobs = await jobsService.listCompanyJobs(req.user.id, { clientId: req.query.clientId });
   ok(res, { jobs });
+});
+
+// Build plan P3: company-side view of a job's Client → Department → HR link
+// (kept off the public GET /jobs/:id so candidates never see client names).
+export const getJobClientLink = asyncHandler(async (req, res) => {
+  const link = await jobsService.getJobClientLink(req.user.id, req.params.id);
+  ok(res, { link });
 });
 
 export const getJob = asyncHandler(async (req, res) => {

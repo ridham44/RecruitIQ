@@ -47,6 +47,14 @@ export function AuthProvider({ children }) {
     return user;
   };
 
+  // Build plan P1: invite link → choose a password → logged straight in.
+  const setPasswordWithToken = async (token, password) => {
+    const { user, token: jwt } = await api.post('/auth/set-password', { token, password });
+    setToken(jwt);
+    setUser(user);
+    return user;
+  };
+
   const logout = async () => {
     try {
       await api.post('/auth/logout');
@@ -56,8 +64,11 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // <AuthContext.Provider value={{ user, setUser, loading, login, registerCompany, registerCandidate, logout }}>
   return (
-    <AuthContext.Provider value={{ user, setUser, loading, login, registerCompany, registerCandidate, logout }}>
+    <AuthContext.Provider
+      value={{ user, setUser, loading, login, registerCompany, registerCandidate, setPasswordWithToken, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -13,6 +13,15 @@ function required(name, fallback = undefined) {
   return value;
 }
 
+// Boolean env flag: "true"/"1"/"yes"/"on" → true, "false"/"0"/"no"/"off" →
+// false, unset/empty/anything else → the given default.
+function flag(name, fallback) {
+  const raw = (process.env[name] ?? '').trim().toLowerCase();
+  if (['true', '1', 'yes', 'on'].includes(raw)) return true;
+  if (['false', '0', 'no', 'off'].includes(raw)) return false;
+  return fallback;
+}
+
 // Vercel injects VERCEL_URL (the deployment's own hostname, no protocol) —
 // used as a same-origin fallback so nothing ever defaults to a localhost
 // URL once actually deployed, without requiring every env var to be set
@@ -83,6 +92,26 @@ export const env = {
     accountSid: process.env.TWILIO_ACCOUNT_SID || '',
     authToken: process.env.TWILIO_AUTH_TOKEN || '',
     phoneNumber: process.env.TWILIO_PHONE_NUMBER || '',
+  },
+
+  // Build plan P4 — phone OTP. "console" prints codes in the server log.
+  smsDriver: (process.env.SMS_DRIVER || 'console').trim().toLowerCase(),
+  // Numbers typed without a country code (e.g. 9876543210) get this prefix.
+  defaultPhoneCountryCode: (process.env.DEFAULT_PHONE_COUNTRY_CODE || '+91').trim(),
+
+  // Pending-features build plan (docs/implementation-plan.html). Every flag
+  // defaults to today's behavior, so new functionality stays off until it's
+  // explicitly turned on per environment.
+  features: {
+    // P1 — when false, POST /auth/register/company returns 403 and only a
+    // Platform Admin can onboard companies. Turn off only after an admin exists.
+    allowCompanySelfRegister: flag('ALLOW_COMPANY_SELF_REGISTER', true),
+    // P4 — public careers portal, guest apply with phone OTP, CV-only submit.
+    guestApply: flag('FEATURE_GUEST_APPLY', false),
+    // P5 — instant interview link (attend now or later) instead of slot booking.
+    instantInterview: flag('FEATURE_INSTANT_INTERVIEW', false),
+    // P8 — client HR / hiring person portal.
+    clientPortal: flag('FEATURE_CLIENT_PORTAL', false),
   },
 };
 

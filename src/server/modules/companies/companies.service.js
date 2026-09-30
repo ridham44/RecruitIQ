@@ -1,10 +1,16 @@
 import { prisma } from '../../config/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
+import { getCompanyContext, jobScopeWhere } from './companyContext.js';
 
+// export async function getCompanyByUserId(userId) {
+//   const company = await prisma.company.findUnique({ where: { userId } });
+//   if (!company) throw ApiError.notFound('Company profile not found');
+//   return company;
+// }
+// Build plan P2: resolved through the shared company context.
 export async function getCompanyByUserId(userId) {
-  const company = await prisma.company.findUnique({ where: { userId } });
-  if (!company) throw ApiError.notFound('Company profile not found');
-  return company;
+  const ctx = await getCompanyContext(userId);
+  return ctx.company;
 }
 
 export async function updateCompanyProfile(userId, data) {
@@ -24,11 +30,15 @@ export async function updateCompanyProfile(userId, data) {
 }
 
 export async function getDashboardOverview(userId) {
-  const company = await getCompanyByUserId(userId);
-  const companyId = company.id;
+  // const company = await getCompanyByUserId(userId);
+  // const companyId = company.id;
+  // Build plan P2: a recruiter's dashboard only counts their own/assigned jobs.
+  const ctx = await getCompanyContext(userId);
+  const company = ctx.company;
 
   const jobs = await prisma.job.findMany({
-    where: { companyId },
+    // where: { companyId },
+    where: jobScopeWhere(ctx, userId),
     include: {
       _count: {
         select: {
@@ -112,6 +122,10 @@ export async function getDashboardOverview(userId) {
     { key: 'SHORTLISTED', label: 'Shortlisted', color: 'amber' },
     { key: 'INTERVIEW_SCHEDULED', label: 'Interview Scheduled', color: 'indigo' },
     { key: 'INTERVIEW_COMPLETED', label: 'Interview Completed', color: 'emerald' },
+    // Build plan P7
+    { key: 'QUALIFIED', label: 'Qualified', color: 'teal' },
+    { key: 'SUBMITTED_TO_CLIENT', label: 'Submitted to Client', color: 'violet' },
+    { key: 'NOT_QUALIFIED', label: 'Not Qualified', color: 'orange' },
     { key: 'REJECTED', label: 'Rejected', color: 'red' },
   ];
 
@@ -121,6 +135,10 @@ export async function getDashboardOverview(userId) {
     SHORTLISTED: 0,
     INTERVIEW_SCHEDULED: 0,
     INTERVIEW_COMPLETED: 0,
+    // Build plan P7
+    QUALIFIED: 0,
+    SUBMITTED_TO_CLIENT: 0,
+    NOT_QUALIFIED: 0,
     REJECTED: 0,
   };
 
@@ -244,7 +262,9 @@ export async function getDashboardOverview(userId) {
 
   // D) Completed interviews whose report is ready / awaiting recruiter decision
   allInterviews
-    .filter((i) => i.status === 'COMPLETED')
+    // .filter((i) => i.status === 'COMPLETED')
+    // Build plan P7: once qualified / not qualified / submitted, a decision was made.
+    .filter((i) => i.status === 'COMPLETED' && !['QUALIFIED', 'NOT_QUALIFIED', 'SUBMITTED_TO_CLIENT', 'REJECTED'].includes(i.applicationStatus))
     .slice(0, 6)
     .forEach((i) => {
       const score = i.report?.overallScore != null ? `${Math.round(i.report.overallScore)}/100` : 'Pending Score';

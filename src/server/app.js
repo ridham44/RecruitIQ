@@ -13,6 +13,15 @@ import applicationsRoutes from './modules/applications/applications.routes.js';
 import screeningRoutes from './modules/screening/screening.routes.js';
 import schedulingRoutes from './modules/scheduling/scheduling.routes.js';
 import interviewsRoutes from './modules/interviews/interviews.routes.js';
+import adminRoutes from './modules/admin/admin.routes.js';
+import configRoutes from './modules/config/config.routes.js';
+import recruitersRoutes from './modules/recruiters/recruiters.routes.js';
+import clientsRoutes from './modules/clients/clients.routes.js';
+import publicRoutes from './modules/public/public.routes.js';
+import cvPoolRoutes from './modules/cvPool/cvPool.routes.js';
+import interviewLinkRoutes from './modules/interviews/interviewLink.routes.js';
+import submissionsRoutes, { publicSubmissionRoutes } from './modules/submissions/submissions.routes.js';
+import clientPortalRoutes from './modules/clientPortal/clientPortal.routes.js';
 
 export function createApp() {
   const app = express();
@@ -25,6 +34,10 @@ export function createApp() {
   // architecture the deployed frontend and API always share one origin, so
   // this mainly matters for local development and any future external
   // client calling the API directly.
+  // Build plan P4: one proxy hop (Vercel / Vite dev proxy) so req.ip is the
+  // real client for the OTP per-IP limit. Nothing else reads req.ip.
+  app.set('trust proxy', 1);
+
   const allowedOrigins = env.clientUrl.split(',').map((origin) => origin.trim());
   app.use(cors({ origin: allowedOrigins }));
   app.use(express.json({ limit: '2mb' }));
@@ -46,6 +59,25 @@ export function createApp() {
   v1.use('/screening', screeningRoutes);
   v1.use('/scheduling', schedulingRoutes);
   v1.use('/interviews', interviewsRoutes);
+  // Build plan P1
+  v1.use('/admin', adminRoutes);
+  v1.use('/config', configRoutes);
+  // Build plan P2
+  v1.use('/recruiters', recruitersRoutes);
+  // Build plan P3
+  v1.use('/clients', clientsRoutes);
+  // Build plan P5 — mounted before /public so it isn't caught by the
+  // FEATURE_GUEST_APPLY gate (it has its own FEATURE_INSTANT_INTERVIEW gate).
+  v1.use('/public/interviews', interviewLinkRoutes);
+  // Build plan P7 — the HR person's read-only candidate link (always on:
+  // the plan's P7 email links must work before/without the P8 portal).
+  v1.use('/public/submissions', publicSubmissionRoutes);
+  v1.use('/submissions', submissionsRoutes);
+  // Build plan P8
+  v1.use('/client-portal', clientPortalRoutes);
+  // Build plan P4
+  v1.use('/public', publicRoutes);
+  v1.use('/cv-pool', cvPoolRoutes);
 
   app.use('/api/v1', v1);
 

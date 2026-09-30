@@ -15,6 +15,23 @@ const STYLES = {
   BOOKED: 'bg-blue-100 text-blue-700',
   CANCELLED: 'bg-slate-200 text-slate-600',
   SCHEDULED: 'bg-blue-100 text-blue-700',
+  // Build plan P1 — company / user status (admin pages)
+  ACTIVE: 'bg-emerald-100 text-emerald-700',
+  SUSPENDED: 'bg-red-100 text-red-700',
+  INACTIVE: 'bg-slate-200 text-slate-600',
+  INVITED: 'bg-amber-100 text-amber-700',
+  // Build plan P2 — company members
+  OWNER: 'bg-brand-50 text-brand-700',
+  // Build plan P7 — post-interview decisions / client submissions
+  QUALIFIED: 'bg-teal-100 text-teal-700',
+  NOT_QUALIFIED: 'bg-orange-100 text-orange-700',
+  SUBMITTED_TO_CLIENT: 'bg-violet-100 text-violet-700',
+  SENT: 'bg-blue-100 text-blue-700',
+  VIEWED: 'bg-emerald-100 text-emerald-700',
+  // Build plan P4 — CV pool
+  MATCHED: 'bg-emerald-100 text-emerald-700',
+  NO_MATCH: 'bg-slate-200 text-slate-600',
+  MATCHING: 'bg-amber-100 text-amber-700',
 };
 
 export default function StatusBadge({ status }) {
