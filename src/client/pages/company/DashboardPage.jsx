@@ -317,7 +317,14 @@ export default function CompanyDashboardPage() {
                             ? 'bg-blue-500'
                             : stage.key === 'REJECTED'
                               ? 'bg-red-400'
-                              : 'bg-slate-400'
+                              : // Build plan P7
+                                stage.key === 'QUALIFIED'
+                                ? 'bg-teal-500'
+                                : stage.key === 'SUBMITTED_TO_CLIENT'
+                                  ? 'bg-violet-500'
+                                  : stage.key === 'NOT_QUALIFIED'
+                                    ? 'bg-orange-400'
+                                    : 'bg-slate-400'
                     }`}
                     style={{ width: `${Math.max(stage.percentage, stage.count > 0 ? 4 : 0)}%` }}
                   />

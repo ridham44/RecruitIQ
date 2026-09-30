@@ -1,7 +1,7 @@
 import { prisma } from '../../config/prisma.js';
 import { env } from '../../config/env.js';
 import { ApiError } from '../../utils/ApiError.js';
-import { APPLICATION_STATUS, SCREENING_STATUS } from '../../../shared/constants/statuses.js';
+import { APPLICATION_STATUS, SCREENING_STATUS, POST_INTERVIEW_STATUSES } from '../../../shared/constants/statuses.js';
 import { matchCandidateToJob } from '../../ai/candidate-matcher.service.js';
 import { computeSkillOverlap, computeExperienceScore, computeEducationScore } from './deterministic.util.js';
 import { getOwnedJob } from '../jobs/jobs.service.js';
@@ -174,7 +174,10 @@ async function screenApplication(application, precomputed = null) {
   // decision (only ever set via the bulk-status endpoint) is never
   // overwritten by (re-)screening, so re-running screening after tweaking
   // these settings can't silently undo a company's prior decision.
-  if (application.status !== APPLICATION_STATUS.SHORTLISTED) {
+  // if (application.status !== APPLICATION_STATUS.SHORTLISTED) {
+  // Build plan P7: post-interview decisions (qualified / submitted) are never
+  // overwritten by a re-screen either.
+  if (application.status !== APPLICATION_STATUS.SHORTLISTED && !POST_INTERVIEW_STATUSES.includes(application.status)) {
     // const newStatus =
     //   job.autoRejectBelowMinScore && overallScore < job.minAcceptableScore
     //     ? APPLICATION_STATUS.REJECTED
@@ -222,7 +225,11 @@ async function screenApplication(application, precomputed = null) {
 export async function screenApplicationById(applicationId, { precomputed = null } = {}) {
   const application = await fetchApplicationForScreening(applicationId);
   if (application.screeningResult?.status === SCREENING_STATUS.COMPLETED) return application.screeningResult;
-  if (application.status === APPLICATION_STATUS.SHORTLISTED || application.status === APPLICATION_STATUS.REJECTED) {
+  if (
+    application.status === APPLICATION_STATUS.SHORTLISTED ||
+    application.status === APPLICATION_STATUS.REJECTED ||
+    POST_INTERVIEW_STATUSES.includes(application.status) // build plan P7
+  ) {
     return application.screeningResult;
   }
   await prisma.application.update({ where: { id: application.id }, data: { status: APPLICATION_STATUS.SCREENING } });
@@ -286,7 +293,9 @@ export async function runScreeningForJob(userId, jobId, { force = false } = {}) 
   const applications = await prisma.application.findMany({
     where: {
       jobId,
-      status: { not: APPLICATION_STATUS.SHORTLISTED },
+      // status: { not: APPLICATION_STATUS.SHORTLISTED },
+      // Build plan P7: also never re-screen post-interview decisions.
+      status: { notIn: [APPLICATION_STATUS.SHORTLISTED, ...POST_INTERVIEW_STATUSES] },
       ...(force ? {} : { OR: [{ screeningResult: null }, { screeningResult: { status: { not: SCREENING_STATUS.COMPLETED } } }] }),
     },
     include: { job: { include: { company: true } }, resume: true, candidate: { include: { user: true } } },

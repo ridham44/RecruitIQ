@@ -41,7 +41,24 @@ export const APPLICATION_STATUS = {
   // Phase 2
   INTERVIEW_SCHEDULED: 'INTERVIEW_SCHEDULED',
   INTERVIEW_COMPLETED: 'INTERVIEW_COMPLETED',
+  // Build plan P7 — set only after the interview (final score / submission).
+  QUALIFIED: 'QUALIFIED',
+  NOT_QUALIFIED: 'NOT_QUALIFIED',
+  SUBMITTED_TO_CLIENT: 'SUBMITTED_TO_CLIENT',
 };
+
+// Build plan P7: decisions made after the interview. Screening (including a
+// forced re-run) must never overwrite these, and candidates see them as
+// INTERVIEW_COMPLETED (see candidateFacingStatus).
+export const POST_INTERVIEW_STATUSES = [
+  APPLICATION_STATUS.QUALIFIED,
+  APPLICATION_STATUS.NOT_QUALIFIED,
+  APPLICATION_STATUS.SUBMITTED_TO_CLIENT,
+];
+
+export function candidateFacingStatus(status) {
+  return POST_INTERVIEW_STATUSES.includes(status) ? APPLICATION_STATUS.INTERVIEW_COMPLETED : status;
+}
 
 export const SCREENING_STATUS = {
   PENDING: 'PENDING',

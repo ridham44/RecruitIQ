@@ -45,6 +45,8 @@ import CareersTrackPage from './pages/careers/CareersTrackPage.jsx';
 import CompanyCvPoolPage from './pages/company/CvPoolPage.jsx';
 // Build plan P5
 import InterviewLinkPage from './pages/careers/InterviewLinkPage.jsx';
+// Build plan P7
+import SubmissionViewPage from './pages/careers/SubmissionViewPage.jsx';
 
 export default function App() {
   return (
@@ -62,6 +64,8 @@ export default function App() {
       <Route path="/careers/:slug/submit-cv" element={<CareersSubmitCvPage />} />
       {/* Build plan P5 — instant interview link (no login; the link is the key) */}
       <Route path="/interview/:token" element={<InterviewLinkPage />} />
+      {/* Build plan P7 — read-only candidate package for client HR */}
+      <Route path="/submission/:token" element={<SubmissionViewPage />} />
 
       <Route
         path="/admin"

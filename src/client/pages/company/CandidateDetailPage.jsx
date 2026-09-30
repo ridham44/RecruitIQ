@@ -11,6 +11,7 @@ import ScoreRing from '../../components/ui/ScoreRing.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import { getApplicationActionState } from '../../utils/applicationActions.js';
 import InstantInterviewCard from './InstantInterviewCard.jsx';
+import SubmitToClientCard from './SubmitToClientCard.jsx';
 
 export default function CandidateDetailPage() {
   const { id: jobId, candidateId } = useParams();
@@ -98,6 +99,8 @@ export default function CandidateDetailPage() {
 
       {/* Build plan P5 */}
       <InstantInterviewCard application={application} onChanged={load} />
+      {/* Build plan P7 */}
+      <SubmitToClientCard application={application} onChanged={load} />
 
       {result?.status === 'COMPLETED' && (
         <Card className="mb-6 p-6">

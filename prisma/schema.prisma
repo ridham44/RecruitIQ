@@ -52,6 +52,12 @@ enum ApplicationStatus {
   INTERVIEW_SCHEDULED
   // Phase 2: set by the company once the interview has taken place.
   INTERVIEW_COMPLETED
+  // Build plan P7: only ever set when the job has a finalThreshold — the
+  // final score (CV × weight + interview × weight) is ≥ / < the threshold.
+  QUALIFIED
+  NOT_QUALIFIED
+  // Build plan P7: the candidate package was sent to the client's HR.
+  SUBMITTED_TO_CLIENT
   // Future statuses (OFFERED, HIRED, etc.) can be appended here later
   // without breaking existing rows.
 }
@@ -179,6 +185,8 @@ enum EmailType {
   ACCOUNT_SETUP
   // Build plan P5: instant interview link (attend now or later).
   INTERVIEW_INVITE
+  // Build plan P7: candidate package sent to a client HR / hiring person.
+  CLIENT_SUBMISSION
 }
 
 // Build plan P5: how a job's candidates get to their interview. SLOT (the
@@ -297,6 +305,7 @@ model ClientCompany {
   departments Department[]
   recruiters  ClientRecruiter[]
   jobs        Job[]
+  submissions ClientSubmission[]
 
   @@index([companyId])
   @@map("client_companies")
@@ -332,11 +341,46 @@ model HiringPerson {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  jobs       Job[]
+  department  Department         @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  jobs        Job[]
+  submissions ClientSubmission[]
 
   @@index([departmentId])
   @@map("hiring_persons")
+}
+
+// Build plan P7 (§13): a candidate package sent to a client's HR / hiring
+// person. `snapshot` freezes everything that was sent (scores, report,
+// contact details), so later re-screening or report changes never alter
+// what the client received. The HR person opens it with a secure read-only
+// link (only the token's hash is stored); P8 adds a logged-in portal.
+model ClientSubmission {
+  id              String    @id @default(cuid())
+  applicationId   String
+  // Null when a job without a client was sent to a hand-typed HR email.
+  clientCompanyId String?
+  departmentId    String?
+  hiringPersonId  String?
+  recipientName   String
+  recipientEmail  String
+  // User id of the recruiter, or "SYSTEM" for auto-submission.
+  submittedById   String
+  note            String?
+  snapshot        Json
+  // SENT | VIEWED
+  status          String    @default("SENT")
+  viewedAt        DateTime?
+  accessTokenHash String    @unique
+  createdAt       DateTime  @default(now())
+
+  application   Application    @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  clientCompany ClientCompany? @relation(fields: [clientCompanyId], references: [id], onDelete: SetNull)
+  hiringPerson  HiringPerson?  @relation(fields: [hiringPersonId], references: [id], onDelete: SetNull)
+
+  @@index([applicationId])
+  @@index([hiringPersonId])
+  @@index([clientCompanyId])
+  @@map("client_submissions")
 }
 
 // §4: which recruiters work for which client.
@@ -520,6 +564,14 @@ model Job {
   interviewFlow           InterviewFlow @default(SLOT)
   // How long an instant interview link stays valid.
   inviteValidDays         Int           @default(7)
+  // Build plan P7 (§12, §13): final score = CV × cvWeight + interview ×
+  // interviewWeight (normalized). finalThreshold null = feature off for the
+  // job, so nothing changes status. autoSubmitToClient sends QUALIFIED
+  // candidates to the job's HR person automatically.
+  finalThreshold          Float?
+  cvWeight                Float         @default(0.3)
+  interviewWeight         Float         @default(0.7)
+  autoSubmitToClient      Boolean       @default(false)
 
   createdBy String
   createdAt DateTime @default(now())
@@ -671,6 +723,9 @@ model Application {
   updatedAt   DateTime          @updatedAt
   // Build plan P4: existing rows are DIRECT (logged-in candidate apply).
   source      ApplicationSource @default(DIRECT)
+  // Build plan P7: CV match + interview combined (0-100).
+  finalScore    Float?
+  finalScoredAt DateTime?
 
   candidate       Candidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   job             Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
@@ -678,6 +733,8 @@ model Application {
   screeningResult ScreeningResult?
   interviews      Interview[]
   cvSubmission    CvSubmission?
+  // Build plan P7
+  clientSubmissions ClientSubmission[]
 
   @@unique([candidateId, jobId])
   @@index([jobId])

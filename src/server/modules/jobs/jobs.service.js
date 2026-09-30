@@ -55,6 +55,11 @@ export async function createJob(userId, jobData) {
       // Build plan P5
       interviewFlow: jobData.interviewFlow ?? 'SLOT',
       inviteValidDays: jobData.inviteValidDays ?? 7,
+      // Build plan P7
+      finalThreshold: jobData.finalThreshold ?? null,
+      cvWeight: jobData.cvWeight ?? 0.3,
+      interviewWeight: jobData.interviewWeight ?? 0.7,
+      autoSubmitToClient: jobData.autoSubmitToClient ?? false,
       ...clientLink,
     },
   });
@@ -112,6 +117,11 @@ export async function updateJob(userId, jobId, jobData) {
       // Build plan P5
       interviewFlow: jobData.interviewFlow ?? job.interviewFlow,
       inviteValidDays: jobData.inviteValidDays ?? job.inviteValidDays,
+      // Build plan P7 (null clears the threshold)
+      finalThreshold: jobData.finalThreshold !== undefined ? jobData.finalThreshold : job.finalThreshold,
+      cvWeight: jobData.cvWeight ?? job.cvWeight,
+      interviewWeight: jobData.interviewWeight ?? job.interviewWeight,
+      autoSubmitToClient: jobData.autoSubmitToClient ?? job.autoSubmitToClient,
       ...clientLink,
     },
   });

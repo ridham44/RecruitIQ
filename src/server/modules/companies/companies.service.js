@@ -122,6 +122,10 @@ export async function getDashboardOverview(userId) {
     { key: 'SHORTLISTED', label: 'Shortlisted', color: 'amber' },
     { key: 'INTERVIEW_SCHEDULED', label: 'Interview Scheduled', color: 'indigo' },
     { key: 'INTERVIEW_COMPLETED', label: 'Interview Completed', color: 'emerald' },
+    // Build plan P7
+    { key: 'QUALIFIED', label: 'Qualified', color: 'teal' },
+    { key: 'SUBMITTED_TO_CLIENT', label: 'Submitted to Client', color: 'violet' },
+    { key: 'NOT_QUALIFIED', label: 'Not Qualified', color: 'orange' },
     { key: 'REJECTED', label: 'Rejected', color: 'red' },
   ];
 
@@ -131,6 +135,10 @@ export async function getDashboardOverview(userId) {
     SHORTLISTED: 0,
     INTERVIEW_SCHEDULED: 0,
     INTERVIEW_COMPLETED: 0,
+    // Build plan P7
+    QUALIFIED: 0,
+    SUBMITTED_TO_CLIENT: 0,
+    NOT_QUALIFIED: 0,
     REJECTED: 0,
   };
 
@@ -254,7 +262,9 @@ export async function getDashboardOverview(userId) {
 
   // D) Completed interviews whose report is ready / awaiting recruiter decision
   allInterviews
-    .filter((i) => i.status === 'COMPLETED')
+    // .filter((i) => i.status === 'COMPLETED')
+    // Build plan P7: once qualified / not qualified / submitted, a decision was made.
+    .filter((i) => i.status === 'COMPLETED' && !['QUALIFIED', 'NOT_QUALIFIED', 'SUBMITTED_TO_CLIENT', 'REJECTED'].includes(i.applicationStatus))
     .slice(0, 6)
     .forEach((i) => {
       const score = i.report?.overallScore != null ? `${Math.round(i.report.overallScore)}/100` : 'Pending Score';

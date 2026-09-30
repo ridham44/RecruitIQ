@@ -148,6 +148,27 @@ export async function sendInterviewInviteEmail({ to, candidateName, jobTitle, co
   return sendAndLog({ to, subject, html, type: 'INTERVIEW_INVITE', applicationId: applicationId ?? null });
 }
 
+// Build plan P7 (§13): candidate package for a client HR / hiring person.
+export async function sendClientSubmissionEmail({ to, recipientName, candidateName, jobTitle, recruitmentCompany, finalScore, note, link, applicationId }) {
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const subject = `Candidate for ${jobTitle}: ${candidateName}`;
+  const html = layout(`
+    <p>Hi ${esc(recipientName)},</p>
+    <p><strong>${esc(recruitmentCompany)}</strong> has shared a candidate with you for <strong>${esc(jobTitle)}</strong>:
+    <strong>${esc(candidateName)}</strong>${finalScore != null ? ` — overall score <strong>${Math.round(finalScore)}/100</strong>` : ''}.</p>
+    ${note ? `<p style="background:#f1f5f9;border-radius:8px;padding:12px 16px;margin:16px 0;">${esc(note)}</p>` : ''}
+    <p>The profile includes the CV, contact details, the AI CV match and the interview evaluation.</p>
+    <p style="margin:24px 0;">
+      <a href="${link}" style="background:#2a4bd6;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:bold;display:inline-block;">
+        View candidate
+      </a>
+    </p>
+    <p style="color:#64748b;font-size:12px;">This link is private to you — please don't forward it. If the button doesn't work, copy this link: ${link}</p>
+    <p>— The RecruitIQ team</p>
+  `);
+  return sendAndLog({ to, subject, html, type: 'CLIENT_SUBMISSION', applicationId: applicationId ?? null });
+}
+
 // Forgot password: one-time reset link (see auth.service requestPasswordReset).
 export async function sendPasswordResetEmail({ to, link, expiresInMinutes = 60 }) {
   const subject = 'Reset your RecruitIQ password';

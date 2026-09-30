@@ -5,7 +5,7 @@ import { prisma, TX_OPTIONS } from '../../config/prisma.js';
 import { env } from '../../config/env.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ROLES } from '../../../shared/constants/roles.js';
-import { APPLICATION_STATUS, JOB_STATUS, SCREENING_STATUS } from '../../../shared/constants/statuses.js';
+import { APPLICATION_STATUS, JOB_STATUS, SCREENING_STATUS, candidateFacingStatus } from '../../../shared/constants/statuses.js';
 import { extractResumeText } from '../../resume/extract.service.js';
 import { storage } from '../../resume/storage/index.js';
 import { analyzeResume } from '../../ai/resume-analyzer.service.js';
@@ -233,7 +233,9 @@ function describeApplication(application) {
   if (application.status === APPLICATION_STATUS.REJECTED) stage = 'not_selected';
   else if (application.status === APPLICATION_STATUS.SHORTLISTED) stage = 'shortlisted';
   else if (application.status === APPLICATION_STATUS.INTERVIEW_SCHEDULED) stage = 'interview_scheduled';
-  else if (application.status === APPLICATION_STATUS.INTERVIEW_COMPLETED) stage = 'interview_completed';
+  // else if (application.status === APPLICATION_STATUS.INTERVIEW_COMPLETED) stage = 'interview_completed';
+  // Build plan P7: post-interview decisions look like "interview completed" to the candidate.
+  else if (candidateFacingStatus(application.status) === APPLICATION_STATUS.INTERVIEW_COMPLETED) stage = 'interview_completed';
   else if (screening === SCREENING_STATUS.COMPLETED || screening === SCREENING_STATUS.FAILED) stage = 'under_review';
   else if (application.status === APPLICATION_STATUS.SCREENING) stage = 'screening';
 
@@ -244,7 +246,8 @@ function describeApplication(application) {
 
   return {
     applicationId: application.id,
-    status: application.status,
+    // status: application.status,
+    status: candidateFacingStatus(application.status),
     stage,
     job: { id: application.job.id, title: application.job.title },
     company: { name: application.job.company.name },

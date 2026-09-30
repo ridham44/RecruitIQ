@@ -10,6 +10,8 @@ import { generateInterviewReport, computeResumeAlignment } from '../../ai/interv
 import { normalizeTranscript } from '../../ai/transcript-normalizer.service.js';
 import { nextDifficulty, bucketAnswerStrength } from './interviewDifficulty.util.js';
 import { sanitizeRecruiterGuidance } from '../../ai/sanitize.util.js';
+import { computeFinalScore } from '../submissions/finalScore.service.js';
+import { autoSubmit } from '../submissions/submissions.service.js';
 
 const STAGE_QUESTION_TYPE = {
   RESUME_QUESTIONS: 'RESUME_BASED',
@@ -561,6 +563,15 @@ async function generateFinalReport(interviewId) {
         ...criteria,
       },
     });
+
+    // Build plan P7: final score (+ QUALIFIED/NOT_QUALIFIED when the job has a
+    // threshold, + optional auto-submit). Its own try/catch — a failure here
+    // must never turn a good report into FAILED.
+    try {
+      await computeFinalScore(interview.applicationId, { onQualified: (app) => autoSubmit(app.id) });
+    } catch (scoreErr) {
+      console.error('[interviews] final score failed:', scoreErr.message);
+    }
   } catch (err) {
     await prisma.interviewReport.upsert({
       where: { interviewId },

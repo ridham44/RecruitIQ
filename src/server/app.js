@@ -20,6 +20,7 @@ import clientsRoutes from './modules/clients/clients.routes.js';
 import publicRoutes from './modules/public/public.routes.js';
 import cvPoolRoutes from './modules/cvPool/cvPool.routes.js';
 import interviewLinkRoutes from './modules/interviews/interviewLink.routes.js';
+import submissionsRoutes, { publicSubmissionRoutes } from './modules/submissions/submissions.routes.js';
 
 export function createApp() {
   const app = express();
@@ -67,6 +68,10 @@ export function createApp() {
   // Build plan P5 — mounted before /public so it isn't caught by the
   // FEATURE_GUEST_APPLY gate (it has its own FEATURE_INSTANT_INTERVIEW gate).
   v1.use('/public/interviews', interviewLinkRoutes);
+  // Build plan P7 — the HR person's read-only candidate link (always on:
+  // the plan's P7 email links must work before/without the P8 portal).
+  v1.use('/public/submissions', publicSubmissionRoutes);
+  v1.use('/submissions', submissionsRoutes);
   // Build plan P4
   v1.use('/public', publicRoutes);
   v1.use('/cv-pool', cvPoolRoutes);
