@@ -55,8 +55,20 @@ export const authenticate = asyncHandler(async (req, res, next) => {
       company: { select: { status: true } },
       // Build plan P2: recruiters reach their company through membership.
       membership: { select: { isActive: true, company: { select: { status: true } } } },
+      // Build plan P8: client HR reach the recruitment company through their HR person.
+      hiringPerson: {
+        select: { isActive: true, department: { select: { clientCompany: { select: { company: { select: { status: true } } } } } } },
+      },
     },
   });
+  if (account?.role === 'CLIENT_HR') {
+    if (!account.isActive || !account.hiringPerson?.isActive) {
+      throw ApiError.unauthorized('Your account is inactive or no longer exists', 'ACCOUNT_INACTIVE');
+    }
+    if (account.hiringPerson.department?.clientCompany?.company?.status === 'SUSPENDED') {
+      throw ApiError.forbidden('This portal is currently unavailable. Please contact your recruitment partner.', 'COMPANY_SUSPENDED');
+    }
+  }
   if (!account || !account.isActive) {
     throw ApiError.unauthorized('Your account is inactive or no longer exists', 'ACCOUNT_INACTIVE');
   }

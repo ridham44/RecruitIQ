@@ -47,6 +47,10 @@ import CompanyCvPoolPage from './pages/company/CvPoolPage.jsx';
 import InterviewLinkPage from './pages/careers/InterviewLinkPage.jsx';
 // Build plan P7
 import SubmissionViewPage from './pages/careers/SubmissionViewPage.jsx';
+// Build plan P8
+import ClientPortalLayout from './layouts/ClientPortalLayout.jsx';
+import ClientCandidatesPage from './pages/client/ClientCandidatesPage.jsx';
+import ClientCandidateDetailPage from './pages/client/ClientCandidateDetailPage.jsx';
 
 export default function App() {
   return (
@@ -111,6 +115,20 @@ export default function App() {
         <Route path="clients" element={<CompanyClientsPage />} />
         <Route path="clients/:id" element={<CompanyClientDetailPage />} />
         <Route path="cv-pool" element={<CompanyCvPoolPage />} />
+      </Route>
+
+      {/* Build plan P8 — client HR portal */}
+      <Route
+        path="/client"
+        element={
+          <ProtectedRoute role="CLIENT_HR">
+            <ClientPortalLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<Navigate to="candidates" replace />} />
+        <Route path="candidates" element={<ClientCandidatesPage />} />
+        <Route path="candidates/:id" element={<ClientCandidateDetailPage />} />
       </Route>
 
       <Route

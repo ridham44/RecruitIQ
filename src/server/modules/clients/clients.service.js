@@ -1,6 +1,7 @@
 import { prisma } from '../../config/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { getCompanyContext, clientScopeWhere } from '../companies/companyContext.js';
+import { portalStatusFor } from '../clientPortal/clientPortal.service.js';
 
 // Build plan P3 — a recruitment company's clients (§4), their departments
 // (§4.1) and HR / hiring persons (§4.2). Everything is scoped to the caller's
@@ -111,7 +112,15 @@ export async function getClient(userId, clientId) {
   const ctx = await getCompanyContext(userId);
   await loadClient(ctx, clientId);
   const client = await prisma.clientCompany.findUnique({ where: { id: clientId }, include: CLIENT_DETAIL_INCLUDE });
-  return serializeClient(client);
+  // return serializeClient(client);
+  // Build plan P8: portal login status per HR person (NONE / INVITED / ACTIVE).
+  const serialized = serializeClient(client);
+  const status = await portalStatusFor(serialized.departments.flatMap((d) => d.hiringPersons));
+  serialized.departments = serialized.departments.map((d) => ({
+    ...d,
+    hiringPersons: d.hiringPersons.map(({ userId: _u, ...p }) => ({ ...p, portalStatus: status[p.id] })),
+  }));
+  return serialized;
 }
 
 export async function createClient(userId, data) {

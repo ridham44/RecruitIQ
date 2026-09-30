@@ -12,7 +12,16 @@ import StatusBadge from '../../components/ui/StatusBadge.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import { inputClass } from '../../components/ui/FormField.jsx';
 
-const ROLE_LABELS = { ADMIN: 'Admin', COMPANY: 'Company', CANDIDATE: 'Candidate', RECRUITER: 'Recruiter', INTERVIEWER: 'Interviewer' };
+// const ROLE_LABELS = { ADMIN: 'Admin', COMPANY: 'Company', CANDIDATE: 'Candidate', RECRUITER: 'Recruiter', INTERVIEWER: 'Interviewer' };
+const ROLE_LABELS = {
+  ADMIN: 'Admin',
+  COMPANY: 'Company',
+  CANDIDATE: 'Candidate',
+  RECRUITER: 'Recruiter',
+  INTERVIEWER: 'Interviewer',
+  // Build plan P8
+  CLIENT_HR: 'Client HR',
+};
 const formatDate = (d) => new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
 // function displayName(u) {
@@ -121,7 +130,7 @@ export default function UsersPage() {
         <select className={`${inputClass} min-h-[44px] sm:w-40`} value={filters.role} onChange={setFilter('role')} aria-label="Filter by role">
           <option value="">All roles</option>
           {/* {['ADMIN', 'COMPANY', 'CANDIDATE'].map((r) => ( */}
-          {['ADMIN', 'COMPANY', 'RECRUITER', 'CANDIDATE'].map((r) => (
+          {['ADMIN', 'COMPANY', 'RECRUITER', 'CANDIDATE', 'CLIENT_HR'].map((r) => (
             <option key={r} value={r}>
               {ROLE_LABELS[r]}
             </option>

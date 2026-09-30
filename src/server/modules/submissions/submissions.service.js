@@ -7,6 +7,7 @@ import { getOwnedJob } from '../jobs/jobs.service.js';
 import { storage } from '../../resume/storage/index.js';
 import { sendClientSubmissionEmail } from '../notifications/email.service.js';
 import { computeFinalScore } from './finalScore.service.js';
+import { inviteHiringPerson } from '../clientPortal/clientPortal.service.js';
 
 // Build plan P7 (§13) — send a candidate package to the right Client →
 // Department → HR person. The package is frozen in ClientSubmission.snapshot
@@ -174,6 +175,15 @@ async function createSubmission(application, recipient, { submittedById, note })
     link,
     applicationId: application.id,
   });
+
+  // Build plan P8: first submission to an HR person without a portal login
+  // → invite them automatically (when the portal is on). Never blocks.
+  if (recipient.hiringPersonId && env.features.clientPortal) {
+    const person = await prisma.hiringPerson.findUnique({ where: { id: recipient.hiringPersonId } });
+    if (person && !person.userId) {
+      await inviteHiringPerson(person.id).catch((err) => console.error('[submissions] portal invite failed:', err.message));
+    }
+  }
   return { submission: serializeSubmission(submission), link };
 }
 

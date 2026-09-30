@@ -21,6 +21,7 @@ import publicRoutes from './modules/public/public.routes.js';
 import cvPoolRoutes from './modules/cvPool/cvPool.routes.js';
 import interviewLinkRoutes from './modules/interviews/interviewLink.routes.js';
 import submissionsRoutes, { publicSubmissionRoutes } from './modules/submissions/submissions.routes.js';
+import clientPortalRoutes from './modules/clientPortal/clientPortal.routes.js';
 
 export function createApp() {
   const app = express();
@@ -72,6 +73,8 @@ export function createApp() {
   // the plan's P7 email links must work before/without the P8 portal).
   v1.use('/public/submissions', publicSubmissionRoutes);
   v1.use('/submissions', submissionsRoutes);
+  // Build plan P8
+  v1.use('/client-portal', clientPortalRoutes);
   // Build plan P4
   v1.use('/public', publicRoutes);
   v1.use('/cv-pool', cvPoolRoutes);

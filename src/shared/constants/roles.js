@@ -4,6 +4,8 @@ export const ROLES = {
   CANDIDATE: 'CANDIDATE',
   RECRUITER: 'RECRUITER',
   INTERVIEWER: 'INTERVIEWER',
+  // Build plan P8: client HR / hiring person (client portal only).
+  CLIENT_HR: 'CLIENT_HR',
 };
 
 // Roles that can currently register/authenticate in Phase 1.

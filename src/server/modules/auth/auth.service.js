@@ -31,11 +31,28 @@ function serializeUser(user) {
     membership: membership
       ? { id: membership.id, role: membership.role, permissions: membership.permissions, fullName: membership.fullName }
       : undefined,
+    // Build plan P8: who a CLIENT_HR user is inside their client company.
+    hiringPerson: user.hiringPerson
+      ? {
+          id: user.hiringPerson.id,
+          fullName: user.hiringPerson.fullName,
+          department: user.hiringPerson.department?.name,
+          clientName: user.hiringPerson.department?.clientCompany?.name,
+          recruitmentCompany: user.hiringPerson.department?.clientCompany?.company?.name,
+        }
+      : undefined,
   };
 }
 
 // Relations every auth response needs (login, /auth/me, set-password).
-export const USER_AUTH_INCLUDE = { company: true, candidate: true, membership: { include: { company: true } } };
+// export const USER_AUTH_INCLUDE = { company: true, candidate: true, membership: { include: { company: true } } };
+export const USER_AUTH_INCLUDE = {
+  company: true,
+  candidate: true,
+  membership: { include: { company: true } },
+  // Build plan P8
+  hiringPerson: { include: { department: { include: { clientCompany: { include: { company: true } } } } } },
+};
 
 export async function registerCompany({ email, password, companyName, website, industry, location }) {
   const normalizedEmail = email.trim().toLowerCase();
@@ -123,6 +140,15 @@ export async function login({ email, password }) {
 }
 
 export function assertCompanyNotSuspended(user) {
+  // Build plan P8: a deactivated HR person can't log in; a suspended
+  // recruitment company closes its clients' portal too.
+  if (user.role === ROLES.CLIENT_HR) {
+    if (!user.hiringPerson?.isActive) throw ApiError.unauthorized('Invalid email or password', 'INVALID_CREDENTIALS');
+    if (user.hiringPerson.department?.clientCompany?.company?.status === 'SUSPENDED') {
+      throw ApiError.forbidden('This portal is currently unavailable. Please contact your recruitment partner.', 'COMPANY_SUSPENDED');
+    }
+    return;
+  }
   // Build plan P2: a deactivated recruiter is treated like a wrong login.
   if (user.role === ROLES.RECRUITER && user.membership && !user.membership.isActive) {
     throw ApiError.unauthorized('Invalid email or password', 'INVALID_CREDENTIALS');
@@ -170,7 +196,9 @@ export async function getPasswordTokenInfo(token) {
     email: row.user.email,
     role: row.user.role,
     // companyName: row.user.company?.name,
-    companyName: row.user.company?.name ?? row.user.membership?.company?.name,
+    // companyName: row.user.company?.name ?? row.user.membership?.company?.name,
+    // Build plan P8: client HR see their own (client) company name.
+    companyName: row.user.company?.name ?? row.user.membership?.company?.name ?? row.user.hiringPerson?.department?.clientCompany?.name,
     purpose: row.purpose,
   };
 }

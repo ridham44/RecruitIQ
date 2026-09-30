@@ -19,4 +19,6 @@ export const clientsApi = {
   addHiringPerson: (departmentId, payload) => api.post(`/clients/departments/${departmentId}/hiring-persons`, payload),
   updateHiringPerson: (personId, payload) => api.patch(`/clients/hiring-persons/${personId}`, payload),
   setHiringPersonStatus: (personId, isActive) => api.patch(`/clients/hiring-persons/${personId}/status`, { isActive }),
+  // Build plan P8
+  inviteHiringPerson: (personId) => api.post(`/clients/hiring-persons/${personId}/invite`),
 };

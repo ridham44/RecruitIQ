@@ -5,6 +5,9 @@ import { validate } from '../../middleware/validate.js';
 import { requirePermission } from '../../middleware/permission.js';
 import { COMPANY_SIDE_ROLES } from '../../../shared/constants/roles.js';
 import { PERMISSIONS } from '../../../shared/constants/permissions.js';
+import { asyncHandler } from '../../utils/asyncHandler.js';
+import { ok } from '../../utils/apiResponse.js';
+import { inviteHiringPersonAsCompany } from '../clientPortal/clientPortal.service.js';
 import {
   createClientSchema,
   updateClientSchema,
@@ -32,6 +35,12 @@ router.patch('/departments/:departmentId/status', manageClients, validate(active
 router.post('/departments/:departmentId/hiring-persons', manageClients, validate(createHiringPersonSchema), controller.createHiringPerson);
 router.patch('/hiring-persons/:personId', manageClients, validate(updateHiringPersonSchema), controller.updateHiringPerson);
 router.patch('/hiring-persons/:personId/status', manageClients, validate(activeStatusSchema), controller.setHiringPersonStatus);
+// Build plan P8: invite / re-invite an HR person to the client portal.
+router.post(
+  '/hiring-persons/:personId/invite',
+  manageClients,
+  asyncHandler(async (req, res) => ok(res, await inviteHiringPersonAsCompany(req.user.id, req.params.personId)))
+);
 
 router.get('/:id', controller.get);
 router.patch('/:id', manageClients, validate(updateClientSchema), controller.update);

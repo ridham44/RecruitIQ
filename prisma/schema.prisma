@@ -27,6 +27,8 @@ enum Role {
   CANDIDATE
   RECRUITER
   INTERVIEWER
+  // Build plan P8: a client's HR / hiring person using the client portal.
+  CLIENT_HR
 }
 
 enum JobStatus {
@@ -248,6 +250,8 @@ model User {
   passwordTokens PasswordToken[]
   // Build plan P2: company owners and recruiters. Null for candidates/admins.
   membership     CompanyMember?
+  // Build plan P8: set for CLIENT_HR users (the HR person they log in as).
+  hiringPerson   HiringPerson?
 
   @@map("users")
 }
@@ -344,6 +348,8 @@ model HiringPerson {
   department  Department         @relation(fields: [departmentId], references: [id], onDelete: Cascade)
   jobs        Job[]
   submissions ClientSubmission[]
+  // Build plan P8: the portal login (userId existed since P3, now a real FK).
+  user        User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([departmentId])
   @@map("hiring_persons")

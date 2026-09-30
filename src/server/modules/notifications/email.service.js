@@ -97,16 +97,31 @@ export async function sendApplicationStatusEmail(application) {
 // Build plan P1: invite for an account someone else created (admin-onboarded
 // company owner). Not tied to an application, so applicationId stays null.
 // Build plan P2: `asRecruiter` switches the wording for recruiter invites.
-export async function sendAccountSetupEmail({ to, companyName: rawCompanyName, link, expiresInHours = 72, asRecruiter = false }) {
+// Build plan P8: `asClientHr` (+ partnerName) for client HR portal invites.
+export async function sendAccountSetupEmail({
+  to,
+  companyName: rawCompanyName,
+  link,
+  expiresInHours = 72,
+  asRecruiter = false,
+  asClientHr = false,
+  partnerName,
+}) {
   // const subject = `Set up your RecruitIQ account for ${rawCompanyName}`;
-  const subject = asRecruiter
-    ? `You've been invited to join ${rawCompanyName} on RecruitIQ`
-    : `Set up your RecruitIQ account for ${rawCompanyName}`;
-  const companyName = String(rawCompanyName).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-  const intro = asRecruiter
-    ? `<p><strong>${companyName}</strong> has invited you to join their team on RecruitIQ as a recruiter.
+  const subject = asClientHr
+    ? `${partnerName || 'Your recruitment partner'} invited you to review candidates on RecruitIQ`
+    : asRecruiter
+      ? `You've been invited to join ${rawCompanyName} on RecruitIQ`
+      : `Set up your RecruitIQ account for ${rawCompanyName}`;
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const companyName = esc(rawCompanyName);
+  const intro = asClientHr
+    ? `<p><strong>${esc(partnerName)}</strong> uses RecruitIQ to send you candidates for <strong>${companyName}</strong>.
+    Choose a password to see every candidate shared with you — CVs, scores and interview evaluations — in one place.</p>`
+    : asRecruiter
+      ? `<p><strong>${companyName}</strong> has invited you to join their team on RecruitIQ as a recruiter.
     Choose a password to start working on your assigned jobs.</p>`
-    : `<p>A RecruitIQ account has been created for <strong>${companyName}</strong> with this email address.
+      : `<p>A RecruitIQ account has been created for <strong>${companyName}</strong> with this email address.
     Choose a password to start posting jobs and screening candidates.</p>`;
   const html = layout(`
     <p>Hello,</p>

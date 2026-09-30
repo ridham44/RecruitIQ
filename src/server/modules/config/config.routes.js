@@ -13,6 +13,8 @@ router.get('/public', (req, res) => {
     guestApply: env.features.guestApply,
     // Build plan P5
     instantInterview: env.features.instantInterview,
+    // Build plan P8
+    clientPortal: env.features.clientPortal,
   });
 });
 

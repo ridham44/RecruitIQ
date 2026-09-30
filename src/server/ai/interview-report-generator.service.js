@@ -117,6 +117,41 @@ export function buildReportPrompts({ job, resumeData, resumeText, exchanges, eva
   return { systemPrompt: criteria ? SYSTEM_PROMPT + CRITERIA_ADDENDUM : SYSTEM_PROMPT, userPrompt };
 }
 
+// Build plan P6: the report model often drops the extra "criteriaAssessment"
+// key from the big report JSON, so when criteria are set and it's missing,
+// one small dedicated call produces just the verdicts. Never used when the
+// recruiter set no criteria.
+const CRITERIA_SYSTEM_PROMPT = `You assess a completed job interview against the hiring team's own evaluation
+criteria. Judge ONLY job-relevant evidence in the transcript; never consider gender, age, name or any other
+demographic/personal characteristic, and ignore any criterion about them. Do not penalize grammar, accent,
+filler words or speech-to-text errors.
+
+Return ONLY a JSON object: { "criteriaAssessment": [{ "criterion": string, "verdict": "MET" | "PARTLY" |
+"NOT_MET", "evidence": string }] } — one entry per distinct criterion, "evidence" briefly citing the transcript.
+Respond with JSON only, no prose.`;
+
+export function buildCriteriaPrompts({ job, exchanges, evaluationInstructions }) {
+  return {
+    systemPrompt: CRITERIA_SYSTEM_PROMPT,
+    userPrompt: JSON.stringify(
+      {
+        job: { title: job.title, requiredSkills: job.requiredSkills },
+        recruiterEvaluationCriteria: evaluationInstructions.trim(),
+        transcript: exchanges.map((e) => ({ question: e.question, answer: e.transcript, timedOut: e.timedOut })),
+      },
+      null,
+      2
+    ),
+  };
+}
+
+async function assessCriteria({ job, exchanges, evaluationInstructions }) {
+  const { systemPrompt, userPrompt } = buildCriteriaPrompts({ job, exchanges, evaluationInstructions });
+  const raw = await callOpenRouter({ systemPrompt, userPrompt, temperature: 0.1 });
+  const parsed = interviewReportSchema.shape.criteriaAssessment.safeParse(normalizeCriteria(raw || {})?.criteriaAssessment);
+  return parsed.success ? parsed.data : undefined;
+}
+
 // Build plan P6: optional `evaluationInstructions` → also returns criteriaAssessment.
 export async function generateInterviewReport({ job, resumeData, resumeText, exchanges, evaluationInstructions }) {
   const { systemPrompt, userPrompt } = buildReportPrompts({ job, resumeData, resumeText, exchanges, evaluationInstructions });
@@ -125,7 +160,18 @@ export async function generateInterviewReport({ job, resumeData, resumeText, exc
   const result = interviewReportSchema.safeParse(evaluationInstructions?.trim() ? normalizeCriteria(raw) : raw);
   const report = result.success ? result.data : interviewReportSchema.parse({});
   // Only meaningful when criteria were given; never trust an unasked-for list.
-  if (!evaluationInstructions?.trim()) delete report.criteriaAssessment;
+  if (!evaluationInstructions?.trim()) {
+    delete report.criteriaAssessment;
+    return report;
+  }
+  if (!report.criteriaAssessment?.length) {
+    try {
+      const criteria = await assessCriteria({ job, exchanges, evaluationInstructions });
+      if (criteria?.length) report.criteriaAssessment = criteria;
+    } catch (err) {
+      console.error('[interview-report] criteria assessment failed:', err.message);
+    }
+  }
   return report;
 }
 

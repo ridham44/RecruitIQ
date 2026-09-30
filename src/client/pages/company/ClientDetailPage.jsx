@@ -13,6 +13,9 @@ import StatusBadge from '../../components/ui/StatusBadge.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import FormField, { inputClass } from '../../components/ui/FormField.jsx';
 import ClientForm, { clientToForm, validateClientForm, trimClientForm } from './ClientForm.jsx';
+// Build plan P8
+import { configApi } from '../../services/config.js';
+import SetupLinkNotice from '../admin/SetupLinkNotice.jsx';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const EMPTY_PERSON = { fullName: '', email: '', phone: '', designation: '' };
@@ -74,6 +77,29 @@ export default function ClientDetailPage() {
   };
 
   useEffect(load, [id]);
+
+  // Build plan P8: client HR portal invites
+  const [portalOn, setPortalOn] = useState(false);
+  const [inviteNotice, setInviteNotice] = useState(null);
+  useEffect(() => {
+    configApi
+      .getPublic()
+      .then((c) => setPortalOn(Boolean(c?.clientPortal)))
+      .catch(() => setPortalOn(false));
+  }, []);
+  const invite = async (person) => {
+    setBusy(`inv:${person.id}`);
+    setActionError('');
+    try {
+      const { setupLink } = await clientsApi.inviteHiringPerson(person.id);
+      setInviteNotice({ email: person.email, link: setupLink });
+      load();
+    } catch (err) {
+      setActionError(err.message);
+    } finally {
+      setBusy('');
+    }
+  };
 
   // Every mutation returns the full, refreshed client.
   const run = async (key, fn, { closeModal = false } = {}) => {
@@ -185,6 +211,12 @@ export default function ClientDetailPage() {
         </div>
       )}
       {actionError && <p className="mb-4 text-sm text-red-600">{actionError}</p>}
+      {/* Build plan P8 */}
+      {inviteNotice && (
+        <div className="mb-4">
+          <SetupLinkNotice email={inviteNotice.email} link={inviteNotice.link} who="the HR person" />
+        </div>
+      )}
 
       {/* Tabs — horizontally scrollable on very small screens */}
       <div className="mb-4 flex gap-1 overflow-x-auto border-b border-slate-200" role="tablist">
@@ -268,6 +300,13 @@ export default function ClientDetailPage() {
                             <div className="min-w-0">
                               <p className="text-sm font-medium text-slate-900">
                                 {p.fullName} {!p.isActive && <span className="text-xs font-normal text-slate-400">(inactive)</span>}
+                                {/* Build plan P8 */}
+                                {portalOn && p.portalStatus === 'ACTIVE' && (
+                                  <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">Portal</span>
+                                )}
+                                {portalOn && p.portalStatus === 'INVITED' && (
+                                  <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">Invited</span>
+                                )}
                               </p>
                               <p className="break-all text-xs text-slate-500">
                                 {[p.designation, p.email, p.phone].filter(Boolean).join(' · ')}
@@ -295,6 +334,12 @@ export default function ClientDetailPage() {
                               >
                                 {p.isActive ? 'Deactivate' : 'Activate'}
                               </Button>
+                              {/* Build plan P8: client HR portal login */}
+                              {portalOn && p.isActive && p.portalStatus !== 'ACTIVE' && (
+                                <Button variant="ghost" loading={busy === `inv:${p.id}`} onClick={() => invite(p)}>
+                                  {p.portalStatus === 'INVITED' ? 'Resend invite' : 'Invite to portal'}
+                                </Button>
+                              )}
                             </div>
                           )}
                         </li>
