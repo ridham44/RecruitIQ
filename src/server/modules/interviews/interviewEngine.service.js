@@ -10,6 +10,7 @@ import { generateInterviewReport, computeResumeAlignment } from '../../ai/interv
 import { normalizeTranscript } from '../../ai/transcript-normalizer.service.js';
 import { nextDifficulty, bucketAnswerStrength } from './interviewDifficulty.util.js';
 import { sanitizeRecruiterGuidance } from '../../ai/sanitize.util.js';
+import { generateClosingReply } from '../../ai/interview-closing.service.js';
 import { computeFinalScore } from '../submissions/finalScore.service.js';
 import { autoSubmit } from '../submissions/submissions.service.js';
 
@@ -438,6 +439,21 @@ async function advanceInterviewCore(interview, params) {
   const stagePlan = buildStagePlan(config, followUpsUsedSoFar);
 
   if (nextPlannedIndex >= stagePlan.length) {
+    // return finalizeInterview(interviewId);
+    // The closing turn ("any questions for us?"): reply briefly from the job /
+    // company info, keep that reply with the answer, then finish as before.
+    if (question.stage === 'CANDIDATE_QUESTIONS') {
+      const closingMessage = await generateClosingReply({
+        job: interview.application.job,
+        company: interview.application.job.company,
+        candidateText: evaluationTranscript || rawTranscript,
+      });
+      await prisma.interviewAnswer
+        .update({ where: { questionId: question.id }, data: { evaluation: { ...(evaluation || {}), closingReply: closingMessage } } })
+        .catch(() => {});
+      const finished = await finalizeInterview(interviewId);
+      return { ...finished, closingMessage };
+    }
     return finalizeInterview(interviewId);
   }
 
