@@ -94,9 +94,14 @@ async function main() {
   const it = client.departments.find((d) => d.name === 'IT');
   const fin = client.departments.find((d) => d.name === 'Finance');
   ({ client } = await req(`/clients/departments/${it.id}/hiring-persons`, { method: 'POST', token: owner.token, body: { fullName: 'Ira IT', email: `p8-hr-it-${ts}@test.com` } }));
-  ({ client } = await req(`/clients/departments/${fin.id}/hiring-persons`, { method: 'POST', token: owner.token, body: { fullName: 'Farah Finance', email: `p8-hr-fin-${ts}@test.com` } }));
-  const hrIt = client.departments.find((d) => d.id === it.id).hiringPersons[0];
-  const hrFin = client.departments.find((d) => d.id === fin.id).hiringPersons[0];
+  // ({ client } = await req(`/clients/departments/${fin.id}/hiring-persons`, { method: 'POST', token: owner.token, body: { fullName: 'Farah Finance', email: `p8-hr-fin-${ts}@test.com` } }));
+  // const hrIt = client.departments.find((d) => d.id === it.id).hiringPersons[0];
+  // const hrFin = client.departments.find((d) => d.id === fin.id).hiringPersons[0];
+  // Second Company HR added directly to the company, with no department.
+  ({ client } = await req(`/clients/${client.id}/hiring-persons`, { method: 'POST', token: owner.token, body: { fullName: 'Farah Finance', email: `p8-hr-fin-${ts}@test.com` } }));
+  const hrIt = client.hiringPersons.find((p) => p.fullName === 'Ira IT');
+  const hrFin = client.hiringPersons.find((p) => p.fullName === 'Farah Finance');
+  assert(hrIt.department?.name === 'IT' && hrFin.departmentId === null, 'Company HR with and without a department label');
   assert(hrIt.portalStatus === 'NONE' && !('userId' in hrIt), 'HR people start without a portal login (userId not exposed)');
   const { job } = await req('/jobs', {
     method: 'POST',
@@ -109,7 +114,8 @@ async function main() {
   const sent = await req('/submissions', { method: 'POST', token: owner.token, body: { applicationId: a.application.id } });
   assert(sent.submission.hiringPersonId === hrIt.id, 'submitted to the IT HR person');
   ({ client } = await req(`/clients/${client.id}`, { token: owner.token }));
-  assert(client.departments.find((d) => d.id === it.id).hiringPersons[0].portalStatus === 'INVITED', 'IT HR is now INVITED');
+  // assert(client.departments.find((d) => d.id === it.id).hiringPersons[0].portalStatus === 'INVITED', 'IT HR is now INVITED');
+  assert(client.hiringPersons.find((p) => p.id === hrIt.id).portalStatus === 'INVITED', 'IT HR is now INVITED');
 
   step('3. HR sets a password and opens the portal');
   const resend = await req(`/clients/hiring-persons/${hrIt.id}/invite`, { method: 'POST', token: owner.token });
@@ -139,6 +145,7 @@ async function main() {
   const tFin = (await req('/auth/set-password', { method: 'POST', body: { token: tokenOf(inv2.setupLink), password: PASSWORD } })).token;
   const finList = await req('/client-portal/submissions', { token: tFin });
   assert(finList.submissions.length === 0, 'Finance HR has an empty list');
+  assert(finList.me.department === null && finList.me.clientName === `P8 Client ${ts}`, 'HR without a department still knows their company');
   const peek = await call(`/client-portal/submissions/${list.submissions[0].id}`, { token: tFin });
   assert(peek.status === 404, 'Finance HR gets 404 on the IT submission');
   const peekCv = await call(`/client-portal/submissions/${list.submissions[0].id}/cv`, { token: tFin });
@@ -170,7 +177,8 @@ async function main() {
 
   step('7. Email already used by another account');
   ({ client } = await req(`/clients/departments/${fin.id}/hiring-persons`, { method: 'POST', token: owner.token, body: { fullName: 'Clash', email: a.email } }));
-  const clash = client.departments.find((d) => d.id === fin.id).hiringPersons.find((p) => p.fullName === 'Clash');
+  // const clash = client.departments.find((d) => d.id === fin.id).hiringPersons.find((p) => p.fullName === 'Clash');
+  const clash = client.hiringPersons.find((p) => p.fullName === 'Clash');
   const conflict = await call(`/clients/hiring-persons/${clash.id}/invite`, { method: 'POST', token: owner.token });
   assert(conflict.status === 409, 'HR email that belongs to a candidate account → 409');
 

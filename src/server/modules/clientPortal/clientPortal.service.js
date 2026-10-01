@@ -15,10 +15,15 @@ import { sendAccountSetupEmail } from '../notifications/email.service.js';
 // submissions, recruiter notes or monitoring events.
 
 export function assertPortalEnabled() {
-  if (!env.features.clientPortal) throw ApiError.notFound('The client portal is not enabled', 'FEATURE_DISABLED');
+  if (!env.features.clientPortal) throw ApiError.notFound('The Company HR portal is not enabled', 'FEATURE_DISABLED');
 }
 
-const PERSON_INCLUDE = { department: { include: { clientCompany: { include: { company: { select: { id: true, name: true } } } } } } };
+// const PERSON_INCLUDE = { department: { include: { clientCompany: { include: { company: { select: { id: true, name: true } } } } } } };
+// HR belongs to the client company directly; the department is optional.
+const PERSON_INCLUDE = {
+  clientCompany: { include: { company: { select: { id: true, name: true } } } },
+  department: { select: { name: true } },
+};
 
 // ─── Invites (recruitment-company side) ───
 
@@ -28,14 +33,15 @@ const PERSON_INCLUDE = { department: { include: { clientCompany: { include: { co
 export async function inviteHiringPerson(personId, { companyId = null } = {}) {
   assertPortalEnabled();
   const person = await prisma.hiringPerson.findUnique({ where: { id: personId }, include: PERSON_INCLUDE });
-  const client = person?.department.clientCompany;
-  if (!person || (companyId && client.companyId !== companyId)) throw ApiError.notFound('HR person not found');
-  if (!person.isActive) throw ApiError.badRequest('This HR person is inactive', 'HR_INACTIVE');
+  // const client = person?.department.clientCompany;
+  const client = person?.clientCompany;
+  if (!person || (companyId && client.companyId !== companyId)) throw ApiError.notFound('Company HR not found');
+  if (!person.isActive) throw ApiError.badRequest('This Company HR is inactive', 'HR_INACTIVE');
 
   let userId = person.userId;
   if (userId) {
     if (!(await hasPendingInvite(userId))) {
-      throw ApiError.badRequest('This HR person already has an active portal login', 'INVITE_NOT_PENDING');
+      throw ApiError.badRequest('This Company HR already has an active portal login', 'INVITE_NOT_PENDING');
     }
   } else {
     const email = person.email.trim().toLowerCase();
@@ -81,7 +87,7 @@ export async function portalStatusFor(persons) {
 
 async function personFor(userId) {
   const person = await prisma.hiringPerson.findUnique({ where: { userId }, include: PERSON_INCLUDE });
-  if (!person) throw ApiError.forbidden('No HR profile is linked to this account');
+  if (!person) throw ApiError.forbidden('No Company HR profile is linked to this account');
   return person;
 }
 
@@ -114,9 +120,12 @@ export async function listSubmissions(userId, { jobId } = {}) {
   return {
     me: {
       fullName: person.fullName,
-      department: person.department.name,
-      clientName: person.department.clientCompany.name,
-      recruitmentCompany: person.department.clientCompany.company.name,
+      // department: person.department.name,
+      // clientName: person.department.clientCompany.name,
+      // recruitmentCompany: person.department.clientCompany.company.name,
+      department: person.department?.name || null,
+      clientName: person.clientCompany.name,
+      recruitmentCompany: person.clientCompany.company.name,
     },
     jobs,
     submissions: jobId ? items.filter((i) => i.job?.id === jobId) : items,

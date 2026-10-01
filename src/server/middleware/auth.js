@@ -57,7 +57,8 @@ export const authenticate = asyncHandler(async (req, res, next) => {
       membership: { select: { isActive: true, company: { select: { status: true } } } },
       // Build plan P8: client HR reach the recruitment company through their HR person.
       hiringPerson: {
-        select: { isActive: true, department: { select: { clientCompany: { select: { company: { select: { status: true } } } } } } },
+        // select: { isActive: true, department: { select: { clientCompany: { select: { company: { select: { status: true } } } } } } },
+        select: { isActive: true, clientCompany: { select: { company: { select: { status: true } } } } },
       },
     },
   });
@@ -65,8 +66,9 @@ export const authenticate = asyncHandler(async (req, res, next) => {
     if (!account.isActive || !account.hiringPerson?.isActive) {
       throw ApiError.unauthorized('Your account is inactive or no longer exists', 'ACCOUNT_INACTIVE');
     }
-    if (account.hiringPerson.department?.clientCompany?.company?.status === 'SUSPENDED') {
-      throw ApiError.forbidden('This portal is currently unavailable. Please contact your recruitment partner.', 'COMPANY_SUSPENDED');
+    // if (account.hiringPerson.department?.clientCompany?.company?.status === 'SUSPENDED') {
+    if (account.hiringPerson.clientCompany?.company?.status === 'SUSPENDED') {
+      throw ApiError.forbidden('This portal is currently unavailable. Please contact your recruitment agency.', 'COMPANY_SUSPENDED');
     }
   }
   if (!account || !account.isActive) {
@@ -79,7 +81,7 @@ export const authenticate = asyncHandler(async (req, res, next) => {
   const companyStatus = account.role === 'RECRUITER' ? account.membership?.company?.status : account.company?.status;
   if ((account.role === 'COMPANY' || account.role === 'RECRUITER') && companyStatus === 'SUSPENDED') {
     throw ApiError.forbidden(
-      'Your company account has been suspended. Please contact the RecruitIQ administrator.',
+      'Your agency account has been suspended. Please contact the RecruitIQ administrator.',
       'COMPANY_SUSPENDED'
     );
   }

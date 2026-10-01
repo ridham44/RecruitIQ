@@ -6,7 +6,7 @@ import { emailSchema } from './auth.schema.js';
 const optionalText = (max) => z.string().trim().max(max).optional().or(z.literal('')).optional();
 
 const companyFields = {
-  companyName: z.string().trim().min(1, 'Company name is required').max(200),
+  companyName: z.string().trim().min(1, 'Agency name is required').max(200),
   website: z.string().trim().url('Website must be a valid URL (https://…)').optional().or(z.literal('')).optional(),
   industry: optionalText(120),
   size: optionalText(60),

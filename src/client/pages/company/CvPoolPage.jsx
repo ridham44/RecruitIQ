@@ -16,7 +16,7 @@ const formatDate = (d) => new Date(d).toLocaleDateString(undefined, { day: 'nume
 
 function Placement({ s }) {
   if (!s.placement) return <span className="text-slate-400">—</span>;
-  if (!s.placement.ownJob) return <span className="text-slate-500">Matched to a job at another company</span>;
+  if (!s.placement.ownJob) return <span className="text-slate-500">Matched to a job at another agency</span>;
   return (
     <span>
       {s.placement.jobTitle} <StatusBadge status={s.placement.status} />

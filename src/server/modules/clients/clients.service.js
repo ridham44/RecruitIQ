@@ -27,9 +27,14 @@ const CLIENT_DETAIL_INCLUDE = {
   departments: {
     orderBy: { name: 'asc' },
     include: {
-      hiringPersons: { orderBy: { fullName: 'asc' } },
+      // hiringPersons: { orderBy: { fullName: 'asc' } },
       _count: { select: { jobs: true } },
     },
+  },
+  // HR people belong to the company itself; the department is optional.
+  hiringPersons: {
+    orderBy: { fullName: 'asc' },
+    include: { department: { select: { id: true, name: true } } },
   },
   recruiters: {
     include: { member: { include: { user: { select: { email: true, isActive: true } } } } },
@@ -64,7 +69,7 @@ async function loadClient(ctx, clientId, { write = false } = {}) {
   const client = await prisma.clientCompany.findFirst({
     where: { id: clientId, ...(write ? { companyId: ctx.companyId } : clientScopeWhere(ctx)) },
   });
-  if (!client) throw ApiError.notFound('Client not found');
+  if (!client) throw ApiError.notFound('Company not found');
   return client;
 }
 
@@ -77,10 +82,21 @@ async function loadDepartment(ctx, departmentId) {
 async function loadHiringPerson(ctx, hiringPersonId) {
   const person = await prisma.hiringPerson.findUnique({
     where: { id: hiringPersonId },
-    include: { department: { include: { clientCompany: true } } },
+    // include: { department: { include: { clientCompany: true } } },
+    include: { clientCompany: true },
   });
-  if (!person || person.department.clientCompany.companyId !== ctx.companyId) throw ApiError.notFound('HR person not found');
+  // if (!person || person.department.clientCompany.companyId !== ctx.companyId) throw ApiError.notFound('HR person not found');
+  if (!person || person.clientCompany.companyId !== ctx.companyId) throw ApiError.notFound('Company HR not found');
   return person;
+}
+
+// Optional department for an HR person: must belong to the same company.
+async function resolvePersonDepartment(clientCompanyId, departmentId) {
+  if (departmentId === undefined) return undefined;
+  if (!departmentId) return null;
+  const department = await prisma.department.findUnique({ where: { id: departmentId } });
+  if (!department || department.clientCompanyId !== clientCompanyId) throw ApiError.badRequest('Department does not belong to this company', 'INVALID_DEPARTMENT');
+  return departmentId;
 }
 
 // ─── Clients ───
@@ -115,11 +131,13 @@ export async function getClient(userId, clientId) {
   // return serializeClient(client);
   // Build plan P8: portal login status per HR person (NONE / INVITED / ACTIVE).
   const serialized = serializeClient(client);
-  const status = await portalStatusFor(serialized.departments.flatMap((d) => d.hiringPersons));
-  serialized.departments = serialized.departments.map((d) => ({
-    ...d,
-    hiringPersons: d.hiringPersons.map(({ userId: _u, ...p }) => ({ ...p, portalStatus: status[p.id] })),
-  }));
+  // const status = await portalStatusFor(serialized.departments.flatMap((d) => d.hiringPersons));
+  // serialized.departments = serialized.departments.map((d) => ({
+  //   ...d,
+  //   hiringPersons: d.hiringPersons.map(({ userId: _u, ...p }) => ({ ...p, portalStatus: status[p.id] })),
+  // }));
+  const status = await portalStatusFor(serialized.hiringPersons);
+  serialized.hiringPersons = serialized.hiringPersons.map(({ userId: _u, ...p }) => ({ ...p, portalStatus: status[p.id] }));
   return serialized;
 }
 
@@ -153,7 +171,7 @@ export async function setClientRecruiters(userId, clientId, memberIds) {
     const count = await prisma.companyMember.count({
       where: { id: { in: unique }, companyId: ctx.companyId, role: 'RECRUITER' },
     });
-    if (count !== unique.length) throw ApiError.badRequest('One or more recruiters were not found', 'INVALID_RECRUITER');
+    if (count !== unique.length) throw ApiError.badRequest('One or more agency recruiters were not found', 'INVALID_RECRUITER');
   }
   await prisma.$transaction([
     prisma.clientRecruiter.deleteMany({ where: { clientCompanyId: clientId, memberId: { notIn: unique } } }),
@@ -173,7 +191,7 @@ export async function createDepartment(userId, clientId, { name }) {
   try {
     await prisma.department.create({ data: { clientCompanyId: clientId, name: name.trim() } });
   } catch (err) {
-    if (err.code === 'P2002') throw ApiError.conflict('This client already has a department with that name', 'DEPARTMENT_EXISTS');
+    if (err.code === 'P2002') throw ApiError.conflict('This company already has a department with that name', 'DEPARTMENT_EXISTS');
     throw err;
   }
   return getClient(userId, clientId);
@@ -185,7 +203,7 @@ export async function updateDepartment(userId, departmentId, { name }) {
   try {
     await prisma.department.update({ where: { id: departmentId }, data: { name: name.trim() } });
   } catch (err) {
-    if (err.code === 'P2002') throw ApiError.conflict('This client already has a department with that name', 'DEPARTMENT_EXISTS');
+    if (err.code === 'P2002') throw ApiError.conflict('This company already has a department with that name', 'DEPARTMENT_EXISTS');
     throw err;
   }
   return getClient(userId, department.clientCompanyId);
@@ -200,19 +218,44 @@ export async function setDepartmentStatus(userId, departmentId, isActive) {
 
 // ─── HR / hiring persons ───
 
-export async function createHiringPerson(userId, departmentId, data) {
+// export async function createHiringPerson(userId, departmentId, data) {
+//   const ctx = await getCompanyContext(userId);
+//   const department = await loadDepartment(ctx, departmentId);
+//   await prisma.hiringPerson.create({
+//     data: {
+//       departmentId,
+//       fullName: data.fullName.trim(),
+//       email: data.email.trim().toLowerCase(),
+//       phone: blankToNull(data.phone) ?? null,
+//       designation: blankToNull(data.designation) ?? null,
+//     },
+//   });
+//   return getClient(userId, department.clientCompanyId);
+// }
+
+// HR people are added to the company itself; a department is optional.
+export async function createHiringPerson(userId, clientId, data) {
   const ctx = await getCompanyContext(userId);
-  const department = await loadDepartment(ctx, departmentId);
+  await loadClient(ctx, clientId, { write: true });
   await prisma.hiringPerson.create({
     data: {
-      departmentId,
+      clientCompanyId: clientId,
+      departmentId: (await resolvePersonDepartment(clientId, data.departmentId)) ?? null,
       fullName: data.fullName.trim(),
       email: data.email.trim().toLowerCase(),
       phone: blankToNull(data.phone) ?? null,
       designation: blankToNull(data.designation) ?? null,
     },
   });
-  return getClient(userId, department.clientCompanyId);
+  return getClient(userId, clientId);
+}
+
+// Old route shape (POST /departments/:id/hiring-persons): same as above with
+// that department pre-selected.
+export async function createHiringPersonInDepartment(userId, departmentId, data) {
+  const ctx = await getCompanyContext(userId);
+  const department = await loadDepartment(ctx, departmentId);
+  return createHiringPerson(userId, department.clientCompanyId, { ...data, departmentId });
 }
 
 export async function updateHiringPerson(userId, hiringPersonId, data) {
@@ -225,16 +268,19 @@ export async function updateHiringPerson(userId, hiringPersonId, data) {
       email: data.email?.trim() ? data.email.trim().toLowerCase() : undefined,
       phone: blankToNull(data.phone),
       designation: blankToNull(data.designation),
+      departmentId: await resolvePersonDepartment(person.clientCompanyId, data.departmentId),
     },
   });
-  return getClient(userId, person.department.clientCompanyId);
+  // return getClient(userId, person.department.clientCompanyId);
+  return getClient(userId, person.clientCompanyId);
 }
 
 export async function setHiringPersonStatus(userId, hiringPersonId, isActive) {
   const ctx = await getCompanyContext(userId);
   const person = await loadHiringPerson(ctx, hiringPersonId);
   await prisma.hiringPerson.update({ where: { id: hiringPersonId }, data: { isActive } });
-  return getClient(userId, person.department.clientCompanyId);
+  // return getClient(userId, person.department.clientCompanyId);
+  return getClient(userId, person.clientCompanyId);
 }
 
 // ─── Job link validation (§5) ───
@@ -245,6 +291,8 @@ export async function setHiringPersonStatus(userId, hiringPersonId, isActive) {
 // Returns the normalized { clientCompanyId, departmentId, hiringPersonId }
 // to save, or {} when the request doesn't touch the link at all.
 export async function resolveJobClientLink(companyId, input, existing = null) {
+  // (was: HR person ∈ department ∈ client) — now HR person ∈ client and
+  // department ∈ client, independently.
   const touched = ['clientCompanyId', 'departmentId', 'hiringPersonId'].some((k) => input[k] !== undefined);
   if (!touched) return {};
 
@@ -254,29 +302,34 @@ export async function resolveJobClientLink(companyId, input, existing = null) {
   const changed = (k) => link[k] !== (existing?.[k] ?? null);
 
   // A child sent explicitly without its parent is a mistake, not a clear.
-  if (input.departmentId && !link.clientCompanyId) throw invalid('Choose a client before choosing a department');
-  if (input.hiringPersonId && !link.departmentId) throw invalid('Choose a department before choosing an HR person');
+  if (input.departmentId && !link.clientCompanyId) throw invalid('Choose a company before choosing a department');
+  // if (input.hiringPersonId && !link.departmentId) throw invalid('Choose a department before choosing an HR person');
+  // HR belongs to the company (department optional), so HR only needs the company.
+  if (input.hiringPersonId && !link.clientCompanyId) throw invalid('Choose a company before choosing a Company HR');
 
   // Changing or clearing a parent drops the children the request didn't resend.
   if (changed('clientCompanyId') && input.departmentId === undefined) link.departmentId = null;
   if (!link.clientCompanyId) link.departmentId = null;
-  if (changed('departmentId') && input.hiringPersonId === undefined) link.hiringPersonId = null;
-  if (!link.departmentId) link.hiringPersonId = null;
+  // if (changed('departmentId') && input.hiringPersonId === undefined) link.hiringPersonId = null;
+  // if (!link.departmentId) link.hiringPersonId = null;
+  if (changed('clientCompanyId') && input.hiringPersonId === undefined) link.hiringPersonId = null;
+  if (!link.clientCompanyId) link.hiringPersonId = null;
 
   if (link.clientCompanyId) {
     const client = await prisma.clientCompany.findUnique({ where: { id: link.clientCompanyId } });
-    if (!client || client.companyId !== companyId) throw invalid('Client not found');
-    if (changed('clientCompanyId') && !client.isActive) throw invalid('That client is inactive');
+    if (!client || client.companyId !== companyId) throw invalid('Company not found');
+    if (changed('clientCompanyId') && !client.isActive) throw invalid('That company is inactive');
   }
   if (link.departmentId) {
     const department = await prisma.department.findUnique({ where: { id: link.departmentId } });
-    if (!department || department.clientCompanyId !== link.clientCompanyId) throw invalid('Department does not belong to the selected client');
+    if (!department || department.clientCompanyId !== link.clientCompanyId) throw invalid('Department does not belong to the selected company');
     if (changed('departmentId') && !department.isActive) throw invalid('That department is inactive');
   }
   if (link.hiringPersonId) {
     const person = await prisma.hiringPerson.findUnique({ where: { id: link.hiringPersonId } });
-    if (!person || person.departmentId !== link.departmentId) throw invalid('HR person does not belong to the selected department');
-    if (changed('hiringPersonId') && !person.isActive) throw invalid('That HR person is inactive');
+    // if (!person || person.departmentId !== link.departmentId) throw invalid('HR person does not belong to the selected department');
+    if (!person || person.clientCompanyId !== link.clientCompanyId) throw invalid('Company HR does not belong to the selected company');
+    if (changed('hiringPersonId') && !person.isActive) throw invalid('That Company HR is inactive');
   }
   return link;
 }

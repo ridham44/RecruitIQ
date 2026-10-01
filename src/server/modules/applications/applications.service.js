@@ -5,6 +5,8 @@ import { getOwnedJob } from '../jobs/jobs.service.js';
 import { sendApplicationStatusEmail } from '../notifications/email.service.js';
 import { getEffectiveConfig } from '../interviews/interviewConfig.service.js';
 import { screenApplicationById } from '../screening/screening.service.js';
+import { env } from '../../config/env.js';
+import { inviteApplication } from '../interviews/instantInterview.service.js';
 
 async function getCandidateIdForUser(userId) {
   const candidate = await prisma.candidate.findUnique({ where: { userId } });
@@ -114,9 +116,27 @@ export async function bulkUpdateApplicationStatus(userId, jobId, { applicationId
     where: { id: { in: applicationIds }, jobId, status },
     include: { candidate: { include: { user: true } }, job: { include: { company: true } } },
   });
-  await Promise.all(updatedApplications.map(sendApplicationStatusEmail));
+  // await Promise.all(updatedApplications.map(sendApplicationStatusEmail));
+  // On an INSTANT-flow job a manual shortlist emails the interview link
+  // (same as an auto-shortlist in screening.service.js); everything else —
+  // and a failed invite — gets the usual status email.
+  await Promise.all(updatedApplications.map(notifyStatusChange));
 
   return { updatedCount: result.count };
+}
+
+async function notifyStatusChange(application) {
+  const instant =
+    application.status === APPLICATION_STATUS.SHORTLISTED && application.job.interviewFlow === 'INSTANT' && env.features.instantInterview;
+  if (instant) {
+    try {
+      const { sent } = await inviteApplication(application.id);
+      if (sent?.sent !== false) return;
+    } catch (err) {
+      console.error('[applications] instant interview invite failed:', err.message);
+    }
+  }
+  await sendApplicationStatusEmail(application);
 }
 
 async function fetchOwnedApplication(userId, applicationId) {

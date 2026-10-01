@@ -73,10 +73,10 @@ export default function JobsListPage() {
             className={`${inputClass} min-h-[44px] sm:w-64`}
             value={clientId}
             onChange={(e) => setClientFilter(e.target.value)}
-            aria-label="Filter by client"
+            aria-label="Filter by company"
           >
-            <option value="">All clients</option>
-            <option value="none">No client</option>
+            <option value="">All companies</option>
+            <option value="none">No company</option>
             {clients.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -92,14 +92,14 @@ export default function JobsListPage() {
         <EmptyState
           icon={Briefcase}
           // title="No jobs yet"
-          title={clientId ? 'No jobs for this client' : 'No jobs yet'}
+          title={clientId ? 'No jobs for this company' : 'No jobs yet'}
           // description="Create your first job posting to start receiving applications."
           description={
             clientId
-              ? 'Pick another client, or create a job linked to this one.'
+              ? 'Pick another company, or create a job linked to this one.'
               : can('MANAGE_JOBS')
               ? 'Create your first job posting to start receiving applications.'
-              : "You haven't been assigned to any jobs yet. Ask your company owner."
+              : "You haven't been assigned to any jobs yet. Ask your agency owner."
           }
           action={
             can('MANAGE_JOBS') && (
@@ -119,7 +119,7 @@ export default function JobsListPage() {
               <tr>
                 <th className="px-5 py-3">Title</th>
                 {/* Build plan P3 */}
-                <th className="px-5 py-3">Client</th>
+                <th className="px-5 py-3">Company</th>
                 <th className="px-5 py-3">Work Mode</th>
                 <th className="px-5 py-3">Openings</th>
                 <th className="px-5 py-3">Location</th>

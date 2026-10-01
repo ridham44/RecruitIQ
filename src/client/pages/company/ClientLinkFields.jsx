@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { clientsApi } from '../../services/clients.js';
 import FormField, { inputClass } from '../../components/ui/FormField.jsx';
 
-// Build plan P3 (§5) — Client → Department → HR person pickers for the job
+// Build plan P3 (§5) — Company (client) → Department / Company HR pickers for the job
 // forms. value/onChange use { clientCompanyId, departmentId, hiringPersonId }
 // ('' = none). Inactive entries can't be newly picked, but a job's current
 // (since-deactivated) link still shows as selected.
@@ -38,18 +38,20 @@ export default function ClientLinkFields({ value, onChange, initial = value }) {
   const isKeep = (field, id) => initial?.[field] === id;
 
   const departments = detail?.id === value.clientCompanyId ? detail.departments || [] : [];
-  const department = departments.find((d) => d.id === value.departmentId);
-  const people = department?.hiringPersons || [];
+  // const department = departments.find((d) => d.id === value.departmentId);
+  // const people = department?.hiringPersons || [];
+  // Company HR belong to the company itself — the department doesn't filter them.
+  const people = detail?.id === value.clientCompanyId ? detail.hiringPersons || [] : [];
 
   if (clients && clients.length === 0) {
     return (
-      <FormField label="Client">
+      <FormField label="Company">
         <p className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500">
-          No clients yet —{' '}
+          No companies yet —{' '}
           <Link to="/company/clients" className="font-medium text-brand-600 hover:underline">
             add one
           </Link>{' '}
-          to link this job to a client. (Optional)
+          to link this job to a company. (Optional)
         </p>
       </FormField>
     );
@@ -58,14 +60,14 @@ export default function ClientLinkFields({ value, onChange, initial = value }) {
   return (
     <div>
       <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-3">
-        <FormField label="Client (optional)">
+        <FormField label="Company (optional)">
           <select
             className={cls}
             value={value.clientCompanyId}
             disabled={!clients}
             onChange={(e) => onChange({ clientCompanyId: e.target.value, departmentId: '', hiringPersonId: '' })}
           >
-            <option value="">{clients ? 'No client' : 'Loading…'}</option>
+            <option value="">{clients ? 'No company' : 'Loading…'}</option>
             {(clients || []).map((c) => (
               <option key={c.id} value={c.id} disabled={!c.isActive && !isKeep('clientCompanyId', c.id)}>
                 {c.name}
@@ -79,9 +81,10 @@ export default function ClientLinkFields({ value, onChange, initial = value }) {
             className={cls}
             value={value.departmentId}
             disabled={!value.clientCompanyId || !detail}
-            onChange={(e) => onChange({ ...value, departmentId: e.target.value, hiringPersonId: '' })}
+            // onChange={(e) => onChange({ ...value, departmentId: e.target.value, hiringPersonId: '' })}
+            onChange={(e) => onChange({ ...value, departmentId: e.target.value })}
           >
-            <option value="">{value.clientCompanyId ? (departments.length ? 'No department' : 'No departments yet') : 'Choose a client first'}</option>
+            <option value="">{value.clientCompanyId ? (departments.length ? 'No department' : 'No departments yet') : 'Choose a company first'}</option>
             {departments.map((d) => (
               <option key={d.id} value={d.id} disabled={!d.isActive && !isKeep('departmentId', d.id)}>
                 {d.name}
@@ -90,14 +93,16 @@ export default function ClientLinkFields({ value, onChange, initial = value }) {
             ))}
           </select>
         </FormField>
-        <FormField label="HR / hiring person">
+        <FormField label="Company HR">
           <select
             className={cls}
             value={value.hiringPersonId}
-            disabled={!value.departmentId}
+            // disabled={!value.departmentId}
+            disabled={!value.clientCompanyId || !detail}
             onChange={(e) => onChange({ ...value, hiringPersonId: e.target.value })}
           >
-            <option value="">{value.departmentId ? (people.length ? 'No HR person' : 'No HR people yet') : 'Choose a department first'}</option>
+            {/* was: 'Choose a department first' — HR now only needs the company */}
+            <option value="">{value.clientCompanyId ? (people.length ? 'No Company HR' : 'No Company HR yet') : 'Choose a company first'}</option>
             {people.map((p) => (
               <option key={p.id} value={p.id} disabled={!p.isActive && !isKeep('hiringPersonId', p.id)}>
                 {p.fullName}

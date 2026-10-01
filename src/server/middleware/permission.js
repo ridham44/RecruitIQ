@@ -9,7 +9,7 @@ import { getCompanyContext } from '../modules/companies/companyContext.js';
 // Only the company owner (e.g. editing the company profile).
 export function requireOwner(req, res, next) {
   if (req.user?.role === ROLES.COMPANY) return next();
-  throw ApiError.forbidden('Only the company owner can do this', 'PERMISSION_DENIED');
+  throw ApiError.forbidden('Only the agency owner can do this', 'PERMISSION_DENIED');
 }
 
 export function requirePermission(permission) {
@@ -22,7 +22,7 @@ export function requirePermission(permission) {
       const ctx = await getCompanyContext(req.user.id);
       if (!ctx.isActive) throw ApiError.unauthorized('Your account is inactive', 'ACCOUNT_INACTIVE');
       if (!ctx.isOwner && !ctx.permissions.includes(permission)) {
-        throw ApiError.forbidden("You don't have permission to do this. Ask your company owner.", 'PERMISSION_DENIED');
+        throw ApiError.forbidden("You don't have permission to do this. Ask your agency owner.", 'PERMISSION_DENIED');
       }
       req.companyCtx = ctx;
       next();

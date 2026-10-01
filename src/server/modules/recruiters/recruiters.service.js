@@ -38,14 +38,14 @@ async function serializeMember(member) {
 
 async function loadMember(ctx, memberId) {
   const member = await prisma.companyMember.findUnique({ where: { id: memberId }, include: MEMBER_INCLUDE });
-  if (!member || member.companyId !== ctx.companyId) throw ApiError.notFound('Recruiter not found');
+  if (!member || member.companyId !== ctx.companyId) throw ApiError.notFound('Agency recruiter not found');
   return member;
 }
 
 // Nobody edits the owner through this module, and nobody edits their own
 // membership (prevents a recruiter from granting themselves permissions).
 function assertEditable(ctx, member) {
-  if (member.role === 'OWNER') throw ApiError.badRequest("The company owner can't be changed here", 'OWNER_NOT_EDITABLE');
+  if (member.role === 'OWNER') throw ApiError.badRequest("The agency owner can't be changed here", 'OWNER_NOT_EDITABLE');
   if (member.id === ctx.memberId) throw ApiError.badRequest("You can't change your own access", 'CANNOT_CHANGE_SELF');
 }
 
@@ -133,7 +133,7 @@ export async function setRecruiterPermissions(userId, memberId, permissions) {
 export async function setRecruiterJobs(userId, memberId, jobIds) {
   const ctx = await getCompanyContext(userId);
   const member = await loadMember(ctx, memberId);
-  if (member.role === 'OWNER') throw ApiError.badRequest('The owner already sees every job', 'OWNER_NOT_EDITABLE');
+  if (member.role === 'OWNER') throw ApiError.badRequest('The agency owner already sees every job', 'OWNER_NOT_EDITABLE');
   const unique = [...new Set(jobIds)];
   await assertJobsInCompany(ctx.companyId, unique);
   await prisma.$transaction([
@@ -148,7 +148,7 @@ export async function resendRecruiterInvite(userId, memberId) {
   const member = await loadMember(ctx, memberId);
   assertEditable(ctx, member);
   if (!(await hasPendingInvite(member.userId))) {
-    throw ApiError.badRequest('This recruiter has already set a password', 'INVITE_NOT_PENDING');
+    throw ApiError.badRequest('This agency recruiter has already set a password', 'INVITE_NOT_PENDING');
   }
   const { link } = await issuePasswordToken(member.userId);
   await sendAccountSetupEmail({ to: member.user.email, companyName: ctx.company.name, link, asRecruiter: true });
@@ -182,7 +182,7 @@ export async function setJobRecruiters(userId, jobId, memberIds) {
     const count = await prisma.companyMember.count({
       where: { id: { in: unique }, companyId: ctx.companyId, role: 'RECRUITER' },
     });
-    if (count !== unique.length) throw ApiError.badRequest('One or more recruiters were not found', 'INVALID_RECRUITER');
+    if (count !== unique.length) throw ApiError.badRequest('One or more agency recruiters were not found', 'INVALID_RECRUITER');
   }
   await prisma.$transaction([
     prisma.jobRecruiter.deleteMany({ where: { jobId, memberId: { notIn: unique } } }),

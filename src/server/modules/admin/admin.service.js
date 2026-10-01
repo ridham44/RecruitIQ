@@ -61,7 +61,7 @@ async function loadCompany(companyId) {
     where: { id: companyId },
     include: { user: true, _count: { select: { jobs: true } } },
   });
-  if (!company) throw ApiError.notFound('Company not found');
+  if (!company) throw ApiError.notFound('Agency not found');
   return company;
 }
 
@@ -149,7 +149,7 @@ export async function setCompanyStatus(companyId, status) {
 export async function resendInvite(companyId) {
   const company = await loadCompany(companyId);
   if (!company.createdByAdminId || !(await hasPendingInvite(company.userId))) {
-    throw ApiError.badRequest('The owner has already set a password for this account', 'INVITE_NOT_PENDING');
+    throw ApiError.badRequest('The agency owner has already set a password for this account', 'INVITE_NOT_PENDING');
   }
   const { link } = await issuePasswordToken(company.userId);
   await sendAccountSetupEmail({ to: company.user.email, companyName: company.name, link });

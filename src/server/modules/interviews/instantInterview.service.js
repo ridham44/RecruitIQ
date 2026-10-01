@@ -4,7 +4,8 @@ import { prisma, TX_OPTIONS } from '../../config/prisma.js';
 import { env } from '../../config/env.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { APPLICATION_STATUS, INTERVIEW_STATUS } from '../../../shared/constants/statuses.js';
-import { sendInterviewInviteEmail } from '../notifications/email.service.js';
+// import { sendInterviewInviteEmail } from '../notifications/email.service.js';
+import { sendInterviewInviteEmail, sendInterviewConfirmationEmail } from '../notifications/email.service.js';
 import { smsDriver } from '../notifications/sms/index.js';
 import { maskPhone } from '../../utils/phone.js';
 
@@ -39,6 +40,8 @@ function assertEnabled() {
 }
 
 const INCLUDE = {
+  // Slot interviews booked from the status link use these links too.
+  slot: true,
   application: {
     include: {
       job: { include: { company: { select: { name: true, logoUrl: true } } } },
@@ -96,6 +99,37 @@ export async function createOrRefreshInstantInterview(applicationId, { rotate = 
   return { interview, link: interviewLinkFor(interview) };
 }
 
+// Join link for a SLOT interview booked from the candidate's status link (no
+// login). Same token scheme as instant links; it stops working after the
+// slot ends (+1 hour grace, matching a late/dropped join). Returns the link.
+export async function ensureSlotInterviewLink(interviewId) {
+  const interview = await prisma.interview.findUnique({ where: { id: interviewId }, include: { slot: true } });
+  if (!interview?.slot) return null;
+  const expiresAt = new Date(new Date(interview.slot.endTime).getTime() + 3600 * 1000);
+  if (interview.inviteNonce && interview.accessTokenHash) {
+    if (!interview.inviteExpiresAt || interview.inviteExpiresAt.getTime() !== expiresAt.getTime()) {
+      await prisma.interview.update({ where: { id: interview.id }, data: { inviteExpiresAt: expiresAt } });
+    }
+    return interviewLinkFor(interview);
+  }
+  const inviteNonce = crypto.randomBytes(16).toString('hex');
+  const updated = await prisma.interview.update({
+    where: { id: interview.id },
+    data: { inviteNonce, accessTokenHash: sha256(tokenFor({ ...interview, inviteNonce })), inviteExpiresAt: expiresAt },
+  });
+  return interviewLinkFor(updated);
+}
+
+// Instant links need FEATURE_INSTANT_INTERVIEW; slot-interview join links
+// (status-link bookings) work regardless of that flag.
+async function findForLink(token) {
+  if (env.features.instantInterview) return findByToken(token);
+  const interview = await findByToken(token).catch(() => null);
+  if (interview?.slotId) return interview;
+  assertEnabled();
+  return findByToken(token);
+}
+
 async function findByToken(token) {
   if (!/^[a-f0-9]{64}$/.test(String(token || ''))) throw ApiError.notFound('This interview link is invalid', 'INVITE_INVALID');
   const interview = await prisma.interview.findUnique({ where: { accessTokenHash: sha256(token) }, include: INCLUDE });
@@ -131,6 +165,8 @@ function publicSummary(interview) {
     ...(b ? { reason: b.code, message: b.message } : {}),
     expiresAt: interview.inviteExpiresAt,
     candidateName: candidate.fullName,
+    // Booked slot (null for instant links).
+    slot: interview.slot ? { startTime: interview.slot.startTime, endTime: interview.slot.endTime } : null,
     job: { title: job.title },
     company: { name: job.company.name, logoUrl: job.company.logoUrl },
     channels: {
@@ -141,14 +177,16 @@ function publicSummary(interview) {
 }
 
 export async function getInvite(token) {
-  assertEnabled();
-  return publicSummary(await findByToken(token));
+  // assertEnabled();
+  // return publicSummary(await findByToken(token));
+  return publicSummary(await findForLink(token));
 }
 
 // Link → 3-hour candidate JWT that only works on /interviews/:thisId/*.
 export async function createSession(token) {
-  assertEnabled();
-  const interview = await findByToken(token);
+  // assertEnabled();
+  // const interview = await findByToken(token);
+  const interview = await findForLink(token);
   const b = blocker(interview);
   if (b) throw ApiError.badRequest(b.message, b.code);
   const user = interview.application.candidate.user;
@@ -179,6 +217,10 @@ async function deliver(interview, channel) {
       console.error('[instant-interview] SMS failed:', err.message);
       throw new ApiError(502, 'SMS_FAILED', "We couldn't send the SMS. Please try email instead.");
     }
+  } else if (interview.slot) {
+    // Slot interview (booked from the status link): re-send the booking
+    // confirmation with its join link, not the "no booking needed" invite.
+    await sendInterviewConfirmationEmail({ application: { ...interview.application, id: interview.applicationId }, slot: interview.slot, joinLink: link });
   } else {
     await sendInterviewInviteEmail({
       to: candidate.user.email,
@@ -203,8 +245,9 @@ async function deliver(interview, channel) {
 }
 
 export async function sendInviteByToken(token, channel) {
-  assertEnabled();
-  const interview = await findByToken(token);
+  // assertEnabled();
+  // const interview = await findByToken(token);
+  const interview = await findForLink(token);
   const b = blocker(interview);
   if (b) throw ApiError.badRequest(b.message, b.code);
   return deliver(interview, channel);

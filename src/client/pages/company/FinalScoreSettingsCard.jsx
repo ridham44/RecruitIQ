@@ -87,7 +87,7 @@ export default function FinalScoreSettingsCard({ job, onSaved }) {
               checked={form.autoSubmitToClient}
               onChange={(e) => setForm({ ...form, autoSubmitToClient: e.target.checked })}
             />
-            Automatically send qualified candidates to the job's HR person
+            Automatically send qualified candidates to the job's Company HR
           </label>
         </div>
       )}
@@ -101,7 +101,7 @@ export default function FinalScoreSettingsCard({ job, onSaved }) {
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
       <p className="mt-2 text-xs text-slate-400">
         Without a threshold, candidates stay "Interview completed" and you decide. Auto-send only works when the job is linked to
-        an HR person (Client → Department → HR).
+        a Company HR (Company → Department → Company HR).
       </p>
     </Card>
   );

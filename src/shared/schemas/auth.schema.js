@@ -15,7 +15,7 @@ export const passwordSchema = z
 export const registerCompanySchema = z.object({
   email: emailSchema,
   password: passwordSchema,
-  companyName: z.string().trim().min(1, 'Company name is required'),
+  companyName: z.string().trim().min(1, 'Agency name is required'),
   website: z.string().trim().url().optional().or(z.literal('')).optional(),
   industry: z.string().trim().optional(),
   location: z.string().trim().optional(),

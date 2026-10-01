@@ -88,7 +88,7 @@ export default function CompanyDetailPage() {
   return (
     <div className="mx-auto max-w-4xl">
       <Link to="/admin/companies" className="mb-4 inline-flex min-h-[44px] items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
-        <ArrowLeft className="h-4 w-4" /> Companies
+        <ArrowLeft className="h-4 w-4" /> Agencies
       </Link>
 
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -121,7 +121,7 @@ export default function CompanyDetailPage() {
 
       {suspended && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-          This company is suspended. Its users can't log in, and anyone already logged in is signed out on their next
+          This agency is suspended. Its users can't log in, and anyone already logged in is signed out on their next
           action. Jobs and candidate data are kept.
         </div>
       )}
@@ -140,7 +140,7 @@ export default function CompanyDetailPage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="p-4 sm:p-6 lg:col-span-2">
-          <h3 className="mb-4 font-semibold text-slate-900">Company details</h3>
+          <h3 className="mb-4 font-semibold text-slate-900">Agency details</h3>
           {editing ? (
             <CompanyForm
               initial={company}
@@ -174,7 +174,7 @@ export default function CompanyDetailPage() {
         </Card>
 
         <Card className="p-4 sm:p-6">
-          <h3 className="mb-4 font-semibold text-slate-900">Owner</h3>
+          <h3 className="mb-4 font-semibold text-slate-900">Agency owner</h3>
           <dl className="space-y-4">
             <Detail label="Email">{company.owner?.email}</Detail>
             <Detail label="Login">
@@ -187,7 +187,7 @@ export default function CompanyDetailPage() {
           </dl>
           {company.pendingInvite && (
             <>
-              <p className="mt-3 text-xs text-slate-500">The owner hasn't set a password yet.</p>
+              <p className="mt-3 text-xs text-slate-500">The agency owner hasn't set a password yet.</p>
               <Button variant="secondary" onClick={resend} loading={busy === 'invite'} className="mt-3 w-full">
                 <Send className="h-4 w-4" /> Resend invite
               </Button>
@@ -199,7 +199,7 @@ export default function CompanyDetailPage() {
       <ConfirmDialog
         open={confirmSuspend}
         title={`Suspend ${company.name}?`}
-        description="Its users will be logged out and can't log in until you activate the company again. No data is deleted."
+        description="Its users will be logged out and can't log in until you activate the agency again. No data is deleted."
         confirmLabel="Suspend"
         loading={busy === 'status'}
         onConfirm={() => changeStatus('SUSPENDED')}

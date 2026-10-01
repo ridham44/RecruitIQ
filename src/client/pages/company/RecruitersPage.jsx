@@ -96,7 +96,7 @@ function RecruiterModal({ open, member, jobs, onClose, onSaved }) {
   return (
     <Modal
       open={open}
-      title={editing ? `Edit ${member?.fullName || member?.email}` : 'Invite recruiter'}
+      title={editing ? `Edit ${member?.fullName || member?.email}` : 'Invite agency recruiter'}
       onClose={onClose}
       footer={
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -125,7 +125,7 @@ function RecruiterModal({ open, member, jobs, onClose, onSaved }) {
             className={`${inputClass} min-h-[44px]`}
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
-            placeholder="recruiter@company.com"
+            placeholder="recruiter@agency.com"
           />
         </FormField>
       )}
@@ -249,17 +249,17 @@ export default function RecruitersPage() {
   };
 
   // Owners have no stored name — show "Company owner" instead of the email twice.
-  const displayName = (m) => m.fullName || (m.role === 'OWNER' ? 'Company owner' : m.email);
+  const displayName = (m) => m.fullName || (m.role === 'OWNER' ? 'Agency owner' : m.email);
 
   return (
     <div>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-slate-900">Recruiters</h2>
-          <p className="text-sm text-slate-500">People in your company and the jobs they work on</p>
+          <h2 className="text-xl font-semibold text-slate-900">Agency recruiters</h2>
+          <p className="text-sm text-slate-500">People in your agency and the jobs they work on</p>
         </div>
         <Button onClick={() => setModal({ open: true, member: null })} className="w-full sm:w-auto">
-          <UserPlus className="h-4 w-4" /> Invite recruiter
+          <UserPlus className="h-4 w-4" /> Invite agency recruiter
         </Button>
       </div>
 
@@ -277,7 +277,7 @@ export default function RecruitersPage() {
           {members.length === 1 && (
             <Card className="mb-4 flex flex-col items-center gap-2 p-6 text-center">
               <UserCog className="h-8 w-8 text-slate-300" />
-              <p className="font-medium text-slate-700">No recruiters yet</p>
+              <p className="font-medium text-slate-700">No agency recruiters yet</p>
               <p className="text-sm text-slate-500">Invite recruiters and choose which jobs they work on.</p>
             </Card>
           )}
@@ -367,10 +367,10 @@ export default function RecruitersPage() {
 
       <ConfirmDialog
         open={Boolean(confirmOff)}
-        title="Deactivate this recruiter?"
+        title="Deactivate this agency recruiter?"
         description={
           confirmOff
-            ? `${confirmOff.fullName || confirmOff.email} won't be able to log in. Their jobs stay with the company and you can reassign them.`
+            ? `${confirmOff.fullName || confirmOff.email} won't be able to log in. Their jobs stay with the agency and you can reassign them.`
             : ''
         }
         confirmLabel="Deactivate"

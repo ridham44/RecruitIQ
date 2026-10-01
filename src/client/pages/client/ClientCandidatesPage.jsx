@@ -42,7 +42,9 @@ export default function ClientCandidatesPage() {
       <div className="mb-6">
         <h2 className="text-xl font-semibold text-slate-900">Candidates</h2>
         <p className="text-sm text-slate-500">
-          Shared with you by {me.recruitmentCompany} · {me.clientName} — {me.department}
+          {/* Shared with you by {me.recruitmentCompany} · {me.clientName} — {me.department} */}
+          Shared with you by {me.recruitmentCompany} · {me.clientName}
+          {me.department ? ` — ${me.department}` : ''}
           {newCount > 0 && ` · ${newCount} new`}
         </p>
       </div>
@@ -59,7 +61,7 @@ export default function ClientCandidatesPage() {
       )}
 
       {submissions.length === 0 && (
-        <EmptyState icon={Users} title="No candidates yet" description="Candidates your recruitment partner shares with you will appear here." />
+        <EmptyState icon={Users} title="No candidates yet" description="Candidates your recruitment agency shares with you will appear here." />
       )}
 
       {submissions.length > 0 && (

@@ -8,7 +8,7 @@
     "dev": "concurrently -n client,server -c cyan,magenta \"npm:dev:client\" \"npm:dev:server\"",
     "dev:client": "vite",
     "dev:server": "node --watch src/server/dev-server.js",
-    "build": "vite build",
+    "build": "prisma generate && vite build",
     "preview": "vite preview",
     "start": "node src/server/dev-server.js",
     "test:unit": "node --test \"tests/unit/*.test.mjs\"",
