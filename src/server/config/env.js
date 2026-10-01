@@ -112,7 +112,12 @@ export const env = {
     instantInterview: flag('FEATURE_INSTANT_INTERVIEW', false),
     // P8 — client HR / hiring person portal.
     clientPortal: flag('FEATURE_CLIENT_PORTAL', false),
+    // "Start here" demo page: when on, /start shows the demo accounts'
+    // password (DEMO_PASSWORD). Off → the page still lists roles and links.
+    demoPage: flag('DEMO_PAGE', false),
   },
+  // Password shared by the demo accounts (scripts/seed-demo.mjs).
+  demoPassword: (process.env.DEMO_PASSWORD || 'Demo@123').trim(),
 };
 
 export const isProduction = isProd;

@@ -18,12 +18,22 @@ import { configApi } from '../../services/config.js';
 import SetupLinkNotice from '../admin/SetupLinkNotice.jsx';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const EMPTY_PERSON = { fullName: '', email: '', phone: '', designation: '' };
+// const EMPTY_PERSON = { fullName: '', email: '', phone: '', designation: '' };
+const EMPTY_PERSON = { fullName: '', email: '', phone: '', designation: '', departmentId: '' };
+// const TABS = [
+//   { key: 'info', label: 'Info' },
+//   { key: 'departments', label: 'Departments' },
+//   { key: 'recruiters', label: 'Recruiters' },
+// ];
+// Company HR belong to the company itself; departments are an optional label.
 const TABS = [
   { key: 'info', label: 'Info' },
+  { key: 'hr', label: 'Company HR' },
   { key: 'departments', label: 'Departments' },
-  { key: 'recruiters', label: 'Recruiters' },
+  { key: 'recruiters', label: 'Agency recruiters' },
 ];
+// Old layout listed HR inside each department — kept switched off.
+const SHOW_HR_IN_DEPARTMENTS = false;
 
 function Detail({ label, children }) {
   return (
@@ -153,10 +163,18 @@ export default function ClientDetailPage() {
       const f = modal.form;
       if (!f.fullName.trim()) return setModalError('Name is required');
       if (!EMAIL_REGEX.test(f.email.trim())) return setModalError('Enter a valid email');
-      const payload = { fullName: f.fullName.trim(), email: f.email.trim(), phone: f.phone.trim(), designation: f.designation.trim() };
+      // const payload = { fullName: f.fullName.trim(), email: f.email.trim(), phone: f.phone.trim(), designation: f.designation.trim() };
+      const payload = {
+        fullName: f.fullName.trim(),
+        email: f.email.trim(),
+        phone: f.phone.trim(),
+        designation: f.designation.trim(),
+        departmentId: f.departmentId || null,
+      };
       return run(
         'modal',
-        () => (modal.person ? clientsApi.updateHiringPerson(modal.person.id, payload) : clientsApi.addHiringPerson(modal.departmentId, payload)),
+        // () => (modal.person ? clientsApi.updateHiringPerson(modal.person.id, payload) : clientsApi.addHiringPerson(modal.departmentId, payload)),
+        () => (modal.person ? clientsApi.updateHiringPerson(modal.person.id, payload) : clientsApi.addHiringPerson(id, payload)),
         { closeModal: true }
       );
     }
@@ -167,11 +185,20 @@ export default function ClientDetailPage() {
   };
 
   const departments = client.departments || [];
+  const hiringPersons = client.hiringPersons || [];
+  const personForm = (p) => ({
+    fullName: p.fullName,
+    email: p.email,
+    phone: p.phone || '',
+    designation: p.designation || '',
+    departmentId: p.departmentId || '',
+  });
 
   return (
     <div className="mx-auto max-w-4xl">
       <Link to="/company/clients" className="mb-4 inline-flex min-h-[44px] items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
-        <ArrowLeft className="h-4 w-4" /> Clients
+        {/* <ArrowLeft className="h-4 w-4" /> Clients */}
+        <ArrowLeft className="h-4 w-4" /> Companies
       </Link>
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -181,7 +208,7 @@ export default function ClientDetailPage() {
             <StatusBadge status={client.isActive ? 'ACTIVE' : 'INACTIVE'} />
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            {departments.length} departments ·{' '}
+            {hiringPersons.length} HR · {departments.length} departments ·{' '}
             <Link to={`/company/jobs?clientId=${client.id}`} className="text-brand-600 hover:underline">
               {client.jobCount} jobs
             </Link>
@@ -207,14 +234,15 @@ export default function ClientDetailPage() {
 
       {!client.isActive && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-          This client is inactive. It can't be picked for new jobs; existing jobs keep their link.
+          {/* This client is inactive. It can't be picked for new jobs; existing jobs keep their link. */}
+          This company is inactive. It can't be picked for new jobs; existing jobs keep their link.
         </div>
       )}
       {actionError && <p className="mb-4 text-sm text-red-600">{actionError}</p>}
       {/* Build plan P8 */}
       {inviteNotice && (
         <div className="mb-4">
-          <SetupLinkNotice email={inviteNotice.email} link={inviteNotice.link} who="the HR person" />
+          <SetupLinkNotice email={inviteNotice.email} link={inviteNotice.link} who="the Company HR" />
         </div>
       )}
 
@@ -232,6 +260,7 @@ export default function ClientDetailPage() {
           >
             {t.label}
             {t.key === 'departments' && ` (${departments.length})`}
+            {t.key === 'hr' && ` (${hiringPersons.length})`}
             {t.key === 'recruiters' && ` (${client.recruiters?.length || 0})`}
           </button>
         ))}
@@ -257,6 +286,66 @@ export default function ClientDetailPage() {
             </div>
           </dl>
         </Card>
+      )}
+
+      {/* Company HR — directly under the company; department is only a label */}
+      {tab === 'hr' && (
+        <div className="space-y-3">
+          {canManage && (
+            <Button variant="secondary" className="w-full sm:w-auto" onClick={() => setModal({ kind: 'person', form: EMPTY_PERSON })}>
+              <Plus className="h-4 w-4" /> Add Company HR
+            </Button>
+          )}
+          {hiringPersons.length === 0 ? (
+            <Card className="p-6 text-center text-sm text-slate-500">No Company HR yet.</Card>
+          ) : (
+            <Card className="overflow-hidden">
+              <ul className="divide-y divide-slate-100">
+                {hiringPersons.map((p) => (
+                  <li key={p.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <UserRound className="mt-0.5 h-5 w-5 shrink-0 text-slate-400" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-900">
+                          {p.fullName} {!p.isActive && <span className="text-xs font-normal text-slate-400">(inactive)</span>}
+                          {p.department?.name && (
+                            <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">{p.department.name}</span>
+                          )}
+                          {portalOn && p.portalStatus === 'ACTIVE' && (
+                            <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">Portal</span>
+                          )}
+                          {portalOn && p.portalStatus === 'INVITED' && (
+                            <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">Invited</span>
+                          )}
+                        </p>
+                        <p className="break-all text-xs text-slate-500">{[p.designation, p.email, p.phone].filter(Boolean).join(' · ')}</p>
+                      </div>
+                    </div>
+                    {canManage && (
+                      <div className="flex flex-wrap gap-2 pl-8 sm:pl-0">
+                        <Button variant="ghost" onClick={() => setModal({ kind: 'person', person: p, form: personForm(p) })}>
+                          Edit
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          loading={busy === `p:${p.id}`}
+                          onClick={() => run(`p:${p.id}`, () => clientsApi.setHiringPersonStatus(p.id, !p.isActive))}
+                        >
+                          {p.isActive ? 'Deactivate' : 'Activate'}
+                        </Button>
+                        {portalOn && p.isActive && p.portalStatus !== 'ACTIVE' && (
+                          <Button variant="ghost" loading={busy === `inv:${p.id}`} onClick={() => invite(p)}>
+                            {p.portalStatus === 'INVITED' ? 'Resend invite' : 'Invite to portal'}
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+        </div>
       )}
 
       {tab === 'departments' && (
@@ -285,13 +374,15 @@ export default function ClientDetailPage() {
                     {!d.isActive && <StatusBadge status="INACTIVE" />}
                   </span>
                   <span className="shrink-0 text-xs text-slate-500">
-                    {d.hiringPersons.length} HR · {d.jobCount} jobs
+                    {/* {d.hiringPersons.length} HR · {d.jobCount} jobs */}
+                    {d.jobCount} jobs
                   </span>
                 </button>
 
                 {expanded && (
                   <div className="border-t border-slate-100 px-4 py-3">
-                    {d.hiringPersons.length === 0 && <p className="mb-3 text-sm text-slate-500">No HR / hiring people yet.</p>}
+                    {SHOW_HR_IN_DEPARTMENTS && d.hiringPersons.length === 0 && <p className="mb-3 text-sm text-slate-500">No Company HR yet.</p>}
+                    {SHOW_HR_IN_DEPARTMENTS && (
                     <ul className="divide-y divide-slate-100">
                       {d.hiringPersons.map((p) => (
                         <li key={p.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -345,11 +436,15 @@ export default function ClientDetailPage() {
                         </li>
                       ))}
                     </ul>
+                    )}
                     {canManage && (
-                      <div className="mt-2 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+                      // <div className="mt-2 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+                      <div className="flex flex-wrap gap-2">
+                        {SHOW_HR_IN_DEPARTMENTS && (
                         <Button variant="secondary" onClick={() => setModal({ kind: 'person', departmentId: d.id, form: EMPTY_PERSON })}>
-                          <Plus className="h-4 w-4" /> Add HR person
+                          <Plus className="h-4 w-4" /> Add Company HR
                         </Button>
+                        )}
                         <Button variant="ghost" onClick={() => setModal({ kind: 'department', department: d, name: d.name })}>
                           Rename
                         </Button>
@@ -373,7 +468,7 @@ export default function ClientDetailPage() {
       {tab === 'recruiters' && (
         <Card className="p-4 sm:p-6">
           <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-slate-500">Recruiters assigned here see every job of this client.</p>
+            <p className="text-sm text-slate-500">Agency recruiters assigned here see every job of this company.</p>
             {canAssign && (
               <Button variant="secondary" onClick={openRecruiters} className="w-full sm:w-auto">
                 <UserCog className="h-4 w-4" /> Change
@@ -381,7 +476,7 @@ export default function ClientDetailPage() {
             )}
           </div>
           {(client.recruiters || []).length === 0 ? (
-            <p className="text-sm text-slate-500">No recruiters assigned — only the owner works this client.</p>
+            <p className="text-sm text-slate-500">No agency recruiters assigned — only the agency owner works this company.</p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {client.recruiters.map((r) => (
@@ -394,7 +489,7 @@ export default function ClientDetailPage() {
             </div>
           )}
           <Link to={`/company/jobs?clientId=${client.id}`} className="mt-4 inline-flex min-h-[44px] items-center gap-1 text-sm font-medium text-brand-600 hover:underline">
-            <Briefcase className="h-4 w-4" /> View this client's jobs
+            <Briefcase className="h-4 w-4" /> View this company's jobs
           </Link>
         </Card>
       )}
@@ -402,7 +497,7 @@ export default function ClientDetailPage() {
       {/* ─── Modals ─── */}
       <Modal
         open={modal?.kind === 'client'}
-        title="Edit client"
+        title="Edit company"
         onClose={() => setModal(null)}
         footer={<ModalFooter onCancel={() => setModal(null)} onSave={saveModal} saving={busy === 'modal'} />}
       >
@@ -429,9 +524,10 @@ export default function ClientDetailPage() {
         {modalError && <p className="text-sm text-red-600">{modalError}</p>}
       </Modal>
 
+      {/* was: title={modal?.person ? 'Edit HR person' : 'Add HR / hiring person'} */}
       <Modal
         open={modal?.kind === 'person'}
-        title={modal?.person ? 'Edit HR person' : 'Add HR / hiring person'}
+        title={modal?.person ? 'Edit Company HR' : 'Add Company HR'}
         onClose={() => setModal(null)}
         footer={<ModalFooter onCancel={() => setModal(null)} onSave={saveModal} saving={busy === 'modal'} label={modal?.person ? 'Save' : 'Add'} />}
       >
@@ -453,6 +549,25 @@ export default function ClientDetailPage() {
                 />
               </FormField>
             ))}
+            {/* Optional label — HR belongs to the company either way */}
+            {departments.length > 0 && (
+              <FormField label="Department (optional)">
+                <select
+                  className={`${inputClass} min-h-[44px]`}
+                  value={modal.form.departmentId || ''}
+                  onChange={(e) => setModal((m) => ({ ...m, form: { ...m.form, departmentId: e.target.value } }))}
+                >
+                  <option value="">No department</option>
+                  {departments
+                    .filter((d) => d.isActive || d.id === modal.form.departmentId)
+                    .map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}
+                      </option>
+                    ))}
+                </select>
+              </FormField>
+            )}
           </div>
         )}
         {modalError && <p className="text-sm text-red-600">{modalError}</p>}
@@ -460,13 +575,13 @@ export default function ClientDetailPage() {
 
       <Modal
         open={modal?.kind === 'recruiters'}
-        title="Assign recruiters"
+        title="Assign agency recruiters"
         onClose={() => setModal(null)}
         footer={<ModalFooter onCancel={() => setModal(null)} onSave={saveModal} saving={busy === 'modal'} />}
       >
         {allRecruiters.length === 0 ? (
           <p className="text-sm text-slate-500">
-            No recruiters yet.{' '}
+            No agency recruiters yet.{' '}
             <Link to="/company/recruiters" className="font-medium text-brand-600 hover:underline">
               Invite one
             </Link>

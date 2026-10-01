@@ -4,7 +4,7 @@ import DashboardLayout from './DashboardLayout.jsx';
 // Build plan P1 — Platform Admin area. Reuses the shared dashboard shell
 // (sidebar on desktop, bottom tab bar on mobile).
 const navItems = [
-  { to: '/admin/companies', label: 'Companies', icon: Building2 },
+  { to: '/admin/companies', label: 'Agencies', icon: Building2 },
   { to: '/admin/users', label: 'Users', icon: Users },
 ];
 

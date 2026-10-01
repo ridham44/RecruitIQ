@@ -15,9 +15,9 @@ export default function CompanyNewPage() {
   return (
     <div className="mx-auto max-w-2xl">
       <Link to="/admin/companies" className="mb-4 inline-flex min-h-[44px] items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
-        <ArrowLeft className="h-4 w-4" /> Companies
+        <ArrowLeft className="h-4 w-4" /> Agencies
       </Link>
-      <h2 className="mb-6 text-xl font-semibold text-slate-900">Add company</h2>
+      <h2 className="mb-6 text-xl font-semibold text-slate-900">Add agency</h2>
 
       {result ? (
         <div className="space-y-4">
@@ -27,7 +27,7 @@ export default function CompanyNewPage() {
               <Button className="w-full">View {result.company.name}</Button>
             </Link>
             <Button variant="secondary" className="w-full sm:flex-1" onClick={() => setResult(null)}>
-              Add another company
+              Add another agency
             </Button>
           </div>
         </div>
@@ -35,7 +35,7 @@ export default function CompanyNewPage() {
         <Card className="p-4 sm:p-6">
           <CompanyForm
             withOwnerEmail
-            submitLabel="Create company & send invite"
+            submitLabel="Create agency & send invite"
             onSubmit={async (payload) => setResult(await adminApi.createCompany(payload))}
             onCancel={() => navigate('/admin/companies')}
           />

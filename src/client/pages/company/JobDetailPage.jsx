@@ -327,7 +327,7 @@ export default function JobDetailPage() {
       {/* Build plan P3: who this job is for */}
       {link?.clientCompany && (
         <Card className="mb-6 p-5">
-          <h3 className="mb-3 text-sm font-semibold text-slate-900">Client</h3>
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">Company</h3>
           <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="min-w-0">
               <dt className="text-xs text-slate-500">Company</dt>
@@ -342,7 +342,7 @@ export default function JobDetailPage() {
               <dd className="mt-0.5 text-sm text-slate-900">{link.department?.name || '—'}</dd>
             </div>
             <div className="min-w-0">
-              <dt className="text-xs text-slate-500">HR / hiring person</dt>
+              <dt className="text-xs text-slate-500">Company HR</dt>
               <dd className="mt-0.5 break-words text-sm text-slate-900">
                 {link.hiringPerson ? (
                   <>

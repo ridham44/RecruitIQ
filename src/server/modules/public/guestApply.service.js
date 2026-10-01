@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+// import jwt from 'jsonwebtoken';
 import { prisma, TX_OPTIONS } from '../../config/prisma.js';
 import { env } from '../../config/env.js';
 import { ApiError } from '../../utils/ApiError.js';
@@ -17,6 +17,9 @@ import { sendCandidateApplicationReceivedEmail } from '../notifications/email.se
 import { screenApplicationById } from '../screening/screening.service.js';
 import { matchCvSubmission } from '../screening/bestMatch.service.js';
 import { interviewLinkFor } from '../interviews/instantInterview.service.js';
+// Status-link token helpers now live in trackToken.js (shared with emails).
+import { trackUrl as sharedTrackUrl, signTrackToken, readTrackToken } from './trackToken.js';
+import { getBookingForApplicationId, bookSlotForApplicationId, cancelBookingForApplicationId } from '../scheduling/scheduling.service.js';
 
 // Build plan P4 (§6A, §6B, §7, §8) — apply on a careers portal without an
 // account. The guest becomes an ordinary CANDIDATE user (passwordSet=false)
@@ -24,29 +27,30 @@ import { interviewLinkFor } from '../interviews/instantInterview.service.js';
 // for them once they set a password from the emailed link.
 
 const UPLOAD_TTL_MS = 24 * 3600 * 1000;
-const TRACK_TOKEN_TTL = '30d';
-
-function clientOrigin() {
-  return env.clientUrl.split(',')[0].trim();
-}
-
-export function trackUrl(token) {
-  return `${clientOrigin()}/careers/track?token=${token}`;
-}
-
-function signTrackToken(kind, id) {
-  return jwt.sign({ typ: 'track', kind, id }, env.jwtSecret, { expiresIn: TRACK_TOKEN_TTL });
-}
-
-function readTrackToken(token) {
-  try {
-    const payload = jwt.verify(token, env.jwtSecret);
-    if (payload.typ === 'track' && (payload.kind === 'application' || payload.kind === 'submission')) return payload;
-  } catch {
-    /* fall through */
-  }
-  throw ApiError.notFound('This tracking link is invalid or has expired', 'TRACK_TOKEN_INVALID');
-}
+// const TRACK_TOKEN_TTL = '30d';
+//
+// function clientOrigin() {
+//   return env.clientUrl.split(',')[0].trim();
+// }
+//
+// export function trackUrl(token) {
+//   return `${clientOrigin()}/careers/track?token=${token}`;
+// }
+//
+// function signTrackToken(kind, id) {
+//   return jwt.sign({ typ: 'track', kind, id }, env.jwtSecret, { expiresIn: TRACK_TOKEN_TTL });
+// }
+//
+// function readTrackToken(token) {
+//   try {
+//     const payload = jwt.verify(token, env.jwtSecret);
+//     if (payload.typ === 'track' && (payload.kind === 'application' || payload.kind === 'submission')) return payload;
+//   } catch {
+//     /* fall through */
+//   }
+//   throw ApiError.notFound('This tracking link is invalid or has expired', 'TRACK_TOKEN_INVALID');
+// }
+export const trackUrl = sharedTrackUrl;
 
 // ─── Step 1: upload + read the CV ───
 
@@ -244,15 +248,43 @@ function describeApplication(application) {
     ? (application.interviews || []).find((i) => !i.slotId && (i.status === 'SCHEDULED' || i.status === 'IN_PROGRESS'))
     : null;
 
+  // Slot-booking jobs: has the candidate booked (or started) a slot interview?
+  const slotInterview = (application.interviews || []).find((i) => i.slotId && (i.status === 'SCHEDULED' || i.status === 'IN_PROGRESS'));
+
   return {
     applicationId: application.id,
     // status: application.status,
     status: candidateFacingStatus(application.status),
     stage,
+    // For the progress page: SLOT jobs offer booking from this link.
+    usesSlots: application.job.interviewFlow !== 'INSTANT',
+    hasBookedSlot: Boolean(slotInterview),
     job: { id: application.job.id, title: application.job.title },
     company: { name: application.job.company.name },
     ...(instant ? { interview: { link: interviewLinkFor(instant), expiresAt: instant.inviteExpiresAt, status: instant.status } } : {}),
   };
+}
+
+// ─── Slot booking from the status link (no login) ───
+
+async function applicationIdFromTrack(token) {
+  const { kind, id } = readTrackToken(token);
+  if (kind === 'application') return id;
+  const submission = await prisma.cvSubmission.findUnique({ where: { id }, select: { applicationId: true } });
+  if (!submission?.applicationId) throw ApiError.badRequest('This CV has not been placed on a job yet', 'NO_APPLICATION');
+  return submission.applicationId;
+}
+
+export async function getTrackBooking(token) {
+  return getBookingForApplicationId(await applicationIdFromTrack(token));
+}
+
+export async function bookFromTrack(token, slotId) {
+  return bookSlotForApplicationId(await applicationIdFromTrack(token), slotId);
+}
+
+export async function cancelFromTrack(token) {
+  return cancelBookingForApplicationId(await applicationIdFromTrack(token));
 }
 
 export async function getTrackStatus(token) {

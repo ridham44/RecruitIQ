@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import { ScanSearch, Target, ListChecks } from 'lucide-react';
+// import { ScanSearch, Target, ListChecks } from 'lucide-react';
+import { ScanSearch, Target, ListChecks, PlayCircle } from 'lucide-react';
 
 const FEATURES = [
   {
@@ -22,18 +23,30 @@ const FEATURES = [
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-white">
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-        <div className="flex items-center gap-2">
-          <img src="/Logo.png" alt="RecruitIQ" className="h-10 w-10 object-contain" />
-          <span className="text-lg font-semibold">RecruitIQ</span>
+      {/* <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5"> */}
+      <header className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-5 sm:px-6">
+        <div className="flex shrink-0 items-center gap-2">
+          <img src="/Logo.png" alt="RecruitIQ" className="h-10 w-10 shrink-0 object-contain" />
+          {/* <span className="text-lg font-semibold">RecruitIQ</span> */}
+          <span className="hidden text-lg font-semibold sm:inline">RecruitIQ</span>
         </div>
-        <div className="flex items-center gap-3">
-          <Link to="/auth/login" className="text-sm font-medium text-slate-600 hover:text-slate-900">
+        {/* <div className="flex items-center gap-3"> */}
+        <div className="flex shrink-0 items-center gap-1 sm:gap-3">
+          {/* Live demo: every role, demo login and public link (/live-demo) */}
+          <Link
+            to="/live-demo"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-brand-600 hover:bg-brand-50 hover:text-brand-700 sm:px-3"
+          >
+            <PlayCircle className="h-4 w-4" />
+            Live Demo
+          </Link>
+          <Link to="/auth/login" className="inline-flex min-h-[44px] items-center px-2 text-sm font-medium text-slate-600 hover:text-slate-900">
             Log in
           </Link>
           <Link
             to="/auth/register"
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+            // className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+            className="hidden min-h-[44px] items-center rounded-lg bg-brand-600 px-3 text-sm font-medium text-white hover:bg-brand-700 min-[360px]:inline-flex sm:px-4"
           >
             Get started
           </Link>

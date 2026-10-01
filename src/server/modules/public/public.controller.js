@@ -35,3 +35,16 @@ export const processTracked = asyncHandler(async (req, res) => {
 export const getTrackStatus = asyncHandler(async (req, res) => {
   ok(res, await guest.getTrackStatus(String(req.query.token || '')));
 });
+
+// Slot booking from the status link.
+export const getTrackBooking = asyncHandler(async (req, res) => {
+  ok(res, await guest.getTrackBooking(String(req.query.token || '')));
+});
+
+export const bookFromTrack = asyncHandler(async (req, res) => {
+  ok(res, await guest.bookFromTrack(req.body.token, req.body.slotId));
+});
+
+export const cancelFromTrack = asyncHandler(async (req, res) => {
+  ok(res, await guest.cancelFromTrack(req.body.token));
+});

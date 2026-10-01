@@ -7,7 +7,7 @@ const optionalEmail = z.string().trim().email('Enter a valid email').optional().
 const optionalUrl = z.string().trim().url('Website must be a valid URL (https://…)').optional().or(z.literal('')).optional();
 
 export const createClientSchema = z.object({
-  name: z.string().trim().min(1, 'Client name is required').max(200),
+  name: z.string().trim().min(1, 'Company name is required').max(200),
   description: optionalText(4000),
   website: optionalUrl,
   industry: optionalText(120),
@@ -32,6 +32,8 @@ export const createHiringPersonSchema = z.object({
   email: z.string().trim().min(1, 'Email is required').email('Enter a valid email'),
   phone: optionalText(40),
   designation: optionalText(120),
+  // Optional: HR belongs to the company; a department is just a label.
+  departmentId: z.string().trim().max(64).nullable().optional().or(z.literal('')),
 });
 
 export const updateHiringPersonSchema = createHiringPersonSchema.partial();

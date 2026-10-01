@@ -3,8 +3,6 @@ dist
 build
 .vercel
 
-.env
-.env.*
 !.env.example
 
 *.log
@@ -17,3 +15,7 @@ Thumbs.db
 
 # Local database backups (pg_dump) — contain real candidate data, never commit
 /backups
+
+# Local docs, guides and videos (shared directly, not via git)
+/doc
+config.bat

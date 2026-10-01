@@ -116,14 +116,18 @@ async function resolveRecipient(companyId, application, { hiringPersonId, recipi
   if (hiringPersonId) {
     const person = await prisma.hiringPerson.findUnique({
       where: { id: hiringPersonId },
-      include: { department: { include: { clientCompany: true } } },
+      // include: { department: { include: { clientCompany: true } } },
+      include: { clientCompany: true },
     });
-    if (!person || person.department.clientCompany.companyId !== companyId) throw ApiError.badRequest('HR person not found', 'INVALID_RECIPIENT');
-    if (!person.isActive) throw ApiError.badRequest('That HR person is inactive', 'INVALID_RECIPIENT');
+    // if (!person || person.department.clientCompany.companyId !== companyId) throw ApiError.badRequest('HR person not found', 'INVALID_RECIPIENT');
+    if (!person || person.clientCompany.companyId !== companyId) throw ApiError.badRequest('Company HR not found', 'INVALID_RECIPIENT');
+    if (!person.isActive) throw ApiError.badRequest('That Company HR is inactive', 'INVALID_RECIPIENT');
     return {
       hiringPersonId: person.id,
-      departmentId: person.departmentId,
-      clientCompanyId: person.department.clientCompanyId,
+      // departmentId: person.departmentId,
+      // clientCompanyId: person.department.clientCompanyId,
+      departmentId: person.departmentId ?? application.job.department?.id ?? null,
+      clientCompanyId: person.clientCompanyId,
       recipientName: person.fullName,
       recipientEmail: person.email,
     };
@@ -141,7 +145,7 @@ async function resolveRecipient(companyId, application, { hiringPersonId, recipi
   if (hp?.isActive) {
     return resolveRecipient(companyId, application, { hiringPersonId: hp.id });
   }
-  throw ApiError.badRequest('Choose an HR person or enter an email to send this candidate to', 'RECIPIENT_REQUIRED');
+  throw ApiError.badRequest('Choose a Company HR or enter an email to send this candidate to', 'RECIPIENT_REQUIRED');
 }
 
 async function createSubmission(application, recipient, { submittedById, note }) {
@@ -226,7 +230,8 @@ export async function getSubmissionOverview(userId, applicationId) {
     prisma.clientSubmission.findMany({ where: { applicationId }, orderBy: { createdAt: 'desc' } }),
     application.job.clientCompany
       ? prisma.hiringPerson.findMany({
-          where: { isActive: true, department: { clientCompanyId: application.job.clientCompany.id, isActive: true } },
+          // where: { isActive: true, department: { clientCompanyId: application.job.clientCompany.id, isActive: true } },
+          where: { isActive: true, clientCompanyId: application.job.clientCompany.id },
           include: { department: { select: { name: true } } },
           orderBy: { fullName: 'asc' },
         })
@@ -240,7 +245,7 @@ export async function getSubmissionOverview(userId, applicationId) {
     finalThreshold: application.job.finalThreshold,
     defaultHiringPersonId: application.job.hiringPerson?.isActive ? application.job.hiringPerson.id : null,
     client: application.job.clientCompany,
-    recipients: recipients.map((p) => ({ id: p.id, fullName: p.fullName, email: p.email, designation: p.designation, department: p.department.name })),
+    recipients: recipients.map((p) => ({ id: p.id, fullName: p.fullName, email: p.email, designation: p.designation, department: p.department?.name || null })),
     preview: buildSnapshot(application),
     history: history.map(serializeSubmission),
   };

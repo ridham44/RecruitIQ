@@ -22,7 +22,7 @@ const submitSchema = z
     recipientName: z.string().trim().max(120).optional(),
     note: z.string().trim().max(1000).optional(),
   })
-  .refine((d) => !(d.hiringPersonId && d.recipientEmail), { message: 'Choose an HR person or enter an email, not both' });
+  .refine((d) => !(d.hiringPersonId && d.recipientEmail), { message: 'Choose a Company HR or enter an email, not both' });
 
 router.use(authenticate, authorize(...COMPANY_SIDE_ROLES));
 

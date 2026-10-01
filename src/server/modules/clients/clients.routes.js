@@ -32,7 +32,8 @@ router.post('/', manageClients, validate(createClientSchema), controller.create)
 
 router.patch('/departments/:departmentId', manageClients, validate(departmentSchema), controller.updateDepartment);
 router.patch('/departments/:departmentId/status', manageClients, validate(activeStatusSchema), controller.setDepartmentStatus);
-router.post('/departments/:departmentId/hiring-persons', manageClients, validate(createHiringPersonSchema), controller.createHiringPerson);
+// router.post('/departments/:departmentId/hiring-persons', manageClients, validate(createHiringPersonSchema), controller.createHiringPerson);
+router.post('/departments/:departmentId/hiring-persons', manageClients, validate(createHiringPersonSchema), controller.createHiringPersonInDepartment);
 router.patch('/hiring-persons/:personId', manageClients, validate(updateHiringPersonSchema), controller.updateHiringPerson);
 router.patch('/hiring-persons/:personId/status', manageClients, validate(activeStatusSchema), controller.setHiringPersonStatus);
 // Build plan P8: invite / re-invite an HR person to the client portal.
@@ -47,5 +48,7 @@ router.patch('/:id', manageClients, validate(updateClientSchema), controller.upd
 router.patch('/:id/status', manageClients, validate(activeStatusSchema), controller.setStatus);
 router.put('/:id/recruiters', requirePermission(PERMISSIONS.MANAGE_RECRUITERS), manageClients, validate(clientRecruitersSchema), controller.setRecruiters);
 router.post('/:id/departments', manageClients, validate(departmentSchema), controller.createDepartment);
+// HR / hiring persons belong to the company; department optional in the body.
+router.post('/:id/hiring-persons', manageClients, validate(createHiringPersonSchema), controller.createHiringPerson);
 
 export default router;

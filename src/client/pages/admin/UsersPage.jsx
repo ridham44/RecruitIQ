@@ -14,13 +14,13 @@ import { inputClass } from '../../components/ui/FormField.jsx';
 
 // const ROLE_LABELS = { ADMIN: 'Admin', COMPANY: 'Company', CANDIDATE: 'Candidate', RECRUITER: 'Recruiter', INTERVIEWER: 'Interviewer' };
 const ROLE_LABELS = {
-  ADMIN: 'Admin',
-  COMPANY: 'Company',
+  ADMIN: 'Portal Admin',
+  COMPANY: 'Agency owner',
   CANDIDATE: 'Candidate',
-  RECRUITER: 'Recruiter',
+  RECRUITER: 'Agency recruiter',
   INTERVIEWER: 'Interviewer',
   // Build plan P8
-  CLIENT_HR: 'Client HR',
+  CLIENT_HR: 'Company HR',
 };
 const formatDate = (d) => new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -178,7 +178,7 @@ export default function UsersPage() {
                 <tr>
                   <th className="px-5 py-3">Email</th>
                   <th className="px-5 py-3">Role</th>
-                  <th className="px-5 py-3">Name / company</th>
+                  <th className="px-5 py-3">Name / agency</th>
                   <th className="px-5 py-3">Joined</th>
                   <th className="px-5 py-3">Status</th>
                   <th className="px-5 py-3 text-right">Action</th>
@@ -191,7 +191,7 @@ export default function UsersPage() {
                     <td className="px-5 py-3 text-slate-600">{ROLE_LABELS[u.role] || u.role}</td>
                     <td className="px-5 py-3">
                       <NameCell u={u} />
-                      {u.company?.status === 'SUSPENDED' && <p className="text-xs text-red-600">Company suspended</p>}
+                      {u.company?.status === 'SUSPENDED' && <p className="text-xs text-red-600">Agency suspended</p>}
                     </td>
                     <td className="px-5 py-3 text-slate-500">{formatDate(u.createdAt)}</td>
                     <td className="px-5 py-3">

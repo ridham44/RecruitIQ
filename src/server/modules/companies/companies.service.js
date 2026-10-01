@@ -124,7 +124,7 @@ export async function getDashboardOverview(userId) {
     { key: 'INTERVIEW_COMPLETED', label: 'Interview Completed', color: 'emerald' },
     // Build plan P7
     { key: 'QUALIFIED', label: 'Qualified', color: 'teal' },
-    { key: 'SUBMITTED_TO_CLIENT', label: 'Submitted to Client', color: 'violet' },
+    { key: 'SUBMITTED_TO_CLIENT', label: 'Submitted to Company', color: 'violet' },
     { key: 'NOT_QUALIFIED', label: 'Not Qualified', color: 'orange' },
     { key: 'REJECTED', label: 'Rejected', color: 'red' },
   ];

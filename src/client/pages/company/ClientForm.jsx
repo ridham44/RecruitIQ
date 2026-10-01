@@ -21,7 +21,7 @@ export function clientToForm(client) {
 
 // Returns an error message, or '' when the form is valid.
 export function validateClientForm(form) {
-  if (!form.name.trim()) return 'Client name is required';
+  if (!form.name.trim()) return 'Company name is required';
   if (form.website.trim() && !URL_REGEX.test(form.website.trim())) return 'Website must start with http:// or https://';
   if (form.contactEmail.trim() && !EMAIL_REGEX.test(form.contactEmail.trim())) return 'Enter a valid contact email';
   return '';
@@ -45,7 +45,7 @@ export default function ClientForm({ value, onChange }) {
   return (
     <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
       <div className="sm:col-span-2">
-        <FormField label="Client name *">
+        <FormField label="Company name *">
           <input className={cls} value={form.name} onChange={set('name')} placeholder="e.g. Infosys" />
         </FormField>
       </div>

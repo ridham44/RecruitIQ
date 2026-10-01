@@ -50,7 +50,7 @@ export default function JobRecruitersCard({ jobId }) {
   return (
     <Card className="mt-4 p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-slate-900">Assigned recruiters</h3>
+        <h3 className="text-sm font-semibold text-slate-900">Assigned agency recruiters</h3>
         {assigned && all.length > 0 && (
           <Button variant="secondary" onClick={openEdit}>
             <Pencil className="h-4 w-4" /> Change
@@ -61,7 +61,7 @@ export default function JobRecruitersCard({ jobId }) {
       {!assigned && !error && <p className="text-sm text-slate-400">Loading…</p>}
       {assigned && assigned.length === 0 && (
         <p className="text-sm text-slate-500">
-          {all.length ? 'Nobody assigned yet — only the owner works this job.' : 'No recruiters in your company yet.'}{' '}
+          {all.length ? 'Nobody assigned yet — only the agency owner works this job.' : 'No agency recruiters in your agency yet.'}{' '}
           {!all.length && (
             <Link to="/company/recruiters" className="font-medium text-brand-600 hover:underline">
               Invite one
@@ -83,7 +83,7 @@ export default function JobRecruitersCard({ jobId }) {
 
       <Modal
         open={open}
-        title="Assign recruiters"
+        title="Assign agency recruiters"
         onClose={() => setOpen(false)}
         footer={
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

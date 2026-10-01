@@ -36,9 +36,12 @@ function serializeUser(user) {
       ? {
           id: user.hiringPerson.id,
           fullName: user.hiringPerson.fullName,
-          department: user.hiringPerson.department?.name,
-          clientName: user.hiringPerson.department?.clientCompany?.name,
-          recruitmentCompany: user.hiringPerson.department?.clientCompany?.company?.name,
+          // department: user.hiringPerson.department?.name,
+          // clientName: user.hiringPerson.department?.clientCompany?.name,
+          // recruitmentCompany: user.hiringPerson.department?.clientCompany?.company?.name,
+          department: user.hiringPerson.department?.name || null,
+          clientName: user.hiringPerson.clientCompany?.name,
+          recruitmentCompany: user.hiringPerson.clientCompany?.company?.name,
         }
       : undefined,
   };
@@ -51,7 +54,9 @@ export const USER_AUTH_INCLUDE = {
   candidate: true,
   membership: { include: { company: true } },
   // Build plan P8
-  hiringPerson: { include: { department: { include: { clientCompany: { include: { company: true } } } } } },
+  // hiringPerson: { include: { department: { include: { clientCompany: { include: { company: true } } } } } },
+  // HR belongs to the client company directly; department optional.
+  hiringPerson: { include: { department: true, clientCompany: { include: { company: true } } } },
 };
 
 export async function registerCompany({ email, password, companyName, website, industry, location }) {
@@ -144,8 +149,9 @@ export function assertCompanyNotSuspended(user) {
   // recruitment company closes its clients' portal too.
   if (user.role === ROLES.CLIENT_HR) {
     if (!user.hiringPerson?.isActive) throw ApiError.unauthorized('Invalid email or password', 'INVALID_CREDENTIALS');
-    if (user.hiringPerson.department?.clientCompany?.company?.status === 'SUSPENDED') {
-      throw ApiError.forbidden('This portal is currently unavailable. Please contact your recruitment partner.', 'COMPANY_SUSPENDED');
+    // if (user.hiringPerson.department?.clientCompany?.company?.status === 'SUSPENDED') {
+    if (user.hiringPerson.clientCompany?.company?.status === 'SUSPENDED') {
+      throw ApiError.forbidden('This portal is currently unavailable. Please contact your recruitment agency.', 'COMPANY_SUSPENDED');
     }
     return;
   }
@@ -157,7 +163,7 @@ export function assertCompanyNotSuspended(user) {
   // if (user.role === ROLES.COMPANY && user.company?.status === 'SUSPENDED') {
   if ((user.role === ROLES.COMPANY || user.role === ROLES.RECRUITER) && companyStatus === 'SUSPENDED') {
     throw ApiError.forbidden(
-      'Your company account has been suspended. Please contact the RecruitIQ administrator.',
+      'Your agency account has been suspended. Please contact the RecruitIQ administrator.',
       'COMPANY_SUSPENDED'
     );
   }
@@ -198,7 +204,8 @@ export async function getPasswordTokenInfo(token) {
     // companyName: row.user.company?.name,
     // companyName: row.user.company?.name ?? row.user.membership?.company?.name,
     // Build plan P8: client HR see their own (client) company name.
-    companyName: row.user.company?.name ?? row.user.membership?.company?.name ?? row.user.hiringPerson?.department?.clientCompany?.name,
+    // companyName: row.user.company?.name ?? row.user.membership?.company?.name ?? row.user.hiringPerson?.department?.clientCompany?.name,
+    companyName: row.user.company?.name ?? row.user.membership?.company?.name ?? row.user.hiringPerson?.clientCompany?.name,
     purpose: row.purpose,
   };
 }

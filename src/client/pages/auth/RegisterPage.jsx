@@ -92,7 +92,7 @@ export default function RegisterPage() {
     <AuthShell title="Create your account" subtitle="Start hiring or start applying in minutes">
       {!allowCompanySignup && companyRequested && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-          Company accounts are set up by the RecruitIQ team. Please contact us to get started — or, if you're
+          Agency accounts are set up by the RecruitIQ team. Please contact us to get started — or, if you're
           looking for a job, create a candidate account below.
         </div>
       )}
@@ -103,7 +103,7 @@ export default function RegisterPage() {
         ].map((option) => ( */}
         {[
           { key: 'CANDIDATE', label: "I'm a Candidate" },
-          { key: 'COMPANY', label: "I'm a Company" },
+          { key: 'COMPANY', label: "I'm an Agency" },
         ]
           .filter((option) => option.key !== 'COMPANY' || allowCompanySignup)
           .map((option) => (
@@ -121,14 +121,14 @@ export default function RegisterPage() {
       </div>
 
       <form onSubmit={handleSubmit} noValidate>
-        <FormField label={role === 'COMPANY' ? 'Company name' : 'Full name'}>
+        <FormField label={role === 'COMPANY' ? 'Agency name' : 'Full name'}>
           <input
             required
             className={inputClass}
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             onBlur={() => setTouched((prev) => ({ ...prev, name: true }))}
-            placeholder={role === 'COMPANY' ? 'e.g. Acme Corp' : 'e.g. John Doe'}
+            placeholder={role === 'COMPANY' ? 'e.g. Acme Talent Partners' : 'e.g. John Doe'}
           />
         </FormField>
 

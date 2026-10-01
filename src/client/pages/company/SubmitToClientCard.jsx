@@ -62,7 +62,7 @@ export default function SubmitToClientCard({ application, onChanged }) {
   const submit = async () => {
     setError('');
     if (form.mode === 'email' && !EMAIL_REGEX.test(form.recipientEmail.trim())) return setError('Enter a valid email');
-    if (form.mode === 'hr' && !form.hiringPersonId) return setError('Choose an HR person');
+    if (form.mode === 'hr' && !form.hiringPersonId) return setError('Choose a Company HR');
     setSaving(true);
     try {
       const r = await submissionsApi.submit({
@@ -91,16 +91,16 @@ export default function SubmitToClientCard({ application, onChanged }) {
         <div className="flex items-start gap-3">
           <Building2 className="mt-0.5 h-5 w-5 shrink-0 text-brand-600" />
           <div>
-            <h3 className="font-semibold text-slate-900">Final score &amp; client submission</h3>
+            <h3 className="font-semibold text-slate-900">Final score &amp; submission to company</h3>
             <p className="text-sm text-slate-500">
-              {data.client ? `Client: ${data.client.name}` : 'This job is not linked to a client — you can send to an HR email.'}
+              {data.client ? `Company: ${data.client.name}` : 'This job is not linked to a company — you can send to an HR email.'}
               {data.finalThreshold != null && ` · Threshold ${data.finalThreshold}`}
             </p>
           </div>
         </div>
         {canSend && (
           <Button onClick={openModal} className="w-full sm:w-auto">
-            <Send className="h-4 w-4" /> Submit to client
+            <Send className="h-4 w-4" /> Submit to company
           </Button>
         )}
       </div>
@@ -138,7 +138,7 @@ export default function SubmitToClientCard({ application, onChanged }) {
 
       <Modal
         open={open}
-        title="Submit to client"
+        title="Submit to company"
         onClose={() => setOpen(false)}
         footer={
           sentLink ? (
@@ -161,7 +161,7 @@ export default function SubmitToClientCard({ application, onChanged }) {
       >
         {sentLink ? (
           <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-            Sent. The HR person got an email with a private link to the candidate package.
+            Sent. The Company HR got an email with a private link to the candidate package.
             <input
               readOnly
               value={sentLink}
@@ -192,7 +192,7 @@ export default function SubmitToClientCard({ application, onChanged }) {
             {data.recipients.length > 0 && (
               <div className="mb-3 flex gap-2" role="radiogroup">
                 {[
-                  ['hr', 'Client HR person'],
+                  ['hr', 'Company HR'],
                   ['email', 'Type an email'],
                 ].map(([k, l]) => (
                   <button
@@ -212,7 +212,7 @@ export default function SubmitToClientCard({ application, onChanged }) {
             )}
 
             {form.mode === 'hr' ? (
-              <FormField label="HR / hiring person">
+              <FormField label="Company HR">
                 <select
                   className={`${inputClass} min-h-[44px]`}
                   value={form.hiringPersonId}
@@ -220,7 +220,9 @@ export default function SubmitToClientCard({ application, onChanged }) {
                 >
                   {data.recipients.map((r) => (
                     <option key={r.id} value={r.id}>
-                      {r.fullName} — {r.department}
+                      {/* {r.fullName} — {r.department} */}
+                      {r.fullName}
+                      {r.department ? ` — ${r.department}` : ''}
                       {r.id === data.defaultHiringPersonId ? ' (job HR)' : ''}
                     </option>
                   ))}
@@ -243,7 +245,7 @@ export default function SubmitToClientCard({ application, onChanged }) {
               </div>
             )}
 
-            <FormField label="Note to the client (optional)">
+            <FormField label="Note to the company (optional)">
               <textarea rows={3} maxLength={1000} className={inputClass} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
             </FormField>
             {error && <p className="text-sm text-red-600">{error}</p>}

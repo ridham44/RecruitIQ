@@ -67,12 +67,12 @@ export default function ClientsPage() {
     <div>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-slate-900">Clients</h2>
+          <h2 className="text-xl font-semibold text-slate-900">Companies</h2>
           <p className="text-sm text-slate-500">Companies you recruit for, their departments and HR contacts</p>
         </div>
         {canManage && (
           <Button onClick={openAdd} className="w-full sm:w-auto">
-            <Plus className="h-4 w-4" /> Add client
+            <Plus className="h-4 w-4" /> Add company
           </Button>
         )}
       </div>
@@ -100,15 +100,15 @@ export default function ClientsPage() {
       {clients && clients.length === 0 && (
         <EmptyState
           icon={Building}
-          title={filtered ? 'No clients match' : 'No clients yet'}
+          title={filtered ? 'No companies match' : 'No companies yet'}
           description={
             filtered
               ? 'Try a different search or status.'
               : canManage
                 ? 'Add the companies you recruit for, then link jobs to them.'
-                : "You haven't been assigned to any clients yet."
+                : "You haven't been assigned to any companies yet."
           }
-          action={!filtered && canManage && <Button onClick={openAdd}>Add client</Button>}
+          action={!filtered && canManage && <Button onClick={openAdd}>Add company</Button>}
         />
       )}
 
@@ -140,7 +140,7 @@ export default function ClientsPage() {
             <table className="w-full min-w-[640px] text-sm">
               <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="px-5 py-3">Client</th>
+                  <th className="px-5 py-3">Company</th>
                   <th className="px-5 py-3">Industry</th>
                   <th className="px-5 py-3">Contact</th>
                   <th className="px-5 py-3">Departments</th>
@@ -176,7 +176,7 @@ export default function ClientsPage() {
 
       <Modal
         open={adding}
-        title="Add client"
+        title="Add company"
         onClose={() => setAdding(false)}
         footer={
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -184,7 +184,7 @@ export default function ClientsPage() {
               Cancel
             </Button>
             <Button onClick={save} loading={saving} className="w-full sm:w-auto">
-              Add client
+              Add company
             </Button>
           </div>
         }

@@ -34,11 +34,19 @@ const STYLES = {
   MATCHING: 'bg-amber-100 text-amber-700',
 };
 
+// Display wording that differs from the enum value (roles were renamed:
+// agency = the recruitment firm, company = the client it hires for).
+const LABELS = {
+  OWNER: 'agency owner',
+  SUBMITTED_TO_CLIENT: 'submitted to company',
+};
+
 export default function StatusBadge({ status }) {
   const style = STYLES[status] || 'bg-slate-100 text-slate-700';
   return (
     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${style}`}>
-      {status?.toLowerCase().replace(/_/g, ' ')}
+      {/* {status?.toLowerCase().replace(/_/g, ' ')} */}
+      {LABELS[status] || status?.toLowerCase().replace(/_/g, ' ')}
     </span>
   );
 }
