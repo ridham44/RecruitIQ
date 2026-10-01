@@ -534,6 +534,8 @@ export default function JobApplicationsPage() {
                 selected={filters.statuses}
                 onToggle={(v) => toggleMulti('statuses', v)}
                 formatLabel={(v) =>
+                  // Display wording: the client is now called "company".
+                  v === 'SUBMITTED_TO_CLIENT' ? 'Submitted To Company' :
                   v
                     .toLowerCase()
                     .split('_')

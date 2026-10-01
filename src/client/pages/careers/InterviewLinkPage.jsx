@@ -142,8 +142,21 @@ export default function InterviewLinkPage() {
         <h1 className="mt-1 text-xl font-semibold text-slate-900">Your interview for {info.job.title}</h1>
         <p className="mt-1 text-sm text-slate-500">
           An AI interviewer from {info.company.name} will ask you questions by voice.
-          {info.expiresAt && ` This link works until ${formatDate(info.expiresAt)}.`}
+          {/* {info.expiresAt && ` This link works until ${formatDate(info.expiresAt)}.`} */}
+          {/* Booked slot (status-link booking): show the time instead of the link expiry. */}
+          {!info.slot && info.expiresAt && ` This link works until ${formatDate(info.expiresAt)}.`}
         </p>
+        {info.slot && (
+          <p className="mt-3 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-800">
+            Booked for{' '}
+            <strong>
+              {new Date(info.slot.startTime).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })},{' '}
+              {new Date(info.slot.startTime).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })} –{' '}
+              {new Date(info.slot.endTime).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+            </strong>
+            . Please join at that time.
+          </p>
+        )}
 
         <ul className="my-5 grid grid-cols-1 gap-2 text-sm text-slate-700 sm:grid-cols-2">
           {[
@@ -164,14 +177,20 @@ export default function InterviewLinkPage() {
         {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
 
         <Button onClick={start} loading={joining} className="w-full sm:w-auto">
-          {info.status === 'IN_PROGRESS' ? 'Continue interview' : 'Start interview now'}
+          {/* {info.status === 'IN_PROGRESS' ? 'Continue interview' : 'Start interview now'} */}
+          {info.status === 'IN_PROGRESS' ? 'Continue interview' : info.slot ? 'Join interview' : 'Start interview now'}
         </Button>
         <p className="mt-2 text-xs text-slate-400">You'll check your camera and microphone before the interview begins.</p>
       </Card>
 
       <Card className="mt-4 p-4 sm:p-6">
         <h2 className="text-sm font-semibold text-slate-900">Not ready yet?</h2>
-        <p className="mt-1 text-sm text-slate-500">Send yourself this link and come back any time before it expires.</p>
+        {/* <p className="mt-1 text-sm text-slate-500">Send yourself this link and come back any time before it expires.</p> */}
+        <p className="mt-1 text-sm text-slate-500">
+          {info.slot
+            ? 'Send yourself this link and open it again at your booked time.'
+            : 'Send yourself this link and come back any time before it expires.'}
+        </p>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <Button variant="secondary" loading={sendState.email === 'sending'} onClick={() => send('email')} className="w-full sm:w-auto">
             <Mail className="h-4 w-4" /> Email me ({info.channels.email})

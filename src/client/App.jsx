@@ -51,12 +51,18 @@ import SubmissionViewPage from './pages/careers/SubmissionViewPage.jsx';
 import ClientPortalLayout from './layouts/ClientPortalLayout.jsx';
 import ClientCandidatesPage from './pages/client/ClientCandidatesPage.jsx';
 import ClientCandidateDetailPage from './pages/client/ClientCandidateDetailPage.jsx';
+// "Start here" demo page
+import StartHerePage from './pages/StartHerePage.jsx';
 
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/auth/login" element={<LoginPage />} />
+      {/* "Start here" demo page — every role, demo login and public link */}
+      {/* <Route path="/start" element={<StartHerePage />} /> */}
+      <Route path="/live-demo" element={<StartHerePage />} />
+      <Route path="/start" element={<Navigate to="/live-demo" replace />} />
       <Route path="/auth/register" element={<RegisterPage />} />
       <Route path="/auth/set-password" element={<SetPasswordPage />} />
       <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />

@@ -31,7 +31,7 @@ export const logout = asyncHandler(async (req, res) => {
 export function requireCompanySelfRegister(req, res, next) {
   if (!env.features.allowCompanySelfRegister) {
     throw ApiError.forbidden(
-      'Company accounts are created by the RecruitIQ administrator. Please contact us to get started.',
+      'Agency accounts are created by the RecruitIQ administrator. Please contact us to get started.',
       'SELF_REGISTER_DISABLED'
     );
   }

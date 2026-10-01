@@ -16,7 +16,9 @@ export const clientsApi = {
   addDepartment: (clientId, name) => api.post(`/clients/${clientId}/departments`, { name }),
   renameDepartment: (departmentId, name) => api.patch(`/clients/departments/${departmentId}`, { name }),
   setDepartmentStatus: (departmentId, isActive) => api.patch(`/clients/departments/${departmentId}/status`, { isActive }),
-  addHiringPerson: (departmentId, payload) => api.post(`/clients/departments/${departmentId}/hiring-persons`, payload),
+  // addHiringPerson: (departmentId, payload) => api.post(`/clients/departments/${departmentId}/hiring-persons`, payload),
+  // HR people belong to the company; payload.departmentId is optional.
+  addHiringPerson: (clientId, payload) => api.post(`/clients/${clientId}/hiring-persons`, payload),
   updateHiringPerson: (personId, payload) => api.patch(`/clients/hiring-persons/${personId}`, payload),
   setHiringPersonStatus: (personId, isActive) => api.patch(`/clients/hiring-persons/${personId}/status`, { isActive }),
   // Build plan P8

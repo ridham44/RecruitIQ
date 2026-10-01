@@ -39,8 +39,18 @@ export const setDepartmentStatus = asyncHandler(async (req, res) => {
   ok(res, { client: await service.setDepartmentStatus(req.user.id, req.params.departmentId, req.body.isActive) });
 });
 
+// export const createHiringPerson = asyncHandler(async (req, res) => {
+//   created(res, { client: await service.createHiringPerson(req.user.id, req.params.departmentId, req.body) });
+// });
+
+// POST /clients/:id/hiring-persons — HR directly under the company.
 export const createHiringPerson = asyncHandler(async (req, res) => {
-  created(res, { client: await service.createHiringPerson(req.user.id, req.params.departmentId, req.body) });
+  created(res, { client: await service.createHiringPerson(req.user.id, req.params.id, req.body) });
+});
+
+// POST /clients/departments/:departmentId/hiring-persons — kept for older clients.
+export const createHiringPersonInDepartment = asyncHandler(async (req, res) => {
+  created(res, { client: await service.createHiringPersonInDepartment(req.user.id, req.params.departmentId, req.body) });
 });
 
 export const updateHiringPerson = asyncHandler(async (req, res) => {

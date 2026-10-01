@@ -27,8 +27,8 @@ export default function CompanyForm({ initial = {}, withOwnerEmail = false, subm
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!form.companyName.trim()) return setError('Company name is required');
-    if (withOwnerEmail && !EMAIL_REGEX.test(form.ownerEmail.trim())) return setError('Enter a valid owner email');
+    if (!form.companyName.trim()) return setError('Agency name is required');
+    if (withOwnerEmail && !EMAIL_REGEX.test(form.ownerEmail.trim())) return setError('Enter a valid agency owner email');
     if (form.website.trim() && !URL_REGEX.test(form.website.trim())) {
       return setError('Website must start with http:// or https://');
     }
@@ -57,13 +57,13 @@ export default function CompanyForm({ initial = {}, withOwnerEmail = false, subm
     <form onSubmit={handleSubmit} noValidate>
       <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
-          <FormField label="Company name *">
+          <FormField label="Agency name *">
             <input className={`${inputClass} min-h-[44px]`} value={form.companyName} onChange={set('companyName')} placeholder="e.g. Acme Talent Partners" />
           </FormField>
         </div>
         {withOwnerEmail && (
           <div className="sm:col-span-2">
-            <FormField label="Owner email *">
+            <FormField label="Agency owner email *">
               <input
                 type="email"
                 inputMode="email"
@@ -71,7 +71,7 @@ export default function CompanyForm({ initial = {}, withOwnerEmail = false, subm
                 className={`${inputClass} min-h-[44px]`}
                 value={form.ownerEmail}
                 onChange={set('ownerEmail')}
-                placeholder="owner@company.com"
+                placeholder="owner@agency.com"
               />
               <p className="mt-1 text-xs text-slate-500">We'll email this person a link to set their password.</p>
             </FormField>
@@ -83,7 +83,7 @@ export default function CompanyForm({ initial = {}, withOwnerEmail = false, subm
         <FormField label="Industry">
           <input className={`${inputClass} min-h-[44px]`} value={form.industry} onChange={set('industry')} placeholder="e.g. IT staffing" />
         </FormField>
-        <FormField label="Company size">
+        <FormField label="Agency size">
           <select className={`${inputClass} min-h-[44px]`} value={form.size} onChange={set('size')}>
             <option value="">Not specified</option>
             {SIZE_OPTIONS.map((s) => (

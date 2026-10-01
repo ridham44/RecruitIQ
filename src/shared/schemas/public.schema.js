@@ -30,6 +30,12 @@ export const trackTokenSchema = z.object({
   token: z.string().trim().min(1),
 });
 
+// Book a slot from the status link (no login).
+export const trackBookingSchema = z.object({
+  token: z.string().trim().min(1),
+  slotId: z.string().trim().min(1),
+});
+
 export const careersSlugSchema = z.object({
   slug: z
     .string()

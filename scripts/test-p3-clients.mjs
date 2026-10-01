@@ -57,7 +57,8 @@ async function main() {
   const rId = inv.recruiter.id;
   const tR = (await req('/auth/set-password', { method: 'POST', body: { token: new URL(inv.setupLink).searchParams.get('token'), password: PASSWORD } })).token;
 
-  step('1. Client → departments → HR people');
+  // step('1. Client → departments → HR people');
+  step('1. Company (client) → departments + Company HR');
   const { client: c1 } = await req('/clients', {
     method: 'POST',
     token: a.token,
@@ -82,9 +83,22 @@ async function main() {
     token: a.token,
     body: { fullName: 'Fatima Finance', email: 'fatima@infotech.test' },
   }));
-  const h1 = client.departments.find((d) => d.id === it.id).hiringPersons[0];
-  const h2 = client.departments.find((d) => d.id === fin.id).hiringPersons[0];
-  assert(h1.fullName === 'Harish HR' && h2.fullName === 'Fatima Finance', 'HR people added under their departments');
+  // const h1 = client.departments.find((d) => d.id === it.id).hiringPersons[0];
+  // const h2 = client.departments.find((d) => d.id === fin.id).hiringPersons[0];
+  // assert(h1.fullName === 'Harish HR' && h2.fullName === 'Fatima Finance', 'HR people added under their departments');
+  // Company HR now belong to the company; the department is an optional label.
+  const h1 = client.hiringPersons.find((p) => p.fullName === 'Harish HR');
+  const h2 = client.hiringPersons.find((p) => p.fullName === 'Fatima Finance');
+  assert(h1?.department?.name === 'IT' && h2?.department?.name === 'Finance', 'HR people added (old department route still works, department kept as a label)');
+  ({ client } = await req(`/clients/${c1.id}/hiring-persons`, { method: 'POST', token: a.token, body: { fullName: 'Gita General', email: 'gita@infotech.test' } }));
+  const h3 = client.hiringPersons.find((p) => p.fullName === 'Gita General');
+  assert(h3 && h3.departmentId === null && client.hiringPersons.length === 3, 'Company HR can be added directly to the company, without a department');
+  const badDept = await call(`/clients/${c1.id}/hiring-persons`, { method: 'POST', token: a.token, body: { fullName: 'X', email: 'x@infotech.test', departmentId: 'nope' } });
+  assert(badDept.status === 400, 'a department from elsewhere is rejected');
+  ({ client } = await req(`/clients/hiring-persons/${h3.id}`, { method: 'PATCH', token: a.token, body: { departmentId: fin.id } }));
+  assert(client.hiringPersons.find((p) => p.id === h3.id)?.department?.name === 'Finance', 'department label can be set later');
+  ({ client } = await req(`/clients/hiring-persons/${h3.id}`, { method: 'PATCH', token: a.token, body: { departmentId: null } }));
+  assert(client.hiringPersons.find((p) => p.id === h3.id)?.departmentId === null, 'and cleared again');
   const { clients } = await req('/clients', { token: a.token });
   assert(clients.some((c) => c.id === c1.id && c.departmentCount === 2), 'client list shows department count');
 
@@ -106,8 +120,15 @@ async function main() {
   assert(j0.id && j0.clientCompanyId === null, 'plain job created with no client');
 
   step('4. Chain validation');
-  const wrongDept = await call('/jobs', { method: 'POST', token: a.token, body: job('Bad', { clientCompanyId: c1.id, departmentId: fin.id, hiringPersonId: h1.id }) });
-  assert(wrongDept.status === 400 && wrongDept.json?.error === 'INVALID_CLIENT_CHAIN', 'HR person from another department → 400 INVALID_CLIENT_CHAIN');
+  // const wrongDept = await call('/jobs', { method: 'POST', token: a.token, body: job('Bad', { clientCompanyId: c1.id, departmentId: fin.id, hiringPersonId: h1.id }) });
+  // assert(wrongDept.status === 400 && wrongDept.json?.error === 'INVALID_CLIENT_CHAIN', 'HR person from another department → 400 INVALID_CLIENT_CHAIN');
+  // HR only has to belong to the same company now.
+  let { client: c2 } = await req('/clients', { method: 'POST', token: a.token, body: { name: `Other Co ${ts}` } });
+  ({ client: c2 } = await req(`/clients/${c2.id}/hiring-persons`, { method: 'POST', token: a.token, body: { fullName: 'Otto Other', email: 'otto@other.test' } }));
+  const wrongCo = await call('/jobs', { method: 'POST', token: a.token, body: job('Bad', { clientCompanyId: c1.id, hiringPersonId: c2.hiringPersons[0].id }) });
+  assert(wrongCo.status === 400 && wrongCo.json?.error === 'INVALID_CLIENT_CHAIN', 'HR person from another company → 400 INVALID_CLIENT_CHAIN');
+  const hrNoCo = await call('/jobs', { method: 'POST', token: a.token, body: job('Bad', { hiringPersonId: h1.id }) });
+  assert(hrNoCo.status === 400, 'HR person without a company → 400');
   const noClient = await call('/jobs', { method: 'POST', token: a.token, body: job('Bad', { departmentId: it.id }) });
   assert(noClient.status === 400, 'department without a client → 400');
   const { client: cB } = await req('/clients', { method: 'POST', token: b.token, body: { name: `B Client ${ts}` } });
@@ -117,7 +138,12 @@ async function main() {
   step('5. Updating the link');
   await req(`/jobs/${j1.id}`, { method: 'PATCH', token: a.token, body: { departmentId: fin.id } });
   let l = (await req(`/jobs/${j1.id}/client-link`, { token: a.token })).link;
-  assert(l.department.name === 'Finance' && l.hiringPerson === null, 'changing department clears the old HR person');
+  // assert(l.department.name === 'Finance' && l.hiringPerson === null, 'changing department clears the old HR person');
+  assert(l.department.name === 'Finance' && l.hiringPerson?.fullName === 'Harish HR', 'changing department keeps the Company HR (HR is not tied to a department)');
+  await req(`/jobs/${j1.id}`, { method: 'PATCH', token: a.token, body: { departmentId: null, hiringPersonId: h3.id } });
+  l = (await req(`/jobs/${j1.id}/client-link`, { token: a.token })).link;
+  assert(!l.department && l.hiringPerson?.fullName === 'Gita General', 'job can link Company HR with no department');
+  await req(`/jobs/${j1.id}`, { method: 'PATCH', token: a.token, body: { departmentId: fin.id } });
   await req(`/jobs/${j1.id}`, { method: 'PATCH', token: a.token, body: { hiringPersonId: h2.id } });
   await req(`/jobs/${j1.id}`, { method: 'PATCH', token: a.token, body: { title: 'P3 Linked Job (renamed)' } });
   l = (await req(`/jobs/${j1.id}/client-link`, { token: a.token })).link;

@@ -40,12 +40,12 @@ export default function CompaniesPage() {
     <div>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-slate-900">Companies</h2>
-          <p className="text-sm text-slate-500">Recruitment companies using RecruitIQ</p>
+          <h2 className="text-xl font-semibold text-slate-900">Agencies</h2>
+          <p className="text-sm text-slate-500">Recruitment agencies using RecruitIQ</p>
         </div>
         <Link to="/admin/companies/new" className="sm:shrink-0">
           <Button className="w-full sm:w-auto">
-            <Plus className="h-4 w-4" /> Add company
+            <Plus className="h-4 w-4" /> Add agency
           </Button>
         </Link>
       </div>
@@ -56,7 +56,7 @@ export default function CompaniesPage() {
           <input
             type="search"
             className={`${inputClass} min-h-[44px] pl-9`}
-            placeholder="Search by company or owner email"
+            placeholder="Search by agency or agency owner email"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -78,12 +78,12 @@ export default function CompaniesPage() {
       {companies && companies.length === 0 && (
         <EmptyState
           icon={Building2}
-          title={filtered ? 'No companies match' : 'No companies yet'}
-          description={filtered ? 'Try a different search or status.' : 'Add the first recruitment company to get started.'}
+          title={filtered ? 'No agencies match' : 'No agencies yet'}
+          description={filtered ? 'Try a different search or status.' : 'Add the first recruitment agency to get started.'}
           action={
             !filtered && (
               <Link to="/admin/companies/new">
-                <Button>Add company</Button>
+                <Button>Add agency</Button>
               </Link>
             )
           }
@@ -119,8 +119,8 @@ export default function CompaniesPage() {
             <table className="w-full min-w-[640px] text-sm">
               <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="px-5 py-3">Company</th>
-                  <th className="px-5 py-3">Owner</th>
+                  <th className="px-5 py-3">Agency</th>
+                  <th className="px-5 py-3">Agency owner</th>
                   <th className="px-5 py-3">Jobs</th>
                   <th className="px-5 py-3">Applications</th>
                   <th className="px-5 py-3">Added</th>

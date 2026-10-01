@@ -5,7 +5,8 @@ import { validate } from '../../middleware/validate.js';
 import { uploadResume } from '../../middleware/upload.js';
 import { env } from '../../config/env.js';
 import { ApiError } from '../../utils/ApiError.js';
-import { otpSendSchema, otpVerifySchema, guestApplySchema, trackTokenSchema } from '../../../shared/schemas/public.schema.js';
+// import { otpSendSchema, otpVerifySchema, guestApplySchema, trackTokenSchema } from '../../../shared/schemas/public.schema.js';
+import { otpSendSchema, otpVerifySchema, guestApplySchema, trackTokenSchema, trackBookingSchema } from '../../../shared/schemas/public.schema.js';
 
 // Build plan P4 — public careers portal API (no login), all behind
 // FEATURE_GUEST_APPLY. With the flag off every route answers 404, exactly as
@@ -43,5 +44,11 @@ router.post('/applications', validate(guestApplySchema), controller.apply);
 // then polls GET /track until done.
 router.post('/track/process', validate(trackTokenSchema), controller.processTracked);
 router.get('/track', controller.getTrackStatus);
+
+// Interview slot booking from the status link — no login (the token is the
+// credential and only ever reaches its own application).
+router.get('/track/booking', controller.getTrackBooking);
+router.post('/track/booking', validate(trackBookingSchema), controller.bookFromTrack);
+router.post('/track/booking/cancel', validate(trackTokenSchema), controller.cancelFromTrack);
 
 export default router;

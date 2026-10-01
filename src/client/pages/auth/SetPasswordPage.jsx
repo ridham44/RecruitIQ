@@ -87,19 +87,28 @@ export default function SetPasswordPage() {
 
   // Forgot-password links reuse this page with purpose RESET.
   const isReset = info.purpose === 'RESET';
+  // Invite greeting per role (agency owner / agency recruiter / Company HR).
+  const inviteSubtitle = !info.companyName
+    ? 'Finish setting up your account'
+    : info.role === 'RECRUITER'
+      ? `Join ${info.companyName} on RecruitIQ as an agency recruiter`
+      : info.role === 'CLIENT_HR'
+        ? `Set up your Company HR access for ${info.companyName} on RecruitIQ`
+        : `Finish setting up your agency ${info.companyName} on RecruitIQ`;
 
   return (
     <AuthShell
       // title="Set your password"
       title={isReset ? 'Reset your password' : 'Set your password'}
       // subtitle={info.companyName ? `Finish setting up ${info.companyName} on RecruitIQ` : 'Finish setting up your account'}
-      subtitle={
-        isReset
-          ? 'Choose a new password for your account.'
-          : info.companyName
-            ? `Finish setting up ${info.companyName} on RecruitIQ`
-            : 'Finish setting up your account'
-      }
+      // subtitle={
+      //   isReset
+      //     ? 'Choose a new password for your account.'
+      //     : info.companyName
+      //       ? `Finish setting up ${info.companyName} on RecruitIQ`
+      //       : 'Finish setting up your account'
+      // }
+      subtitle={isReset ? 'Choose a new password for your account.' : inviteSubtitle}
     >
       <form onSubmit={handleSubmit} noValidate>
         <FormField label="Email">

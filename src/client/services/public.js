@@ -14,6 +14,10 @@ export const publicApi = {
   apply: (payload) => api.post('/public/applications', payload),
   processTracked: (token) => api.post('/public/track/process', { token }),
   getTrackStatus: (token) => api.get(`/public/track?token=${encodeURIComponent(token)}`),
+  // Slot booking from the status link (no login)
+  getTrackBooking: (token) => api.get(`/public/track/booking?token=${encodeURIComponent(token)}`),
+  bookFromTrack: (token, slotId) => api.post('/public/track/booking', { token, slotId }),
+  cancelFromTrack: (token) => api.post('/public/track/booking/cancel', { token }),
 };
 
 // Company side: the careers link and the CV pool.

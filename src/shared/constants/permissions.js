@@ -18,11 +18,11 @@ export const PERMISSION_OPTIONS = [
   { key: PERMISSIONS.MANAGE_JOBS, label: 'Manage jobs', description: 'Create, edit and close jobs' },
   { key: PERMISSIONS.REVIEW_CANDIDATES, label: 'Review candidates', description: 'Applicants, AI screening, shortlist/reject, interview results' },
   { key: PERMISSIONS.CONFIGURE_INTERVIEWS, label: 'Configure interviews', description: 'AI interviewer settings and interview slots' },
-  { key: PERMISSIONS.MANAGE_RECRUITERS, label: 'Manage recruiters', description: 'Invite recruiters, set permissions and job assignments' },
+  { key: PERMISSIONS.MANAGE_RECRUITERS, label: 'Manage agency recruiters', description: 'Invite agency recruiters, set permissions and job assignments' },
   // Build plan P3
-  { key: PERMISSIONS.MANAGE_CLIENTS, label: 'Manage clients', description: 'Client companies, departments and HR contacts' },
+  { key: PERMISSIONS.MANAGE_CLIENTS, label: 'Manage companies', description: 'Companies, departments and Company HR' },
   // Build plan P7
-  { key: PERMISSIONS.SUBMIT_CANDIDATES, label: 'Submit candidates', description: 'Send qualified candidates to client HR' },
+  { key: PERMISSIONS.SUBMIT_CANDIDATES, label: 'Submit candidates', description: 'Send qualified candidates to Company HR' },
 ];
 
 export const ASSIGNABLE_PERMISSIONS = PERMISSION_OPTIONS.map((p) => p.key);

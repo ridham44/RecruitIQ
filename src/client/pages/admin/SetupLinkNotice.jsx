@@ -6,7 +6,7 @@ import { Check, Copy, MailCheck } from 'lucide-react';
 // always copy the link and share it directly.
 // export default function SetupLinkNotice({ email, link }) {
 // Build plan P2: `who` lets the recruiter invite reuse this ("the recruiter").
-export default function SetupLinkNotice({ email, link, who = 'the owner' }) {
+export default function SetupLinkNotice({ email, link, who = 'the agency owner' }) {
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {

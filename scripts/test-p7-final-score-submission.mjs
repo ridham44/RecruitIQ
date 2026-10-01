@@ -80,7 +80,8 @@ async function main() {
     token: owner.token,
     body: { fullName: 'Hema HR', email: `p7-hr-${ts}@test.com`, designation: 'IT Hiring Manager' },
   }));
-  const hr = client.departments[0].hiringPersons[0];
+  // const hr = client.departments[0].hiringPersons[0];
+  const hr = client.hiringPersons[0]; // Company HR belong to the company (department = label)
   const jobBody = {
     description: 'Build React front-ends with JavaScript, HTML and CSS against REST APIs.',
     requiredSkills: ['React', 'JavaScript'],

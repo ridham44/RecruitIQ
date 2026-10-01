@@ -310,6 +310,7 @@ model ClientCompany {
   recruiters  ClientRecruiter[]
   jobs        Job[]
   submissions ClientSubmission[]
+  hiringPersons HiringPerson[]
 
   @@index([companyId])
   @@map("client_companies")
@@ -334,7 +335,11 @@ model Department {
 
 model HiringPerson {
   id           String   @id @default(cuid())
-  departmentId String
+  // departmentId String
+  // HR belongs directly to the client company ("Company"); the department
+  // is optional (migration 20260930180000_hr_under_client_company).
+  clientCompanyId String
+  departmentId    String?
   fullName     String
   email        String
   phone        String?
@@ -345,13 +350,16 @@ model HiringPerson {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  department  Department         @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  // department  Department         @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  clientCompany ClientCompany      @relation(fields: [clientCompanyId], references: [id], onDelete: Cascade)
+  department    Department?        @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   jobs        Job[]
   submissions ClientSubmission[]
   // Build plan P8: the portal login (userId existed since P3, now a real FK).
   user        User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([departmentId])
+  @@index([clientCompanyId])
   @@map("hiring_persons")
 }
 

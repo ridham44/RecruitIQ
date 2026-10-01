@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+// import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Loader2, PartyPopper, Clock3, MailCheck, SearchX, CircleCheck, CircleX } from 'lucide-react';
+// import { Loader2, PartyPopper, Clock3, MailCheck, SearchX, CircleCheck, CircleX } from 'lucide-react';
+import { Loader2, PartyPopper, Clock3, MailCheck, SearchX, CircleCheck, CircleX, CalendarDays, Video, Check } from 'lucide-react';
 import { publicApi } from '../../services/public.js';
 import CareersShell from './CareersShell.jsx';
 import Card from '../../components/ui/Card.jsx';
@@ -35,7 +37,10 @@ function outcome(status) {
         icon: PartyPopper,
         tone: 'emerald',
         title: "You've been shortlisted!",
-        body: `${matchedLine}Your profile is a strong match for ${where}. We've emailed you the next steps for your interview.`,
+        // body: `${matchedLine}Your profile is a strong match for ${where}. We've emailed you the next steps for your interview.`,
+        body: app.usesSlots
+          ? `${matchedLine}Your profile is a strong match for ${where}. Pick a time below for your AI interview.`
+          : `${matchedLine}Your profile is a strong match for ${where}. We've emailed you the next steps for your interview.`,
       };
     case 'not_selected':
       return {
@@ -54,9 +59,23 @@ function outcome(status) {
           body: `${matchedLine}Your AI interview for ${where} is ready — start now, or later from the link in your email.`,
         };
       }
-      return { icon: CircleCheck, tone: 'emerald', title: 'Your interview is set up', body: `${matchedLine}Log in to see the details for ${where}.` };
+      // return { icon: CircleCheck, tone: 'emerald', title: 'Your interview is set up', body: `${matchedLine}Log in to see the details for ${where}.` };
+      return {
+        icon: CircleCheck,
+        tone: 'emerald',
+        title: 'Your interview is booked',
+        body: app.hasBookedSlot
+          ? `${matchedLine}Your AI interview for ${where} is booked. The time and the join button are below.`
+          : `${matchedLine}Your interview for ${where} is set up. We've emailed you the details.`,
+      };
     case 'interview_completed':
-      return { icon: CircleCheck, tone: 'emerald', title: 'Your interview is set up', body: `${matchedLine}Log in to see the details for ${where}.` };
+      // return { icon: CircleCheck, tone: 'emerald', title: 'Your interview is set up', body: `${matchedLine}Log in to see the details for ${where}.` };
+      return {
+        icon: CircleCheck,
+        tone: 'emerald',
+        title: 'Interview completed — thank you!',
+        body: `${matchedLine}${app.company.name} is reviewing your interview for ${app.job.title} and will contact you about the next steps.`,
+      };
     default:
       return {
         icon: Clock3,
@@ -65,6 +84,166 @@ function outcome(status) {
         body: `${matchedLine}The recruiting team for ${where} will review your profile and contact you.`,
       };
   }
+}
+
+// Progress steps shown to the candidate (no scores, no results).
+const STEPS = ['Applied', 'CV review', 'Shortlisted', 'Interview', 'Interview completed', 'Under review'];
+// Index of the step the candidate is on now.
+function currentStep(stage) {
+  switch (stage) {
+    case 'shortlisted':
+      return 2;
+    case 'interview_scheduled':
+      return 3;
+    case 'interview_completed':
+      return 5;
+    default:
+      // received / screening / under_review
+      return 1;
+  }
+}
+
+function ProgressSteps({ stage }) {
+  if (stage === 'not_selected') return null;
+  const now = currentStep(stage);
+  return (
+    <Card className="mt-4 p-4 sm:p-6">
+      <h2 className="mb-4 text-sm font-semibold text-slate-900">Your progress</h2>
+      <ol className="space-y-3">
+        {STEPS.map((label, i) => {
+          const done = i < now;
+          const current = i === now;
+          return (
+            <li key={label} className="flex items-center gap-3">
+              <span
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                  done ? 'bg-emerald-500 text-white' : current ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-400'
+                }`}
+              >
+                {done ? <Check className="h-4 w-4" /> : i + 1}
+              </span>
+              <span className={`text-sm ${current ? 'font-semibold text-slate-900' : done ? 'text-slate-700' : 'text-slate-400'}`}>
+                {label}
+                {current && <span className="ml-2 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">Now</span>}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </Card>
+  );
+}
+
+const dayLabel = (iso) => new Date(iso).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+const timeLabel = (iso) => new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+
+// SLOT-booking jobs: pick / change a time and join — all from this link.
+function SlotBooking({ token, onChanged }) {
+  const [booking, setBooking] = useState(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState('');
+
+  const load = useCallback(() => {
+    publicApi
+      .getTrackBooking(token)
+      .then(setBooking)
+      .catch((err) => setError(err.message));
+  }, [token]);
+  useEffect(load, [load]);
+
+  const act = async (key, fn) => {
+    setBusy(key);
+    setError('');
+    try {
+      setBooking(await fn());
+      onChanged?.();
+    } catch (err) {
+      setError(err.message);
+      load();
+    } finally {
+      setBusy('');
+    }
+  };
+
+  if (!booking) return error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null;
+  if (!booking.usesSlots || (!booking.canBook && !booking.booked)) return null;
+
+  if (booking.booked) {
+    const b = booking.booked;
+    return (
+      <Card className="mt-4 p-4 sm:p-6">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <CalendarDays className="h-4 w-4 text-brand-600" /> Your interview
+        </h2>
+        <p className="mt-2 text-lg font-semibold text-slate-900">{dayLabel(b.startTime)}</p>
+        <p className="text-sm text-slate-600">
+          {timeLabel(b.startTime)} – {timeLabel(b.endTime)}
+        </p>
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+          {b.joinLink && (
+            <a href={b.joinLink} className="w-full sm:w-auto">
+              <Button className="w-full sm:w-auto">
+                <Video className="h-4 w-4" /> {b.status === 'IN_PROGRESS' ? 'Rejoin interview' : 'Join interview'}
+              </Button>
+            </a>
+          )}
+          {booking.canChange && (
+            <Button
+              variant="secondary"
+              className="w-full sm:w-auto"
+              loading={busy === 'cancel'}
+              onClick={() => act('cancel', () => publicApi.cancelFromTrack(token))}
+            >
+              Change time
+            </Button>
+          )}
+        </div>
+        <p className="mt-3 text-xs text-slate-500">
+          Join at your booked time from a quiet room, with a working camera and microphone. We've also emailed you this link.
+        </p>
+        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+      </Card>
+    );
+  }
+
+  const byDay = booking.slots.reduce((acc, sl) => {
+    const key = dayLabel(sl.startTime);
+    (acc[key] = acc[key] || []).push(sl);
+    return acc;
+  }, {});
+  return (
+    <Card className="mt-4 p-4 sm:p-6">
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+        <CalendarDays className="h-4 w-4 text-brand-600" /> Book your interview time
+      </h2>
+      {booking.slots.length === 0 ? (
+        <p className="mt-2 text-sm text-slate-500">No times are open right now. Please check this page again later — the recruiter will add more.</p>
+      ) : (
+        <div className="mt-3 space-y-4">
+          {Object.entries(byDay).map(([day, list]) => (
+            <div key={day}>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{day}</p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {list.map((sl) => (
+                  <Button
+                    key={sl.id}
+                    variant="secondary"
+                    className="w-full"
+                    loading={busy === sl.id}
+                    disabled={Boolean(busy)}
+                    onClick={() => act(sl.id, () => publicApi.bookFromTrack(token, sl.id))}
+                  >
+                    {timeLabel(sl.startTime)}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+    </Card>
+  );
 }
 
 const TONES = {
@@ -85,45 +264,98 @@ export default function CareersTrackPage() {
   const [timedOut, setTimedOut] = useState(false);
   const started = useRef(false);
 
+  // useEffect(() => {
+  //   if (!token) {
+  //     setError('This link is missing its tracking code.');
+  //     return undefined;
+  //   }
+  //   if (started.current) return undefined;
+  //   started.current = true;
+
+  //   let cancelled = false;
+  //   let polls = 0;
+  //   const poll = async () => {
+  //     if (cancelled) return;
+  //     try {
+  //       const s = await publicApi.getTrackStatus(token);
+  //       if (cancelled) return;
+  //       setStatus(s);
+  //       if (!s.done && ++polls < MAX_POLLS) setTimeout(poll, POLL_MS);
+  //       else if (!s.done) setTimedOut(true);
+  //     } catch (err) {
+  //       if (!cancelled) setError(err.message);
+  //     }
+  //   };
+
+  //   publicApi
+  //     .processTracked(token)
+  //     .then((s) => {
+  //       if (cancelled) return;
+  //       setStatus(s);
+  //       if (!s.done) setTimeout(poll, POLL_MS);
+  //     })
+  //     // Processing may take longer than the request allows — keep polling.
+  //     .catch(() => !cancelled && setTimeout(poll, POLL_MS));
+
+  //   return () => {
+  //     cancelled = true;
+  //   };
+  // }, [token]);
+
+  // In React StrictMode (local dev) the effect runs mount → cleanup → mount.
+  // The old version cancelled the first run and skipped the second, so the
+  // page never left "Reviewing your CV…" locally. `alive` tracks whether the
+  // page is mounted *now*, so the single processing run still updates it.
+  const alive = useRef(false);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     if (!token) {
       setError('This link is missing its tracking code.');
-      return undefined;
+      return;
     }
-    if (started.current) return undefined;
+    if (started.current) return;
     started.current = true;
 
-    let cancelled = false;
     let polls = 0;
     const poll = async () => {
-      if (cancelled) return;
+      if (!alive.current) return;
       try {
         const s = await publicApi.getTrackStatus(token);
-        if (cancelled) return;
+        if (!alive.current) return;
         setStatus(s);
         if (!s.done && ++polls < MAX_POLLS) setTimeout(poll, POLL_MS);
         else if (!s.done) setTimedOut(true);
       } catch (err) {
-        if (!cancelled) setError(err.message);
+        if (alive.current) setError(err.message);
       }
     };
 
     publicApi
       .processTracked(token)
       .then((s) => {
-        if (cancelled) return;
+        if (!alive.current) return;
         setStatus(s);
         if (!s.done) setTimeout(poll, POLL_MS);
       })
       // Processing may take longer than the request allows — keep polling.
-      .catch(() => !cancelled && setTimeout(poll, POLL_MS));
-
-    return () => {
-      cancelled = true;
-    };
+      .catch(() => alive.current && setTimeout(poll, POLL_MS));
   }, [token]);
 
   const result = status?.done ? outcome(status) : null;
+  // The application this link tracks (CV-only submissions: the matched one).
+  const app = status ? (status.kind === 'application' ? status : status.match) : null;
+  const refresh = useCallback(() => {
+    publicApi
+      .getTrackStatus(token)
+      .then(setStatus)
+      .catch(() => {});
+  }, [token]);
   // Build plan P5
   const interviewLink = (status?.kind === 'application' ? status.interview : status?.match?.interview)?.link;
   const companyName = status?.portalCompany?.name || status?.company?.name || status?.match?.company?.name;
@@ -161,6 +393,12 @@ export default function CareersTrackPage() {
             </div>
           )}
         </Card>
+      )}
+
+      {/* Progress timeline + slot booking (no login needed) */}
+      {result && app && <ProgressSteps stage={app.stage} />}
+      {result && app?.usesSlots && (app.stage === 'shortlisted' || app.stage === 'interview_scheduled') && (
+        <SlotBooking token={token} onChanged={refresh} />
       )}
 
       {!error && (

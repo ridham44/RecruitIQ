@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+// import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import AuthShell from './AuthShell.jsx';
 import { useAuth } from '../../hooks/useAuth.jsx';
 import FormField, { inputClass } from '../../components/ui/FormField.jsx';
@@ -12,7 +13,10 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ email: '', password: '' });
+  // const [form, setForm] = useState({ email: '', password: '' });
+  // "Start here" demo page links to /auth/login?email=… to pre-fill the email.
+  const [searchParams] = useSearchParams();
+  const [form, setForm] = useState({ email: searchParams.get('email') || '', password: '' });
   const [touched, setTouched] = useState({ email: false, password: false });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);

@@ -2,7 +2,8 @@ import { prisma } from '../../config/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { APPLICATION_STATUS, INTERVIEW_SLOT_STATUS, INTERVIEW_STATUS } from '../../../shared/constants/statuses.js';
 import { getOwnedJob } from '../jobs/jobs.service.js';
-import { inviteApplication } from '../interviews/instantInterview.service.js';
+// import { inviteApplication } from '../interviews/instantInterview.service.js';
+import { inviteApplication, ensureSlotInterviewLink, interviewLinkFor } from '../interviews/instantInterview.service.js';
 import { sendInterviewConfirmationEmail } from '../notifications/email.service.js';
 
 async function getCandidateIdForUser(userId) {
@@ -210,6 +211,113 @@ export async function cancelMyInterview(userId, applicationId) {
       : []),
     prisma.application.update({ where: { id: applicationId }, data: { status: APPLICATION_STATUS.SHORTLISTED } }),
   ]);
+}
+
+// ─────────────────────────────────────────────────────────────
+// Candidate WITHOUT login: book / change / cancel a slot from their personal
+// status link (/careers/track?token=…). The route has already verified the
+// token and resolved it to applicationId. Same rules as the logged-in
+// functions above (shortlisted only, atomic slot claim), which stay unchanged.
+// ─────────────────────────────────────────────────────────────
+
+const ACTIVE_INTERVIEW = [INTERVIEW_STATUS.SCHEDULED, INTERVIEW_STATUS.IN_PROGRESS];
+
+async function loadApplicationById(applicationId) {
+  const application = await prisma.application.findUnique({
+    where: { id: applicationId },
+    include: { candidate: { include: { user: true } }, job: { include: { company: true } } },
+  });
+  if (!application) throw ApiError.notFound('Application not found');
+  return application;
+}
+
+// What the status page needs to offer booking: the job's open slots and the
+// candidate's current booking (with its join link).
+export async function getBookingForApplicationId(applicationId) {
+  const application = await loadApplicationById(applicationId);
+  const usesSlots = application.job.interviewFlow !== 'INSTANT';
+  const current = await prisma.interview.findFirst({
+    where: { applicationId, status: { in: ACTIVE_INTERVIEW }, slotId: { not: null } },
+    include: { slot: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  const canBook = usesSlots && application.status === APPLICATION_STATUS.SHORTLISTED && !current;
+  const slots = canBook
+    ? await prisma.interviewSlot.findMany({
+        where: { jobId: application.jobId, status: INTERVIEW_SLOT_STATUS.AVAILABLE, startTime: { gt: new Date() } },
+        orderBy: { startTime: 'asc' },
+        take: 60,
+      })
+    : [];
+  let joinLink = null;
+  if (current) joinLink = interviewLinkFor(current) || (await ensureSlotInterviewLink(current.id));
+  return {
+    usesSlots,
+    canBook,
+    // A booked slot can be changed until the interview has started.
+    canChange: Boolean(current && current.status === INTERVIEW_STATUS.SCHEDULED),
+    slots: slots.map((sl) => ({ id: sl.id, startTime: sl.startTime, endTime: sl.endTime })),
+    booked: current ? { interviewId: current.id, status: current.status, startTime: current.slot.startTime, endTime: current.slot.endTime, joinLink } : null,
+  };
+}
+
+export async function bookSlotForApplicationId(applicationId, slotId) {
+  const application = await loadApplicationById(applicationId);
+  if (application.job.interviewFlow === 'INSTANT') {
+    throw ApiError.badRequest('This job uses an interview link instead of time slots', 'INSTANT_FLOW');
+  }
+  if (application.status !== APPLICATION_STATUS.SHORTLISTED) {
+    throw ApiError.badRequest('You can only schedule an interview once you have been shortlisted', 'NOT_SHORTLISTED');
+  }
+  const slot = await prisma.interviewSlot.findUnique({ where: { id: slotId } });
+  if (!slot || slot.jobId !== application.jobId) throw ApiError.notFound('Slot not found');
+  if (new Date(slot.startTime) <= new Date()) throw ApiError.badRequest('This time has already passed — please choose another.', 'SLOT_IN_PAST');
+
+  const claim = await prisma.interviewSlot.updateMany({
+    where: { id: slotId, status: INTERVIEW_SLOT_STATUS.AVAILABLE },
+    data: { status: INTERVIEW_SLOT_STATUS.BOOKED },
+  });
+  if (claim.count === 0) {
+    throw ApiError.conflict('This slot was just booked by someone else — please choose another.', 'SLOT_UNAVAILABLE');
+  }
+  // Move the application atomically too, so a double click can't book two slots.
+  const moved = await prisma.application.updateMany({
+    where: { id: applicationId, status: APPLICATION_STATUS.SHORTLISTED },
+    data: { status: APPLICATION_STATUS.INTERVIEW_SCHEDULED },
+  });
+  if (moved.count === 0) {
+    await prisma.interviewSlot.update({ where: { id: slotId }, data: { status: INTERVIEW_SLOT_STATUS.AVAILABLE } });
+    throw ApiError.conflict('Your interview is already booked.', 'ALREADY_BOOKED');
+  }
+  let interview;
+  try {
+    interview = await prisma.interview.create({ data: { applicationId, slotId, status: INTERVIEW_STATUS.SCHEDULED } });
+  } catch (err) {
+    await prisma.$transaction([
+      prisma.interviewSlot.update({ where: { id: slotId }, data: { status: INTERVIEW_SLOT_STATUS.AVAILABLE } }),
+      prisma.application.update({ where: { id: applicationId }, data: { status: APPLICATION_STATUS.SHORTLISTED } }),
+    ]);
+    throw err;
+  }
+  const joinLink = await ensureSlotInterviewLink(interview.id);
+  await sendInterviewConfirmationEmail({ application, slot, joinLink }).catch(() => {});
+  return getBookingForApplicationId(applicationId);
+}
+
+// Frees the booked slot and puts the application back to SHORTLISTED so the
+// candidate can pick another time. Only before the interview has started.
+export async function cancelBookingForApplicationId(applicationId) {
+  await loadApplicationById(applicationId);
+  const interview = await prisma.interview.findFirst({
+    where: { applicationId, status: INTERVIEW_STATUS.SCHEDULED, slotId: { not: null } },
+  });
+  if (!interview) throw ApiError.notFound('No booked interview to change');
+  await prisma.$transaction([
+    prisma.interview.update({ where: { id: interview.id }, data: { status: INTERVIEW_STATUS.CANCELLED } }),
+    prisma.interviewSlot.update({ where: { id: interview.slotId }, data: { status: INTERVIEW_SLOT_STATUS.AVAILABLE } }),
+    prisma.application.update({ where: { id: applicationId }, data: { status: APPLICATION_STATUS.SHORTLISTED } }),
+  ]);
+  return getBookingForApplicationId(applicationId);
 }
 
 // ─────────────────────────────────────────────────────────────
