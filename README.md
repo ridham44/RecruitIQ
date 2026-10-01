@@ -1,30 +1,40 @@
 # RecruitIQ — AI Recruitment Platform
 
-An AI-powered recruitment platform for recruitment companies. A recruitment company posts jobs (optionally
-on behalf of a client company), candidates apply with a resume — logged in, or as a guest through a public
-careers portal — and an AI pipeline parses resumes, extracts structured job requirements, and scores/ranks
+An AI-powered recruitment platform for recruitment agencies. An agency posts jobs (optionally on behalf of
+a client company), candidates apply with a resume — logged in, or as a guest through a public careers
+portal — and an AI pipeline parses resumes, extracts structured job requirements, and scores/ranks
 candidates against each job. Shortlisted candidates take a fully automated AI voice interview (booked from
 slots, or via an instant "attend now or later" link), get a final score, and qualified candidates are
-submitted to the client's HR person, who reviews them in a read-only link or their own client portal.
+submitted to the company's HR person, who reviews them in a read-only link or their own portal.
+
+**Naming:** the UI, emails and messages say **Portal Admin**, **Agency** (the recruitment company, its
+owner and agency recruiters), **Company** (the agency's client) and **Company HR**. Code identifiers,
+routes, enums and permission keys keep the older names — e.g. the agency is `Company` / role `COMPANY`,
+the client company is `ClientCompany` (`/clients`), and Company HR is `HiringPerson` / role `CLIENT_HR`.
+
+Want to see every role quickly? Run `node scripts/seed-demo.mjs` and open `/live-demo` — see
+[Live demo page](#live-demo-page).
 
 ## What it does
 
-**Platform Admin:** onboards recruitment companies (invite link to set the owner's password),
-suspends/activates companies, manages users.
+**Portal Admin:** onboards agencies (invite link to set the owner's password), suspends/activates
+agencies, manages users.
 
-**Recruitment company (owner + recruiters):** post a job (AI extracts structured requirements) → link it
-to a client company, department and HR person → review applicants → run AI screening → filter/sort by
+**Agency (owner + agency recruiters):** post a job (AI extracts structured requirements) → link it to a
+company and its Company HR (department optional) → review applicants → run AI screening → filter/sort by
 score, experience, skills, education, status → shortlist or reject (in bulk, or automatically on the
 score) → AI interview via booked slots or an instant link → final score (CV + interview) → submit
-qualified candidates to the client. Owners invite recruiters with granular permissions and job/client
+qualified candidates to the company. Owners invite recruiters with granular permissions and job/company
 assignments.
 
 **Candidate:** register (or apply as a guest with phone OTP) → build a profile (resume upload auto-fills
 academic fields, reviewed before saving) → apply → track status → book an interview slot or open an
-interview link → take the AI voice interview.
+interview link → take the AI voice interview. Candidates **without a login** get a personal status link
+in every email: it shows a progress timeline and lets them book, change and join their slot interview
+(see [Notifications & interview scheduling](#notifications--interview-scheduling-phase-2)).
 
-**Client HR person:** receives submitted candidate packages by email (private read-only link), or logs
-into the client portal to see every candidate submitted to them.
+**Company HR:** receives submitted candidate packages by email (private read-only link), or logs into the
+client portal to see every candidate submitted to them (scores, interview summary and CV, view only).
 
 **Screening engine:** deterministic checks (skill overlap, experience range, education match) blended
 with an LLM's semantic read of the resume — the LLM is never the sole source of truth, and gender/name/
@@ -32,18 +42,21 @@ other demographic data is never sent to it (see [AI & screening](#ai--screening)
 
 ## Roles
 
-| Role          | Who                                    | Lands on          |
-| ------------- | -------------------------------------- | ----------------- |
-| `ADMIN`       | Platform Admin (created by script only) | `/admin/companies` |
-| `COMPANY`     | Recruitment company owner — every permission | `/company/dashboard` |
-| `RECRUITER`   | Invited by the owner — permissions + assigned jobs/clients only | `/company/dashboard` |
-| `CANDIDATE`   | Job seeker (registered or guest)       | `/candidate/dashboard` |
-| `CLIENT_HR`   | Client company's HR / hiring person    | `/client/candidates` |
+| Role (code)   | Shown as         | Who                                               | Lands on               |
+| ------------- | ---------------- | ------------------------------------------------- | ---------------------- |
+| `ADMIN`       | Portal Admin     | Created by script only                            | `/admin/companies`     |
+| `COMPANY`     | Agency owner     | Owns the agency — every permission                | `/company/dashboard`   |
+| `RECRUITER`   | Agency recruiter | Invited by the owner — permissions + assigned jobs/companies only | `/company/dashboard` |
+| `CANDIDATE`   | Candidate        | Job seeker (registered or guest)                  | `/candidate/dashboard` |
+| `CLIENT_HR`   | Company HR       | HR / hiring person at the agency's client company | `/client/candidates`   |
 
 Recruiter permissions (`src/shared/constants/permissions.js`): `MANAGE_JOBS`, `REVIEW_CANDIDATES`,
 `CONFIGURE_INTERVIEWS`, `MANAGE_RECRUITERS`, `MANAGE_CLIENTS`, `SUBMIT_CANDIDATES`. New recruiters get
 `REVIEW_CANDIDATES` + `CONFIGURE_INTERVIEWS` by default. Recruiters only see jobs assigned to them, jobs
-they created, and jobs of clients assigned to them (`403 JOB_NOT_ASSIGNED` otherwise).
+they created, and jobs of companies assigned to them (`403 JOB_NOT_ASSIGNED` otherwise).
+
+Company HR belong directly to a company (the company page has a **Company HR** tab); the department is an
+optional label. On a job, Company HR is picked by company.
 
 ## Application pipeline
 
@@ -152,6 +165,11 @@ tests/unit/               node:test unit tests
   for one slot can't both win — the loser gets a clean `409`. Booking moves the application to
   `INTERVIEW_SCHEDULED` and emails a confirmation.
 - Cancelling frees the slot and reverts the application to `SHORTLISTED` — that's "Reschedule".
+- **No login needed.** Every candidate email carries the candidate's personal status link
+  (`/careers/track`). The status page shows a progress timeline, and on a slot-based job the candidate can
+  book, change and join their interview from it — with the same atomic, no-double-booking rule. Manually
+  shortlisting a candidate on an instant-link job emails the interview link. Logged-in flows are
+  unchanged.
 
 ## AI voice interviews (Phase 3)
 
@@ -189,15 +207,16 @@ turned on.
 | Phase | Feature | Flag |
 | ----- | ------- | ---- |
 | P0 | Safety net: feature flags, `npm run test:smoke`, DB backup/restore scripts | — |
-| P1 | Platform Admin, admin-only company onboarding, invite/set-password links, suspend/activate | `ALLOW_COMPANY_SELF_REGISTER` |
-| P2 | Recruiters with permissions and job assignments (`/company/recruiters`) | — |
-| P3 | Client companies → departments → HR persons, linked to jobs; client-recruiter assignment | — |
+| P1 | Portal Admin, admin-only agency onboarding, invite/set-password links, suspend/activate | `ALLOW_COMPANY_SELF_REGISTER` |
+| P2 | Agency recruiters with permissions and job assignments (`/company/recruiters`) | — |
+| P3 | Client companies and their Company HR (department optional), linked to jobs; company-recruiter assignment | — |
 | P4 | Public careers portal (`/careers/:slug`), guest apply with phone OTP, CV-only submission with best-job auto matching, CV pool | `FEATURE_GUEST_APPLY` |
 | —  | Forgot password (1-hour reset link, rate-limited) | — |
 | P5 | Instant interview link (`/interview/:token`, attend now or later) instead of slot booking, chosen per job | `FEATURE_INSTANT_INTERVIEW` |
 | P6 | Recruiter interview & evaluation instructions; per-criterion `MET` / `PARTLY` / `NOT_MET` verdicts on the report | — |
 | P7 | Final score (CV × weight + interview × weight), final threshold, submission to client with a private read-only link | — |
-| P8 | Client HR portal (`/client/candidates`) — HR persons see only candidates submitted to them | `FEATURE_CLIENT_PORTAL` |
+| P8 | Company HR portal (`/client/candidates`) — Company HR see only candidates submitted to them | `FEATURE_CLIENT_PORTAL` |
+| —  | Company HR under the company, new display names, live demo page, booking from the status link | `DEMO_PAGE` (demo page only) |
 
 Notes:
 
@@ -209,7 +228,7 @@ Notes:
 - **Recruiter guidance (P6)** is sanitized — any sentence mentioning protected characteristics is dropped
   before it reaches a prompt — and empty guidance produces byte-identical prompts (unit-tested).
 - **Final score (P7)** is recalculated after every completed report and can be recalculated per
-  application or per job; a job can auto-submit qualified candidates to its HR person.
+  application or per job; a job can auto-submit qualified candidates to its Company HR.
 
 ## Environment variables
 
@@ -231,13 +250,47 @@ Everything else has a safe default — see the comments in `.env.example`:
 | AI voice interviews | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `INTERVIEW_WORKER_SECRET`, `DEEPGRAM_API_KEY` |
 | SMS OTP | `SMS_DRIVER` (`console` / `twilio`), `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`, `DEFAULT_PHONE_COUNTRY_CODE` (`+91`) |
 | Feature flags | `ALLOW_COMPANY_SELF_REGISTER` (default `true`), `FEATURE_GUEST_APPLY`, `FEATURE_INSTANT_INTERVIEW`, `FEATURE_CLIENT_PORTAL` (default `false`) |
+| Demo page | `DEMO_PAGE` (default `false`), `DEMO_PASSWORD` (default `Demo@123`) |
 
 Feature flags accept `true`/`false` (also `1`/`0`, `yes`/`no`, `on`/`off`). Set
-`ALLOW_COMPANY_SELF_REGISTER=false` once a Platform Admin exists — companies can then only be onboarded by
+`ALLOW_COMPANY_SELF_REGISTER=false` once a Portal Admin exists — agencies can then only be onboarded by
 the admin. With `SMS_DRIVER=console`, OTP codes print in the API server's terminal.
 
 To run AI voice interviews you also need the `LIVEKIT_*` values, `INTERVIEW_WORKER_SECRET` (any long
 random string, matched in `livekit-worker/.env`), and `livekit-worker/` running separately.
+
+## Live demo page
+
+`/live-demo` (`/start` redirects to it, and the landing page links to it) lists every role with what it
+can do, plus the public links: the demo agency's careers page, CV-only submission, application tracking
+and registration. It works off fixed demo accounts on the
+non-routable `@recruitiq.demo` domain (`src/shared/constants/demo.js`), so no real inbox ever gets their
+emails:
+
+| Account | Email |
+| ------- | ----- |
+| Portal Admin | `admin@recruitiq.demo` |
+| Agency owner | `agency@recruitiq.demo` |
+| Agency recruiter | `recruiter@recruitiq.demo` |
+| Company HR | `hr@recruitiq.demo` |
+| Candidate | `candidate@recruitiq.demo` |
+
+```bash
+node scripts/backup-db.mjs before-demo   # it writes to DATABASE_URL — back up first
+node scripts/seed-demo.mjs               # create the demo set (skips if it already exists)
+node scripts/seed-demo.mjs --reset       # delete the demo set first, then recreate it
+```
+
+The seed goes through the app's real flows on its own API instance (port 3093, needed features on, console
+email): **Demo Talent Agency** with its careers link, **Demo Software Pvt Ltd** with an Engineering
+department and its Company HR, an agency recruiter, the open job **Frontend Developer (Demo)**, a candidate
+with a profile and CV who hasn't applied yet (so you can apply live), and one sample candidate already
+submitted to Company HR.
+
+The demo emails and password are only shown on the page while `DEMO_PAGE=true`. With it off, the page still
+lists the roles and links. All demo accounts share `DEMO_PASSWORD`. `DEMO_PAGE=true` publishes working
+demo logins to anyone who opens the page, so only turn it on where that's intended (it never exposes real
+accounts).
 
 ## Local setup
 
@@ -268,7 +321,8 @@ npx prisma migrate deploy    # apply pending migrations (shared/production DBs)
 npx prisma studio            # browse the database
 npm run db:seed              # demo company/job/candidates — dev/demo only, never on a live prod DB
 npm run db:seed:demo-interviews  # 3 completed demo AI interviews on top of db:seed
-npm run build                # production frontend build
+node scripts/seed-demo.mjs   # live demo page accounts (see "Live demo page"), --reset to recreate
+npm run build                # prisma generate + production frontend build
 npm run preview              # preview that build locally
 npm run test:unit            # unit tests
 npm run test:smoke           # full API happy path against the running server
@@ -288,7 +342,7 @@ node scripts/restore-db.mjs backups/<folder> [--data-only]  # onto a NEW, EMPTY 
 - **Use `prisma migrate deploy`, not `migrate dev`, on the shared Neon database.** The live database still
   has columns and enums from the reverted telephonic-interview feature (`interviews.mode`, `callStatus`,
   `phoneNumber`, `twilioCallSid`, `callAttempts`, `interview_slots.mode`, the `CallStatus` /
-  `InterviewMode` enums, …) that `schema.prisma` no longer has. The P1–P8 migrations were hand-written to
+  `InterviewMode` enums, …) that `schema.prisma` no longer has. The P1–P8 and later migrations were hand-written to
   leave them untouched. `migrate dev` sees this as drift and may offer to **reset the database — never
   accept that** on the shared DB. Removing those columns needs a deliberate, reviewed migration.
 - Interactive transactions use `TX_OPTIONS` (15 s wait / 30 s timeout) — Prisma's 5 s default failed
@@ -312,7 +366,7 @@ it recreates the same demo accounts (all sharing password `Demo@1234`) each time
    `OPENROUTER_SITE_URL` can stay unset — they fall back to the deployment's own URL.
 3. Run `npx prisma migrate deploy` against the production database (locally or in CI) — Vercel's build runs
    `prisma generate` but never runs migrations.
-4. Create the Platform Admin with `scripts/create-admin.mjs` against the production database.
+4. Create the Portal Admin with `scripts/create-admin.mjs` against the production database.
 5. `MAX_RESUME_SIZE_MB` defaults to 4 because Vercel's Node functions reject bodies above ~4.5 MB.
 6. For AI voice interviews, also set the `LIVEKIT_*` values and `INTERVIEW_WORKER_SECRET`, and deploy
    `livekit-worker/` separately — see `livekit-worker/README.md`.
@@ -327,7 +381,7 @@ Versioned under `/api/v1`, one module per resource:
 /config                 public config (e.g. whether company self-signup is allowed)
 /companies              company profile
 /recruiters             invite, permissions, job assignments (company side)
-/clients                client companies, departments, HR persons, recruiter assignment
+/clients                client companies, their Company HR, departments, recruiter assignment
 /candidates             candidate profile; /candidates/me/education
 /jobs                   CRUD + public listing; /jobs/:id/client-link (company side only)
 /resumes                upload + listing
@@ -336,11 +390,11 @@ Versioned under `/api/v1`, one module per resource:
 /scheduling             interview slots + booking; instant-interview links
 /interviews             AI interviewer config, LiveKit tokens, state machine, transcript/report
 /submissions            final score, submit to client, history
-/client-portal          CLIENT_HR only — candidates submitted to that HR person
+/client-portal          CLIENT_HR only — candidates submitted to that Company HR
 /cv-pool                CV-only submissions and manual placement
 /public                 careers portal, OTP, guest apply, tracking   (FEATURE_GUEST_APPLY)
 /public/interviews      instant interview link                       (FEATURE_INSTANT_INTERVIEW)
-/public/submissions     HR person's read-only candidate link         (always on)
+/public/submissions     Company HR's read-only candidate link        (always on)
 ```
 
 Every response is `{ success: true, data }` or `{ success: false, message, error }`. Notifications has no
@@ -380,10 +434,11 @@ node scripts/test-p5-instant-interview.mjs
 node scripts/test-p6-recruiter-instructions.mjs
 node scripts/test-p7-final-score-submission.mjs
 node scripts/test-p8-client-portal.mjs
+node scripts/test-track-booking.mjs                             # no-login status link: timeline, book/change/join a slot
 ```
 
-The P4, P5 and P8 scripts start their own API instance with their feature flag turned on, so they work
-even when the dev server has the flag off.
+The P4, P5, P8 and track-booking scripts start their own API instance with the features they need turned
+on, so they work even when the dev server has those flags off.
 
 The interview scripts drive the engine by posting simulated transcripts to the same `/worker/answer`
 endpoint the real livekit-worker calls. They cover everything except the realtime audio path, which

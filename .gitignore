@@ -3,8 +3,6 @@ dist
 build
 .vercel
 
-.env
-.env.*
 !.env.example
 
 *.log
@@ -20,3 +18,4 @@ Thumbs.db
 
 # Local docs, guides and videos (shared directly, not via git)
 /doc
+config.bat
