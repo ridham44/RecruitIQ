@@ -155,8 +155,8 @@ function EducationCard({ entry, onChange, onSave, onDelete }) {
                 type="number"
                 min={1900}
                 max={2100}
-                className={inputClass}
-                placeholder="e.g. 2024"
+                className={`${inputClass} disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400`}
+                placeholder={entry.isCurrentlyStudying ? 'Present' : 'e.g. 2024'}
                 value={entry.endYear}
                 disabled={entry.isCurrentlyStudying}
                 onChange={(e) => set('endYear', e.target.value)}
@@ -172,19 +172,20 @@ function EducationCard({ entry, onChange, onSave, onDelete }) {
             </FormField>
           </div>
 
-          {/* Currently Studying toggle — the whole row (dial + label text) is
-              the click target, not just the small dial, so it's easy to hit
-              on touch screens and actually responds when tapped. */}
-          <label
-            className="mb-4 flex cursor-pointer select-none items-center gap-3 py-1 text-sm text-slate-700"
+          {/* Both fields must change in one onChange: two set() calls would each
+              spread the same stale entry and the second would undo the first. */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={entry.isCurrentlyStudying}
+            className="mb-4 flex min-h-[44px] cursor-pointer select-none items-center gap-3 py-1 text-left text-sm text-slate-700"
             onClick={() => {
-              set('isCurrentlyStudying', !entry.isCurrentlyStudying);
-              if (!entry.isCurrentlyStudying) set('endYear', '');
+              const next = !entry.isCurrentlyStudying;
+              onChange({ ...entry, isCurrentlyStudying: next, endYear: next ? '' : entry.endYear });
             }}
           >
             <span
-              role="switch"
-              aria-checked={entry.isCurrentlyStudying}
+              aria-hidden="true"
               className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 ${
                 entry.isCurrentlyStudying ? 'bg-brand-600' : 'bg-slate-300'
               }`}
@@ -196,7 +197,7 @@ function EducationCard({ entry, onChange, onSave, onDelete }) {
               />
             </span>
             Currently studying here
-          </label>
+          </button>
 
           {entry.error && <p className="mb-3 text-sm text-red-600">{entry.error}</p>}
           {entry.saved && <p className="mb-3 text-sm text-emerald-600">Saved ✓</p>}
