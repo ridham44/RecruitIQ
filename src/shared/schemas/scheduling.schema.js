@@ -15,6 +15,12 @@ export const createSlotsSchema = z.object({
   slots: z.array(slotSchema).min(1, 'Provide at least one slot'),
 });
 
+// Second-round AI interview request (agency or Company HR).
+export const secondRoundSchema = z.object({
+  reason: z.enum(['TECHNICAL_ISSUE', 'NOT_READY', 'NEED_MORE_DETAIL', 'OTHER']),
+  notes: z.string().trim().max(1000).optional().or(z.literal('')),
+});
+
 // Candidate books a specific slot for one of their applications.
 export const bookSlotSchema = z.object({
   slotId: z.string().min(1, 'slotId is required'),

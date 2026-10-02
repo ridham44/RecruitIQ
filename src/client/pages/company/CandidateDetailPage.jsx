@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, MapPin, ThumbsUp, ThumbsDown, XCircle } from 'lucide-react';
+// import { ArrowLeft, Mail, Phone, MapPin, ThumbsUp, ThumbsDown, XCircle } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, MapPin, ThumbsUp, ThumbsDown, XCircle, FileText, Download } from 'lucide-react';
+import { usePermissions } from '../../hooks/usePermissions.js';
 import { applicationsApi } from '../../services/applications.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
@@ -12,6 +14,8 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import { getApplicationActionState } from '../../utils/applicationActions.js';
 import InstantInterviewCard from './InstantInterviewCard.jsx';
 import SubmitToClientCard from './SubmitToClientCard.jsx';
+import SecondRoundPanel from '../../components/SecondRoundPanel.jsx';
+import { schedulingApi } from '../../services/scheduling.js';
 
 export default function CandidateDetailPage() {
   const { id: jobId, candidateId } = useParams();
@@ -20,6 +24,21 @@ export default function CandidateDetailPage() {
   const [error, setError] = useState('');
   const [rejecting, setRejecting] = useState(false);
   const [confirmReject, setConfirmReject] = useState(false);
+  // View-only recruiters (VIEW_CANDIDATES) see everything but get no actions.
+  const { can } = usePermissions();
+  const canReview = can('REVIEW_CANDIDATES');
+  const [cvBusy, setCvBusy] = useState('');
+  const openCv = async (download) => {
+    setCvBusy(download ? 'download' : 'view');
+    setError('');
+    try {
+      await applicationsApi.openCv(jobId, candidateId, { download, fileName: application?.resume?.fileName || 'cv' });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCvBusy('');
+    }
+  };
 
   const load = () => {
     setError('');
@@ -30,6 +49,16 @@ export default function CandidateDetailPage() {
   };
 
   useEffect(load, [jobId, candidateId]);
+
+  // Interview rounds (second-round AI interview).
+  const [rounds, setRounds] = useState(null);
+  useEffect(() => {
+    if (!application?.id) return;
+    schedulingApi
+      .getRounds(application.id)
+      .then(setRounds)
+      .catch(() => setRounds(null));
+  }, [application?.id, application?.status]);
 
   const handleReject = async () => {
     setRejecting(true);
@@ -83,6 +112,17 @@ export default function CandidateDetailPage() {
           </div>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
+          {resume && (
+            <>
+              <Button variant="secondary" onClick={() => openCv(false)} loading={cvBusy === 'view'} className="w-full sm:w-auto">
+                <FileText className="h-4 w-4" /> View CV
+              </Button>
+              <Button variant="secondary" onClick={() => openCv(true)} loading={cvBusy === 'download'} className="w-full sm:w-auto">
+                <Download className="h-4 w-4" /> Download CV
+              </Button>
+            </>
+          )}
+          {canReview && (
           <Button
             variant="danger"
             disabled={actions.reject.disabled}
@@ -92,6 +132,7 @@ export default function CandidateDetailPage() {
           >
             <XCircle className="h-4 w-4" /> {actions.reject.label}
           </Button>
+          )}
         </div>
       </div>
 
@@ -100,7 +141,20 @@ export default function CandidateDetailPage() {
       {/* Build plan P5 */}
       <InstantInterviewCard application={application} onChanged={load} />
       {/* Build plan P7 */}
-      <SubmitToClientCard application={application} onChanged={load} />
+      {/* Second-round AI interview: rounds + "Give second interview" */}
+      <SecondRoundPanel
+        data={rounds}
+        canRequest={canReview}
+        audience="agency"
+        onRequest={async (payload) => {
+          const res = await schedulingApi.giveSecondRound(application.id, payload);
+          setRounds(res);
+          load();
+          return res;
+        }}
+      />
+      {/* <SubmitToClientCard application={application} onChanged={load} /> */}
+      {canReview && <SubmitToClientCard application={application} onChanged={load} />}
 
       {result?.status === 'COMPLETED' && (
         <Card className="mb-6 p-6">

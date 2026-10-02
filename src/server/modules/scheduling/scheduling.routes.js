@@ -3,9 +3,15 @@ import * as schedulingController from './scheduling.controller.js';
 import { authenticate, authorize } from '../../middleware/auth.js';
 import { validate } from '../../middleware/validate.js';
 import { ROLES, COMPANY_SIDE_ROLES } from '../../../shared/constants/roles.js';
-import { PERMISSIONS } from '../../../shared/constants/permissions.js';
-import { requirePermission } from '../../middleware/permission.js';
-import { createSlotsSchema, generateSlotsSchema, bookSlotSchema } from '../../../shared/schemas/scheduling.schema.js';
+// import { PERMISSIONS } from '../../../shared/constants/permissions.js';
+// import { requirePermission } from '../../middleware/permission.js';
+// import { createSlotsSchema, generateSlotsSchema, bookSlotSchema } from '../../../shared/schemas/scheduling.schema.js';
+import { PERMISSIONS, VIEW_CANDIDATE_PERMISSIONS } from '../../../shared/constants/permissions.js';
+import { requirePermission, requireAnyPermission } from '../../middleware/permission.js';
+import { createSlotsSchema, generateSlotsSchema, bookSlotSchema, secondRoundSchema } from '../../../shared/schemas/scheduling.schema.js';
+import { asyncHandler } from '../../utils/asyncHandler.js';
+import { ok } from '../../utils/apiResponse.js';
+import { giveSecondRound, getRoundsForCompany } from './scheduling.service.js';
 
 const router = Router();
 
@@ -74,6 +80,22 @@ router.get(
   authorize(ROLES.CANDIDATE, ...COMPANY_SIDE_ROLES),
   requirePermission(PERMISSIONS.REVIEW_CANDIDATES),
   schedulingController.getInterview
+);
+
+// Second-round AI interview (agency side). Giving one needs REVIEW_CANDIDATES;
+// reading the rounds works for view-only recruiters too.
+router.get(
+  '/applications/:applicationId/rounds',
+  authorize(...COMPANY_SIDE_ROLES),
+  requireAnyPermission(...VIEW_CANDIDATE_PERMISSIONS),
+  asyncHandler(async (req, res) => ok(res, await getRoundsForCompany(req.user.id, req.params.applicationId)))
+);
+router.post(
+  '/applications/:applicationId/second-round',
+  authorize(...COMPANY_SIDE_ROLES),
+  requirePermission(PERMISSIONS.REVIEW_CANDIDATES),
+  validate(secondRoundSchema),
+  asyncHandler(async (req, res) => ok(res, await giveSecondRound(req.user, req.params.applicationId, req.body)))
 );
 
 export default router;

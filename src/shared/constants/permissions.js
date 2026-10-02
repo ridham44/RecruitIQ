@@ -4,6 +4,8 @@
 // a migration.
 export const PERMISSIONS = {
   MANAGE_JOBS: 'MANAGE_JOBS',
+  // View-only: applicants on assigned jobs, their CV (view / download) and scores.
+  VIEW_CANDIDATES: 'VIEW_CANDIDATES',
   REVIEW_CANDIDATES: 'REVIEW_CANDIDATES',
   CONFIGURE_INTERVIEWS: 'CONFIGURE_INTERVIEWS',
   MANAGE_RECRUITERS: 'MANAGE_RECRUITERS',
@@ -15,6 +17,7 @@ export const PERMISSIONS = {
 
 // Shown in the invite / edit-permissions UI, in this order.
 export const PERMISSION_OPTIONS = [
+  { key: PERMISSIONS.VIEW_CANDIDATES, label: 'View candidates', description: 'See applicants on assigned jobs, open / download CVs and scores (no actions)' },
   { key: PERMISSIONS.MANAGE_JOBS, label: 'Manage jobs', description: 'Create, edit and close jobs' },
   { key: PERMISSIONS.REVIEW_CANDIDATES, label: 'Review candidates', description: 'Applicants, AI screening, shortlist/reject, interview results' },
   { key: PERMISSIONS.CONFIGURE_INTERVIEWS, label: 'Configure interviews', description: 'AI interviewer settings and interview slots' },
@@ -27,4 +30,9 @@ export const PERMISSION_OPTIONS = [
 
 export const ASSIGNABLE_PERMISSIONS = PERMISSION_OPTIONS.map((p) => p.key);
 
-export const DEFAULT_RECRUITER_PERMISSIONS = [PERMISSIONS.REVIEW_CANDIDATES, PERMISSIONS.CONFIGURE_INTERVIEWS];
+// export const DEFAULT_RECRUITER_PERMISSIONS = [PERMISSIONS.REVIEW_CANDIDATES, PERMISSIONS.CONFIGURE_INTERVIEWS];
+// New recruiters start view-only; existing recruiters keep what they were given.
+export const DEFAULT_RECRUITER_PERMISSIONS = [PERMISSIONS.VIEW_CANDIDATES];
+
+// Any of these lets a recruiter READ applicants / CVs / scores / interview results.
+export const VIEW_CANDIDATE_PERMISSIONS = [PERMISSIONS.VIEW_CANDIDATES, PERMISSIONS.REVIEW_CANDIDATES];

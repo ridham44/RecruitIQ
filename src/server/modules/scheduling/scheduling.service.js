@@ -3,7 +3,8 @@ import { ApiError } from '../../utils/ApiError.js';
 import { APPLICATION_STATUS, INTERVIEW_SLOT_STATUS, INTERVIEW_STATUS } from '../../../shared/constants/statuses.js';
 import { getOwnedJob } from '../jobs/jobs.service.js';
 // import { inviteApplication } from '../interviews/instantInterview.service.js';
-import { inviteApplication, ensureSlotInterviewLink, interviewLinkFor } from '../interviews/instantInterview.service.js';
+// import { inviteApplication, ensureSlotInterviewLink, interviewLinkFor } from '../interviews/instantInterview.service.js';
+import { inviteApplication, ensureSlotInterviewLink, interviewLinkFor, createSecondRound, roundsForApplication } from '../interviews/instantInterview.service.js';
 import { sendInterviewConfirmationEmail } from '../notifications/email.service.js';
 
 async function getCandidateIdForUser(userId) {
@@ -197,6 +198,11 @@ export async function cancelMyInterview(userId, applicationId) {
     where: { applicationId, status: INTERVIEW_STATUS.SCHEDULED },
   });
   if (!interview) throw ApiError.notFound('No scheduled interview to cancel');
+  // A second-round interview was requested by the company/agency — the
+  // candidate can't cancel it back to "shortlisted".
+  if (interview.round > 1) {
+    throw ApiError.badRequest('A second-round interview cannot be cancelled. Please contact the recruiter.', 'SECOND_ROUND_NO_CANCEL');
+  }
 
   // await prisma.$transaction([
   //   prisma.interview.update({ where: { id: interview.id }, data: { status: INTERVIEW_STATUS.CANCELLED } }),
@@ -346,6 +352,33 @@ export async function getInterviewForApplication(userId, applicationId, { asComp
     include: { slot: true },
     orderBy: { createdAt: 'desc' },
   });
+}
+
+// Second-round AI interview given by the agency (e.g. after a technical issue).
+export async function giveSecondRound(user, applicationId, { reason, notes }) {
+  const application = await prisma.application.findUnique({ where: { id: applicationId } });
+  if (!application) throw ApiError.notFound('Application not found');
+  await getOwnedJob(user.id, application.jobId);
+  const { interview, link, sent } = await createSecondRound(applicationId, {
+    reason,
+    notes,
+    requestedById: user.id,
+    requestedByRole: user.role,
+  });
+  return {
+    interviewId: interview.id,
+    link,
+    expiresAt: interview.inviteExpiresAt,
+    emailed: sent?.sent !== false,
+    ...(await roundsForApplication(applicationId, { withLink: true })),
+  };
+}
+
+export async function getRoundsForCompany(userId, applicationId) {
+  const application = await prisma.application.findUnique({ where: { id: applicationId } });
+  if (!application) throw ApiError.notFound('Application not found');
+  await getOwnedJob(userId, application.jobId);
+  return roundsForApplication(applicationId, { withLink: true });
 }
 
 // Build plan P5: recruiter sends (or re-sends) an instant interview link to

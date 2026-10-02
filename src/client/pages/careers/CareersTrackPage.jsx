@@ -31,6 +31,15 @@ function outcome(status) {
 
   const where = `${app.job.title} at ${app.company.name}`;
   const matchedLine = status.kind === 'submission' ? `We matched your CV to ${where}. ` : '';
+  // Second-round AI interview (requested after the first one).
+  if (app.interview?.link && app.interview.round > 1) {
+    return {
+      icon: PartyPopper,
+      tone: 'emerald',
+      title: 'Your second interview is ready',
+      body: `Thank you for your first interview for ${where}. Please take a second AI interview — start now, or later from the link in your email.`,
+    };
+  }
   switch (app.stage) {
     case 'shortlisted':
       return {

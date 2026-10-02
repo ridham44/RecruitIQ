@@ -189,6 +189,8 @@ enum EmailType {
   INTERVIEW_INVITE
   // Build plan P7: candidate package sent to a client HR / hiring person.
   CLIENT_SUBMISSION
+  // Company HR asked for a second-round interview (email to the agency).
+  SECOND_ROUND_REQUESTED
 }
 
 // Build plan P5: how a job's candidates get to their interview. SLOT (the
@@ -854,6 +856,17 @@ model Interview {
   inviteSentAt       DateTime?
   inviteSendCount    Int       @default(0)
   inviteSendWindowAt DateTime?
+
+  // Second-round AI interview (retake). 1 = the normal interview. A round 2 is
+  // requested by Company HR or the agency, always uses an instant link, and
+  // its notes guide the AI's questions.
+  round                Int     @default(1)
+  // TECHNICAL_ISSUE | NOT_READY | NEED_MORE_DETAIL | OTHER
+  roundReason          String?
+  roundNotes           String?
+  roundRequestedById   String?
+  // CLIENT_HR | COMPANY | RECRUITER
+  roundRequestedByRole String?
 
   application Application         @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   // slot        InterviewSlot       @relation(fields: [slotId], references: [id], onDelete: Cascade)

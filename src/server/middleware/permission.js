@@ -12,6 +12,25 @@ export function requireOwner(req, res, next) {
   throw ApiError.forbidden('Only the agency owner can do this', 'PERMISSION_DENIED');
 }
 
+// Passes when a recruiter holds at least one of the given permissions
+// (e.g. read-only routes: VIEW_CANDIDATES or REVIEW_CANDIDATES).
+export function requireAnyPermission(...permissions) {
+  return async (req, res, next) => {
+    try {
+      if (req.user?.role !== ROLES.RECRUITER) return next();
+      const ctx = await getCompanyContext(req.user.id);
+      if (!ctx.isActive) throw ApiError.unauthorized('Your account is inactive', 'ACCOUNT_INACTIVE');
+      if (!ctx.isOwner && !permissions.some((p) => ctx.permissions.includes(p))) {
+        throw ApiError.forbidden("You don't have permission to do this. Ask your agency owner.", 'PERMISSION_DENIED');
+      }
+      req.companyCtx = ctx;
+      next();
+    } catch (err) {
+      next(err);
+    }
+  };
+}
+
 export function requirePermission(permission) {
   return async (req, res, next) => {
     try {

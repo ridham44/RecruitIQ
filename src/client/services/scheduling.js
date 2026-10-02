@@ -1,6 +1,9 @@
 import { api } from './api.js';
 
 export const schedulingApi = {
+  // Second-round AI interview (agency side)
+  getRounds: (applicationId) => api.get(`/scheduling/applications/${applicationId}/rounds`),
+  giveSecondRound: (applicationId, payload) => api.post(`/scheduling/applications/${applicationId}/second-round`, payload),
   // Company
   createSlots: (jobId, slots) => api.post(`/scheduling/jobs/${jobId}/slots`, { slots }),
   generateSlots: (jobId, payload) => api.post(`/scheduling/jobs/${jobId}/slots/generate`, payload),

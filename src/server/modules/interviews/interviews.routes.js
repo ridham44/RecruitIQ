@@ -4,8 +4,10 @@ import { authenticate, authorize } from '../../middleware/auth.js';
 import { authenticateWorker } from '../../middleware/workerAuth.js';
 import { validate } from '../../middleware/validate.js';
 import { ROLES, COMPANY_SIDE_ROLES } from '../../../shared/constants/roles.js';
-import { PERMISSIONS } from '../../../shared/constants/permissions.js';
-import { requirePermission } from '../../middleware/permission.js';
+// import { PERMISSIONS } from '../../../shared/constants/permissions.js';
+// import { requirePermission } from '../../middleware/permission.js';
+import { PERMISSIONS, VIEW_CANDIDATE_PERMISSIONS } from '../../../shared/constants/permissions.js';
+import { requirePermission, requireAnyPermission } from '../../middleware/permission.js';
 import {
   upsertInterviewConfigSchema,
   logInterviewEventSchema,
@@ -36,13 +38,18 @@ router.patch('/config/:jobId', authorize(...COMPANY_SIDE_ROLES), configureInterv
 
 // Company: recruiter view of interviews for a job
 // router.get('/job/:jobId', authorize(ROLES.COMPANY), controller.listForJob);
-router.get('/job/:jobId', authorize(...COMPANY_SIDE_ROLES), reviewCandidates, controller.listForJob);
+// router.get('/job/:jobId', authorize(...COMPANY_SIDE_ROLES), reviewCandidates, controller.listForJob);
+// Reading interview results: VIEW_CANDIDATES or REVIEW_CANDIDATES.
+const viewCandidates = requireAnyPermission(...VIEW_CANDIDATE_PERMISSIONS);
+router.get('/job/:jobId', authorize(...COMPANY_SIDE_ROLES), viewCandidates, controller.listForJob);
 
 // Shared: either the owning candidate or the owning company can read
 // router.get('/:interviewId', authorize(ROLES.CANDIDATE, ROLES.COMPANY), controller.getDetail);
 // router.get('/:interviewId/state', authorize(ROLES.CANDIDATE, ROLES.COMPANY), controller.getState);
-router.get('/:interviewId', authorize(ROLES.CANDIDATE, ...COMPANY_SIDE_ROLES), reviewCandidates, controller.getDetail);
-router.get('/:interviewId/state', authorize(ROLES.CANDIDATE, ...COMPANY_SIDE_ROLES), reviewCandidates, controller.getState);
+// router.get('/:interviewId', authorize(ROLES.CANDIDATE, ...COMPANY_SIDE_ROLES), reviewCandidates, controller.getDetail);
+// router.get('/:interviewId/state', authorize(ROLES.CANDIDATE, ...COMPANY_SIDE_ROLES), reviewCandidates, controller.getState);
+router.get('/:interviewId', authorize(ROLES.CANDIDATE, ...COMPANY_SIDE_ROLES), viewCandidates, controller.getDetail);
+router.get('/:interviewId/state', authorize(ROLES.CANDIDATE, ...COMPANY_SIDE_ROLES), viewCandidates, controller.getState);
 
 // Candidate: join/run/end their own interview
 router.post('/:interviewId/start', authorize(ROLES.CANDIDATE), controller.start);

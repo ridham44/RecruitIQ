@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { Sparkles, Eye, Users, SlidersHorizontal, X, Save, RefreshCw, ArrowLeft, CalendarCheck, XCircle, UserCheck } from 'lucide-react';
+// import { Sparkles, Eye, Users, SlidersHorizontal, X, Save, RefreshCw, ArrowLeft, CalendarCheck, XCircle, UserCheck } from 'lucide-react';
+import { Sparkles, Eye, Users, SlidersHorizontal, X, Save, RefreshCw, ArrowLeft, CalendarCheck, XCircle, UserCheck, Download } from 'lucide-react';
+import { usePermissions } from '../../hooks/usePermissions.js';
 import { screeningApi } from '../../services/screening.js';
 import { jobsApi } from '../../services/jobs.js';
 import { applicationsApi } from '../../services/applications.js';
@@ -135,6 +137,13 @@ export default function JobApplicationsPage() {
   const [bulkLoading, setBulkLoading] = useState(false);
   const [rerunning, setRerunning] = useState(false);
   const [confirmRerun, setConfirmRerun] = useState(false);
+  // View-only recruiters (VIEW_CANDIDATES): list, scores and CVs, no actions.
+  const { can } = usePermissions();
+  const canReview = can('REVIEW_CANDIDATES');
+  const downloadCv = (app) =>
+    applicationsApi
+      .openCv(jobId, app.candidate.id, { download: true, fileName: app.resume?.fileName || 'cv' })
+      .catch((err) => setRowError((prev) => ({ ...prev, [app.id]: err.message })));
   const [rowError, setRowError] = useState({});
   const [confirmRejectId, setConfirmRejectId] = useState(null);
   const [rejecting, setRejecting] = useState(false);
@@ -349,6 +358,7 @@ export default function JobApplicationsPage() {
             {applications.length} total · {pendingCount} pending screening
           </p>
         </div>
+        {canReview && (
         <div className="flex flex-col gap-2 sm:flex-row flex-wrap">
           <Button onClick={handleRunScreening} loading={running} disabled={pendingCount === 0} className="w-full sm:w-auto">
             <Sparkles className="h-4 w-4" />
@@ -368,11 +378,13 @@ export default function JobApplicationsPage() {
             </Button>
           </Link>
         </div>
+        )}
       </div>
 
       {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
       {/* Job-level screening decision settings */}
+      {canReview && (
       <Card className="mb-6 p-5">
         <h3 className="mb-3 font-semibold text-slate-900">Screening settings</h3>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-6">
@@ -430,8 +442,10 @@ export default function JobApplicationsPage() {
           is emailed.
         </p>
       </Card>
+      )}
 
       {/* Build plan P7 */}
+      {canReview && (
       <FinalScoreSettingsCard
         job={job}
         onSaved={(updated) => {
@@ -439,6 +453,7 @@ export default function JobApplicationsPage() {
           load();
         }}
       />
+      )}
 
       {/* Filters */}
       <Card className="mb-6 p-5">
@@ -554,7 +569,7 @@ export default function JobApplicationsPage() {
         )}
       </Card>
 
-      {selected.size > 0 && (
+      {canReview && selected.size > 0 && (
         <div className="mb-4 flex flex-col gap-3 rounded-lg border border-brand-200 bg-brand-50 p-4 sm:flex-row sm:items-center sm:justify-between">
           <span className="text-sm font-medium text-brand-800">{selected.size} candidate(s) selected</span>
           <div className="flex flex-wrap gap-2">
@@ -581,7 +596,7 @@ export default function JobApplicationsPage() {
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">
-                  <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} />
+                  {canReview && <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} />}
                 </th>
                 <th className="px-4 py-3">Rank</th>
                 <th className="px-4 py-3">Candidate</th>
@@ -600,7 +615,7 @@ export default function JobApplicationsPage() {
                 return (
                   <tr key={app.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3">
-                      <input type="checkbox" checked={selected.has(app.id)} onChange={() => toggleSelected(app.id)} />
+                      {canReview && <input type="checkbox" checked={selected.has(app.id)} onChange={() => toggleSelected(app.id)} />}
                     </td>
                     <td className="px-4 py-3 font-medium text-slate-900">#{index + 1}</td>
                     <td className="px-4 py-3">
@@ -633,6 +648,7 @@ export default function JobApplicationsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex min-w-[140px] flex-col gap-1.5">
+                        {canReview && (
                         <Button
                           variant="danger"
                           className="w-full justify-start px-3 py-1.5 text-xs"
@@ -643,6 +659,7 @@ export default function JobApplicationsPage() {
                         >
                           <XCircle className="h-3.5 w-3.5" /> {actions.reject.label}
                         </Button>
+                        )}
                         {rowError[app.id] && <p className="text-xs text-red-600">{rowError[app.id]}</p>}
                         <Link
                           to={`/company/jobs/${jobId}/candidates/${app.candidate.id}`}
@@ -650,6 +667,15 @@ export default function JobApplicationsPage() {
                         >
                           <Eye className="h-3.5 w-3.5" /> View
                         </Link>
+                        {app.resume && (
+                          <button
+                            type="button"
+                            onClick={() => downloadCv(app)}
+                            className="inline-flex items-center gap-1 text-left text-xs text-brand-600 hover:text-brand-700"
+                          >
+                            <Download className="h-3.5 w-3.5" /> CV
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

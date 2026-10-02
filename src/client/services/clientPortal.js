@@ -4,6 +4,8 @@ import { api, getToken } from './api.js';
 export const clientPortalApi = {
   list: (jobId) => api.get(`/client-portal/submissions${jobId ? `?jobId=${encodeURIComponent(jobId)}` : ''}`),
   get: (id) => api.get(`/client-portal/submissions/${id}`),
+  // Ask for a second-round AI interview (link goes to the candidate at once).
+  requestSecondRound: (id, payload) => api.post(`/client-portal/submissions/${id}/second-round`, payload),
   // The CV endpoint needs the Bearer token, so it can't be a plain link:
   // fetch it and hand the browser a temporary object URL instead.
   openCv: async (id, { download = false, fileName = 'cv' } = {}) => {

@@ -4,6 +4,8 @@ import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ok } from '../../utils/apiResponse.js';
 import { ROLES } from '../../../shared/constants/roles.js';
 import * as service from './clientPortal.service.js';
+import { validate } from '../../middleware/validate.js';
+import { secondRoundSchema } from '../../../shared/schemas/scheduling.schema.js';
 
 // Build plan P8 — /api/v1/client-portal, CLIENT_HR only, behind
 // FEATURE_CLIENT_PORTAL (checked in the service). No other role can reach
@@ -21,6 +23,14 @@ router.get(
 router.get(
   '/submissions/:id',
   asyncHandler(async (req, res) => ok(res, await service.getSubmission(req.user.id, req.params.id)))
+);
+
+// Company HR asks for a second-round AI interview: the link goes to the
+// candidate straight away and the agency is emailed.
+router.post(
+  '/submissions/:id/second-round',
+  validate(secondRoundSchema),
+  asyncHandler(async (req, res) => ok(res, await service.requestSecondRound(req.user.id, req.params.id, req.body)))
 );
 
 router.get(

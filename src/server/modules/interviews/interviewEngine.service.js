@@ -198,6 +198,21 @@ function recruiterGuidanceFrom(config) {
   return { instructions: text, focusSkills };
 }
 
+// Second-round interview: the requester's notes ("focus on SQL…") are added
+// to the guidance. Round 1 returns exactly recruiterGuidanceFrom(config).
+function guidanceFor(interview, config) {
+  const base = recruiterGuidanceFrom(config);
+  if (!(interview?.round > 1)) return base;
+  const { text: notes } = sanitizeRecruiterGuidance(interview.roundNotes || '');
+  const roundLine = notes
+    ? `This is a second-round interview. Focus especially on: ${notes}`
+    : 'This is a second-round interview. Ask fresh questions; do not repeat the first round.';
+  return {
+    instructions: [base?.instructions, roundLine].filter(Boolean).join('\n'),
+    focusSkills: base?.focusSkills || [],
+  };
+}
+
 async function createPlannedQuestion(interview, plannedIndex, config, stagePlan, difficulty) {
   const stage = stagePlan[plannedIndex];
   const alreadyAskedCustom = interview.questions.filter((q) => q.type === 'CUSTOM').length;
@@ -220,7 +235,8 @@ async function createPlannedQuestion(interview, plannedIndex, config, stagePlan,
       previousExchanges: exchangesFor(interview),
       difficulty,
       // Build plan P6: recruiter guidance (null when not set → prompt unchanged).
-      recruiterGuidance: recruiterGuidanceFrom(config),
+      // recruiterGuidance: recruiterGuidanceFrom(config),
+      recruiterGuidance: guidanceFor(interview, config),
     });
     type = STAGE_QUESTION_TYPE[stage];
   }
@@ -310,7 +326,8 @@ export async function getCurrentStateForWorker(interviewId) {
     aiTitle: config.aiTitle,
     ttsVoiceId: resolveTtsVoiceId(config),
     // Build plan P6: so a voice/phone worker can follow the same guidance.
-    recruiterGuidance: recruiterGuidanceFrom(config),
+    // recruiterGuidance: recruiterGuidanceFrom(config),
+    recruiterGuidance: guidanceFor(interview, config),
   };
 }
 
@@ -514,10 +531,19 @@ export async function finalizeInterview(interviewId) {
     data: { status: 'COMPLETED', stage: 'END', endedAt: new Date() },
   });
   await prisma.interviewEvent.create({ data: { interviewId, type: 'INTERVIEW_ENDED' } });
-  await prisma.application.update({
-    where: { id: interview.applicationId },
-    data: { status: 'INTERVIEW_COMPLETED' },
-  });
+  // await prisma.application.update({
+  //   where: { id: interview.applicationId },
+  //   data: { status: 'INTERVIEW_COMPLETED' },
+  // });
+  // A second round for a candidate already sent to the company keeps
+  // "Submitted to company"; everything else behaves as before.
+  const keepSubmitted = interview.round > 1 && interview.application.status === 'SUBMITTED_TO_CLIENT';
+  if (!keepSubmitted) {
+    await prisma.application.update({
+      where: { id: interview.applicationId },
+      data: { status: 'INTERVIEW_COMPLETED' },
+    });
+  }
 
   // Awaited (not fire-and-forget): Vercel functions don't guarantee
   // execution continues after the response is sent, so the report is

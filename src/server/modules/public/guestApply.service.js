@@ -244,9 +244,13 @@ function describeApplication(application) {
   else if (application.status === APPLICATION_STATUS.SCREENING) stage = 'screening';
 
   // Build plan P5: an instant interview link, when one is ready.
-  const instant = env.features.instantInterview
-    ? (application.interviews || []).find((i) => !i.slotId && (i.status === 'SCHEDULED' || i.status === 'IN_PROGRESS'))
-    : null;
+  // const instant = env.features.instantInterview
+  //   ? (application.interviews || []).find((i) => !i.slotId && (i.status === 'SCHEDULED' || i.status === 'IN_PROGRESS'))
+  //   : null;
+  // Second-round links work even with instant links switched off.
+  const instant = (application.interviews || []).find(
+    (i) => !i.slotId && (i.status === 'SCHEDULED' || i.status === 'IN_PROGRESS') && (env.features.instantInterview || i.round > 1)
+  );
 
   // Slot-booking jobs: has the candidate booked (or started) a slot interview?
   const slotInterview = (application.interviews || []).find((i) => i.slotId && (i.status === 'SCHEDULED' || i.status === 'IN_PROGRESS'));
@@ -261,7 +265,8 @@ function describeApplication(application) {
     hasBookedSlot: Boolean(slotInterview),
     job: { id: application.job.id, title: application.job.title },
     company: { name: application.job.company.name },
-    ...(instant ? { interview: { link: interviewLinkFor(instant), expiresAt: instant.inviteExpiresAt, status: instant.status } } : {}),
+    // ...(instant ? { interview: { link: interviewLinkFor(instant), expiresAt: instant.inviteExpiresAt, status: instant.status } } : {}),
+    ...(instant ? { interview: { link: interviewLinkFor(instant), expiresAt: instant.inviteExpiresAt, status: instant.status, round: instant.round || 1 } } : {}),
   };
 }
 

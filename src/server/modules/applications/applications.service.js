@@ -7,6 +7,7 @@ import { getEffectiveConfig } from '../interviews/interviewConfig.service.js';
 import { screenApplicationById } from '../screening/screening.service.js';
 import { env } from '../../config/env.js';
 import { inviteApplication } from '../interviews/instantInterview.service.js';
+import { storage } from '../../resume/storage/index.js';
 
 async function getCandidateIdForUser(userId) {
   const candidate = await prisma.candidate.findUnique({ where: { userId } });
@@ -172,6 +173,19 @@ export async function rejectApplication(userId, applicationId) {
 // Combined candidate detail for a company reviewing one applicant against a
 // specific job (resume, structured resume data, and screening result) —
 // backs the /company/jobs/:id/candidates/:candidateId page.
+// CV file of a candidate who applied to this job. getOwnedJob enforces the
+// agency (and, for recruiters, the job assignment).
+export async function getCandidateCv(userId, jobId, candidateId) {
+  await getOwnedJob(userId, jobId);
+  const application = await prisma.application.findUnique({
+    where: { candidateId_jobId: { candidateId, jobId } },
+    include: { resume: true },
+  });
+  if (!application?.resume) throw ApiError.notFound('CV not found');
+  const { resume } = application;
+  return { buffer: await storage.read(resume.storageKey), fileName: resume.fileName || 'cv', fileType: resume.fileType };
+}
+
 export async function getCandidateApplicationDetail(userId, jobId, candidateId) {
   await getOwnedJob(userId, jobId);
 

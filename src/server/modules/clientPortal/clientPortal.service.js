@@ -7,7 +7,9 @@ import { ROLES } from '../../../shared/constants/roles.js';
 import { storage } from '../../resume/storage/index.js';
 import { getCompanyContext } from '../companies/companyContext.js';
 import { issuePasswordToken, hasPendingInvite } from '../auth/passwordToken.service.js';
-import { sendAccountSetupEmail } from '../notifications/email.service.js';
+// import { sendAccountSetupEmail } from '../notifications/email.service.js';
+import { sendAccountSetupEmail, sendSecondRoundRequestedEmail } from '../notifications/email.service.js';
+import { createSecondRound, roundsForApplication } from '../interviews/instantInterview.service.js';
 
 // Build plan P8 — client HR / hiring person portal. HR people log in and see
 // ONLY the candidates submitted to them (their HiringPerson row): the frozen
@@ -146,7 +148,44 @@ export async function getSubmission(userId, submissionId) {
   if (s.status !== 'VIEWED') {
     await prisma.clientSubmission.update({ where: { id: s.id }, data: { status: 'VIEWED', viewedAt: new Date() } });
   }
-  return { id: s.id, submittedAt: s.createdAt, snapshot: s.snapshot };
+  // return { id: s.id, submittedAt: s.createdAt, snapshot: s.snapshot };
+  // + live round history (second-round interviews happen after the snapshot).
+  return { id: s.id, submittedAt: s.createdAt, snapshot: s.snapshot, ...(await roundsForApplication(s.applicationId)) };
+}
+
+const REASON_LABELS = {
+  TECHNICAL_ISSUE: 'Technical issue in the first interview',
+  NOT_READY: 'Candidate was not ready',
+  NEED_MORE_DETAIL: 'Need more detail',
+  OTHER: 'Other',
+};
+
+export async function requestSecondRound(userId, submissionId, { reason, notes }) {
+  assertPortalEnabled();
+  const s = await ownSubmission(userId, submissionId);
+  const person = await personFor(userId);
+  await createSecondRound(s.applicationId, { reason, notes, requestedById: userId, requestedByRole: ROLES.CLIENT_HR });
+
+  // Tell the agency (owner email). Never blocks the request.
+  const app = await prisma.application.findUnique({
+    where: { id: s.applicationId },
+    include: { candidate: true, job: { include: { company: { include: { user: { select: { email: true } } } } } } },
+  });
+  if (app?.job.company.user?.email) {
+    await sendSecondRoundRequestedEmail({
+      to: app.job.company.user.email,
+      hrName: person.fullName,
+      companyName: person.clientCompany.name,
+      candidateName: app.candidate.fullName,
+      jobTitle: app.job.title,
+      reason: REASON_LABELS[reason] || reason,
+      notes: notes?.trim() || null,
+      jobId: app.jobId,
+      candidateId: app.candidateId,
+      applicationId: app.id,
+    }).catch((err) => console.error('[client-portal] second-round email failed:', err.message));
+  }
+  return getSubmission(userId, submissionId);
 }
 
 export async function getSubmissionCv(userId, submissionId) {

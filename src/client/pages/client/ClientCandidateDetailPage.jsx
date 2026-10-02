@@ -6,6 +6,7 @@ import SubmissionPackage from '../../components/SubmissionPackage.jsx';
 import Button from '../../components/ui/Button.jsx';
 import LoadingState from '../../components/ui/LoadingState.jsx';
 import ErrorState from '../../components/ui/ErrorState.jsx';
+import SecondRoundPanel from '../../components/SecondRoundPanel.jsx';
 
 // Build plan P8 — /client/candidates/:id: one shared candidate (opening it
 // marks the submission Viewed for the recruiter).
@@ -43,6 +44,17 @@ export default function ClientCandidateDetailPage() {
       <Link to="/client/candidates" className="mb-4 inline-flex min-h-[44px] items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
         <ArrowLeft className="h-4 w-4" /> Candidates
       </Link>
+      {/* Second-round AI interview: request one, see round 2's result */}
+      <SecondRoundPanel
+        data={data}
+        canRequest
+        audience="hr"
+        onRequest={async (payload) => {
+          const res = await clientPortalApi.requestSecondRound(id, payload);
+          setData(res);
+          return res;
+        }}
+      />
       <SubmissionPackage
         snapshot={data.snapshot}
         cvActions={

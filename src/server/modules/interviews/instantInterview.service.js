@@ -121,11 +121,12 @@ export async function ensureSlotInterviewLink(interviewId) {
 }
 
 // Instant links need FEATURE_INSTANT_INTERVIEW; slot-interview join links
-// (status-link bookings) work regardless of that flag.
+// (status-link bookings) and second-round links work regardless of that flag.
 async function findForLink(token) {
   if (env.features.instantInterview) return findByToken(token);
   const interview = await findByToken(token).catch(() => null);
-  if (interview?.slotId) return interview;
+  // if (interview?.slotId) return interview;
+  if (interview?.slotId || interview?.round > 1) return interview;
   assertEnabled();
   return findByToken(token);
 }
@@ -230,6 +231,8 @@ async function deliver(interview, channel) {
       link,
       expiresAt: interview.inviteExpiresAt,
       applicationId: interview.applicationId,
+      // Second-round interview: different wording ("a second interview").
+      secondRound: interview.round > 1,
     });
   }
 
@@ -251,6 +254,102 @@ export async function sendInviteByToken(token, channel) {
   const b = blocker(interview);
   if (b) throw ApiError.badRequest(b.message, b.code);
   return deliver(interview, channel);
+}
+
+// ─── Second-round AI interview (retake) ───
+// Requested by Company HR (from their portal) or by the agency. Always an
+// instant link (attend now or before it expires), emailed straight away.
+// Round 1 and its report stay untouched; the final score then uses the
+// latest completed round (finalScore.service.js).
+
+export const MAX_INTERVIEW_ROUND = 2;
+export const SECOND_ROUND_REASONS = ['TECHNICAL_ISSUE', 'NOT_READY', 'NEED_MORE_DETAIL', 'OTHER'];
+
+export async function createSecondRound(applicationId, { reason, notes, requestedById, requestedByRole }) {
+  const application = await prisma.application.findUnique({
+    where: { id: applicationId },
+    include: { job: true, interviews: true },
+  });
+  if (!application) throw ApiError.notFound('Application not found');
+  if (application.status === APPLICATION_STATUS.REJECTED) {
+    throw ApiError.badRequest('This candidate was rejected', 'APPLICATION_REJECTED');
+  }
+  const live = application.interviews.filter((i) => i.status !== INTERVIEW_STATUS.CANCELLED);
+  if (!live.some((i) => i.status === INTERVIEW_STATUS.COMPLETED)) {
+    throw ApiError.badRequest('A second round is possible once the first interview is completed', 'NO_COMPLETED_INTERVIEW');
+  }
+  if (live.some((i) => ACTIVE.includes(i.status))) {
+    throw ApiError.conflict('An interview is already open for this candidate', 'INTERVIEW_ACTIVE');
+  }
+  const lastRound = Math.max(...live.map((i) => i.round || 1));
+  if (lastRound >= MAX_INTERVIEW_ROUND) {
+    throw ApiError.conflict('This candidate has already been given a second round', 'ROUND_LIMIT');
+  }
+
+  // A candidate already sent to the company stays "Submitted to company".
+  const keepStatus = application.status === APPLICATION_STATUS.SUBMITTED_TO_CLIENT;
+  const expiresAt = new Date(Date.now() + (application.job.inviteValidDays || 7) * 24 * 3600 * 1000);
+  const created = await prisma.$transaction(async (tx) => {
+    const row = await tx.interview.create({
+      data: {
+        applicationId,
+        status: INTERVIEW_STATUS.SCHEDULED,
+        round: lastRound + 1,
+        roundReason: SECOND_ROUND_REASONS.includes(reason) ? reason : 'OTHER',
+        roundNotes: notes?.trim() ? notes.trim().slice(0, 1000) : null,
+        roundRequestedById: requestedById || null,
+        roundRequestedByRole: requestedByRole || null,
+        inviteNonce: crypto.randomBytes(16).toString('hex'),
+      },
+    });
+    if (!keepStatus) {
+      await tx.application.update({ where: { id: applicationId }, data: { status: APPLICATION_STATUS.INTERVIEW_SCHEDULED } });
+    }
+    return tx.interview.update({ where: { id: row.id }, data: { accessTokenHash: sha256(tokenFor(row)), inviteExpiresAt: expiresAt } });
+  }, TX_OPTIONS);
+
+  const full = await prisma.interview.findUnique({ where: { id: created.id }, include: INCLUDE });
+  const sent = await deliver(full, 'email').catch((err) => ({ sent: false, error: err.message }));
+  return { interview: full, link: interviewLinkFor(full), sent };
+}
+
+// Round history for one application (agency + Company HR views).
+// withLink: only the agency gets the candidate's join link.
+export async function roundsForApplication(applicationId, { withLink = false } = {}) {
+  const rows = await prisma.interview.findMany({
+    where: { applicationId, status: { not: INTERVIEW_STATUS.CANCELLED } },
+    include: { report: true },
+    orderBy: [{ round: 'asc' }, { createdAt: 'asc' }],
+  });
+  const lastCompleted = rows.some((i) => i.status === INTERVIEW_STATUS.COMPLETED);
+  const open = rows.some((i) => ACTIVE.includes(i.status));
+  const lastRound = rows.length ? Math.max(...rows.map((i) => i.round || 1)) : 0;
+  return {
+    canRequestSecondRound: lastCompleted && !open && lastRound < MAX_INTERVIEW_ROUND,
+    rounds: rows.map((i) => ({
+      interviewId: i.id,
+      round: i.round || 1,
+      status: i.status,
+      reason: i.roundReason,
+      notes: i.roundNotes,
+      requestedByRole: i.roundRequestedByRole,
+      createdAt: i.createdAt,
+      endedAt: i.endedAt,
+      expiresAt: i.round > 1 ? i.inviteExpiresAt : null,
+      ...(withLink && i.round > 1 && ACTIVE.includes(i.status) ? { link: interviewLinkFor(i) } : {}),
+      report:
+        i.report?.status === 'COMPLETED'
+          ? {
+              overallScore: i.report.overallScore,
+              technicalScore: i.report.technicalScore,
+              communicationScore: i.report.communicationScore,
+              strengths: i.report.strengths,
+              areasForImprovement: i.report.areasForImprovement,
+              reasoning: i.report.reasoning,
+            }
+          : null,
+    })),
+  };
 }
 
 // Used after auto-advance (P4) and by the recruiter's "Send interview link"

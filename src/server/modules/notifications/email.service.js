@@ -161,16 +161,25 @@ export async function sendAccountSetupEmail({
 }
 
 // Build plan P5: instant interview link — attend now or any time before it expires.
-export async function sendInterviewInviteEmail({ to, candidateName, jobTitle, companyName, link, expiresAt, applicationId }) {
+// secondRound: a second-round AI interview (retake) — different wording.
+// export async function sendInterviewInviteEmail({ to, candidateName, jobTitle, companyName, link, expiresAt, applicationId }) {
+export async function sendInterviewInviteEmail({ to, candidateName, jobTitle, companyName, link, expiresAt, applicationId, secondRound = false }) {
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const until = expiresAt
     ? new Date(expiresAt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
     : null;
-  const subject = `Your interview for ${jobTitle} at ${companyName}`;
+  // const subject = `Your interview for ${jobTitle} at ${companyName}`;
+  const subject = secondRound
+    ? `Your second interview for ${jobTitle} at ${companyName}`
+    : `Your interview for ${jobTitle} at ${companyName}`;
+  const intro = secondRound
+    ? `<p>Thank you for your first interview for <strong>${esc(jobTitle)}</strong> at <strong>${esc(companyName)}</strong>.
+    We'd like you to take a <strong>second AI interview</strong> — it's ready whenever you are, no booking needed.</p>`
+    : `<p>Good news — you've been shortlisted for <strong>${esc(jobTitle)}</strong> at <strong>${esc(companyName)}</strong>.
+    Your AI video interview is ready whenever you are — no booking needed.</p>`;
   const html = layout(`
     <p>Hi ${esc(candidateName)},</p>
-    <p>Good news — you've been shortlisted for <strong>${esc(jobTitle)}</strong> at <strong>${esc(companyName)}</strong>.
-    Your AI video interview is ready whenever you are — no booking needed.</p>
+    ${intro}
     <p style="margin:24px 0;">
       <a href="${link}" style="background:#2a4bd6;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:bold;display:inline-block;">
         Start your interview
@@ -184,6 +193,30 @@ export async function sendInterviewInviteEmail({ to, candidateName, jobTitle, co
     <p>— The RecruitIQ team</p>
   `);
   return sendAndLog({ to, subject, html, type: 'INTERVIEW_INVITE', applicationId: applicationId ?? null });
+}
+
+// Company HR asked for a second-round interview — tell the agency. The new
+// interview link has already gone to the candidate.
+export async function sendSecondRoundRequestedEmail({ to, hrName, companyName, candidateName, jobTitle, reason, notes, jobId, candidateId, applicationId }) {
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const url = `${env.clientUrl.split(',')[0].trim()}/company/jobs/${jobId}/candidates/${candidateId}`;
+  const subject = `2nd round requested: ${candidateName} — ${jobTitle}`;
+  const html = layout(`
+    <p>Hello,</p>
+    <p><strong>${esc(hrName)}</strong> (${esc(companyName)}) asked for a <strong>second-round AI interview</strong> for
+    <strong>${esc(candidateName)}</strong> — ${esc(jobTitle)}.</p>
+    <p style="background:#f1f5f9;border-radius:8px;padding:12px 16px;margin:16px 0;">
+      <strong>Reason:</strong> ${esc(reason)}${notes ? `<br /><strong>Notes:</strong> ${esc(notes)}` : ''}
+    </p>
+    <p>The interview link has already been emailed to the candidate. You'll see the round 2 report on the candidate's page when it's done.</p>
+    <p style="margin:24px 0;">
+      <a href="${url}" style="background:#2a4bd6;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:bold;display:inline-block;">
+        Open candidate
+      </a>
+    </p>
+    <p>— The RecruitIQ team</p>
+  `);
+  return sendAndLog({ to, subject, html, type: 'SECOND_ROUND_REQUESTED', applicationId: applicationId ?? null });
 }
 
 // Build plan P7 (§13): candidate package for a client HR / hiring person.
