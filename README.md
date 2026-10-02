@@ -50,10 +50,16 @@ other demographic data is never sent to it (see [AI & screening](#ai--screening)
 | `CANDIDATE`   | Candidate        | Job seeker (registered or guest)                  | `/candidate/dashboard` |
 | `CLIENT_HR`   | Company HR       | HR / hiring person at the agency's client company | `/client/candidates`   |
 
-Recruiter permissions (`src/shared/constants/permissions.js`): `MANAGE_JOBS`, `REVIEW_CANDIDATES`,
-`CONFIGURE_INTERVIEWS`, `MANAGE_RECRUITERS`, `MANAGE_CLIENTS`, `SUBMIT_CANDIDATES`. New recruiters get
-`REVIEW_CANDIDATES` + `CONFIGURE_INTERVIEWS` by default. Recruiters only see jobs assigned to them, jobs
-they created, and jobs of companies assigned to them (`403 JOB_NOT_ASSIGNED` otherwise).
+Recruiter permissions (`src/shared/constants/permissions.js`): `MANAGE_JOBS`, `VIEW_CANDIDATES`,
+`REVIEW_CANDIDATES`, `CONFIGURE_INTERVIEWS`, `MANAGE_RECRUITERS`, `MANAGE_CLIENTS`, `SUBMIT_CANDIDATES`.
+Recruiters only see jobs assigned to them, jobs they created, and jobs of companies assigned to them
+(`403 JOB_NOT_ASSIGNED` otherwise).
+
+- **View-only by default.** New recruiters get only `VIEW_CANDIDATES`: applicants on their jobs, scores,
+  interview results and the CV (view / download), with every action button hidden. Recruiters created
+  before this kept their existing permissions.
+- Read routes accept `VIEW_CANDIDATES` or `REVIEW_CANDIDATES` (`requireAnyPermission`); every action
+  (screening, shortlist/reject, second round, …) still needs `REVIEW_CANDIDATES`.
 
 Company HR belong directly to a company (the company page has a **Company HR** tab); the department is an
 optional label. On a job, Company HR is picked by company.
@@ -217,6 +223,7 @@ turned on.
 | P7 | Final score (CV × weight + interview × weight), final threshold, submission to client with a private read-only link | — |
 | P8 | Company HR portal (`/client/candidates`) — Company HR see only candidates submitted to them | `FEATURE_CLIENT_PORTAL` |
 | —  | Company HR under the company, new display names, live demo page, booking from the status link | `DEMO_PAGE` (demo page only) |
+| —  | View-only agency recruiters (`VIEW_CANDIDATES`) and second-round AI interviews | — |
 
 Notes:
 
@@ -229,6 +236,12 @@ Notes:
   before it reaches a prompt — and empty guidance produces byte-identical prompts (unit-tested).
 - **Final score (P7)** is recalculated after every completed report and can be recalculated per
   application or per job; a job can auto-submit qualified candidates to its Company HR.
+- **Second-round interview (retake):** Company HR (**Request second round**) or the agency (**Give second
+  interview**) can ask for one more AI interview, with a reason and notes. The candidate is emailed an
+  instant interview link straight away, and the agency is emailed when Company HR asks. At most 2 rounds;
+  it needs a completed round 1 and no open interview, and the candidate can't cancel it. The notes steer
+  the AI's questions, round 1 is kept, and the final score uses the latest round. A candidate already
+  submitted stays `SUBMITTED_TO_CLIENT`. Agency and Company HR both see a rounds panel.
 
 ## Environment variables
 
@@ -385,7 +398,7 @@ Versioned under `/api/v1`, one module per resource:
 /candidates             candidate profile; /candidates/me/education
 /jobs                   CRUD + public listing; /jobs/:id/client-link (company side only)
 /resumes                upload + listing
-/applications           apply, list, company views, bulk Shortlist/Reject
+/applications           apply, list, company views, bulk Shortlist/Reject, candidate CV for the agency
 /screening              AI screening, ranked/top candidates, best-job matching
 /scheduling             interview slots + booking; instant-interview links
 /interviews             AI interviewer config, LiveKit tokens, state machine, transcript/report
@@ -435,9 +448,11 @@ node scripts/test-p6-recruiter-instructions.mjs
 node scripts/test-p7-final-score-submission.mjs
 node scripts/test-p8-client-portal.mjs
 node scripts/test-track-booking.mjs                             # no-login status link: timeline, book/change/join a slot
+node scripts/test-recruiter-view-only.mjs                       # VIEW_CANDIDATES: read routes allowed, actions blocked
+node scripts/test-second-round.mjs                              # second-round interview requests, limits, final score
 ```
 
-The P4, P5, P8 and track-booking scripts start their own API instance with the features they need turned
+The P4, P5, P8, track-booking and second-round scripts start their own API instance with the features they need turned
 on, so they work even when the dev server has those flags off.
 
 The interview scripts drive the engine by posting simulated transcripts to the same `/worker/answer`
