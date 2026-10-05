@@ -46,6 +46,16 @@ export const env = {
   nodeEnv,
   port: Number(process.env.PORT || 3001),
   clientUrl: process.env.CLIENT_URL || deployedOrigin || 'http://localhost:5173',
+  // Build plan P9: the public address of the live product, e.g.
+  // https://recruitiq-eta.vercel.app — every link that leaves the app uses it:
+  // emailed links (interview, set password, status, login, application,
+  // Company HR submission) and the /recq links recruiters copy and share.
+  // Falls back to CLIENT_URL (which stays the CORS origin list). Point it at
+  // the instance that holds the data (local dev/demo → http://localhost:5173).
+  publicAppUrl: (process.env.PUBLIC_APP_URL || process.env.CLIENT_URL || deployedOrigin || 'http://localhost:5173')
+    .split(',')[0]
+    .trim()
+    .replace(/\/+$/, ''),
 
   databaseUrl: required('DATABASE_URL'),
 

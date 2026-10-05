@@ -19,13 +19,13 @@ export const updateProfile = asyncHandler(async (req, res) => {
 export const getCareersLink = asyncHandler(async (req, res) => {
   const ctx = await getCompanyContext(req.user.id);
   const slug = await ensureCompanySlug(ctx.companyId);
-  ok(res, { slug, url: careersUrl(slug), enabled: env.features.guestApply });
+  ok(res, { slug, url: careersUrl(slug), enabled: env.features.recq });
 });
 
 export const setCareersLink = asyncHandler(async (req, res) => {
   const ctx = await getCompanyContext(req.user.id);
   const slug = await setCompanySlug(ctx.companyId, req.body.slug);
-  ok(res, { slug, url: careersUrl(slug), enabled: env.features.guestApply });
+  ok(res, { slug, url: careersUrl(slug), enabled: env.features.recq });
 });
 
 export const getDashboardOverview = asyncHandler(async (req, res) => {

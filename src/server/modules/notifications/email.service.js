@@ -30,7 +30,7 @@ function layout(bodyHtml) {
 }
 
 function viewApplicationButton(applicationId) {
-  const url = `${env.clientUrl}/candidate/applications/${applicationId}`;
+  const url = `${env.publicAppUrl}/candidate/applications/${applicationId}`;
   return `<p style="margin:24px 0;">
     <a href="${url}" style="background:#2a4bd6;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:bold;display:inline-block;">
       View Application
@@ -199,7 +199,7 @@ export async function sendInterviewInviteEmail({ to, candidateName, jobTitle, co
 // interview link has already gone to the candidate.
 export async function sendSecondRoundRequestedEmail({ to, hrName, companyName, candidateName, jobTitle, reason, notes, jobId, candidateId, applicationId }) {
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-  const url = `${env.clientUrl.split(',')[0].trim()}/company/jobs/${jobId}/candidates/${candidateId}`;
+  const url = `${env.publicAppUrl}/company/jobs/${jobId}/candidates/${candidateId}`;
   const subject = `2nd round requested: ${candidateName} — ${jobTitle}`;
   const html = layout(`
     <p>Hello,</p>
@@ -266,7 +266,7 @@ export async function sendCandidateApplicationReceivedEmail({ to, fullName, comp
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const what = jobTitle ? `your application for <strong>${esc(jobTitle)}</strong>` : 'your CV';
   const subject = jobTitle ? `We received your application for ${jobTitle}` : `We received your CV — ${companyName}`;
-  const loginUrl = `${env.clientUrl.split(',')[0].trim()}/auth/login`;
+  const loginUrl = `${env.publicAppUrl}/auth/login`;
   const action = link
     ? `<p>Set a password to track your application and attend interviews from your RecruitIQ account.</p>
        <p style="margin:24px 0;">

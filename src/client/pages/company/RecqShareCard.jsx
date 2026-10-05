@@ -57,6 +57,8 @@ export default function RecqShareCard({ job, onSaved }) {
   const { can } = usePermissions();
   const [enabled, setEnabled] = useState(null);
   const [agencySlug, setAgencySlug] = useState('');
+  // The live product address (PUBLIC_APP_URL) — the links are meant to be shared.
+  const [publicUrl, setPublicUrl] = useState(window.location.origin);
   const [win, setWin] = useState({
     start: toLocalInput(job.interviewAvailabilityStart),
     end: toLocalInput(job.interviewAvailabilityEnd),
@@ -68,7 +70,10 @@ export default function RecqShareCard({ job, onSaved }) {
   useEffect(() => {
     configApi
       .getPublic()
-      .then((c) => setEnabled(Boolean(c?.recq)))
+      .then((c) => {
+        setEnabled(Boolean(c?.recq));
+        if (c?.publicAppUrl) setPublicUrl(c.publicAppUrl);
+      })
       .catch(() => setEnabled(false));
     careersAdminApi
       .getLink()
@@ -79,7 +84,7 @@ export default function RecqShareCard({ job, onSaved }) {
   if (enabled === null) return null;
   if (!enabled) return null;
 
-  const origin = window.location.origin;
+  const origin = publicUrl;
   const agencyUrl = agencySlug ? `${origin}/recq/${agencySlug}` : null;
   const jobUrl = agencySlug && job.slug ? `${origin}/recq/${agencySlug}/${job.slug}` : null;
   const canEdit = can('CONFIGURE_INTERVIEWS') && can('MANAGE_JOBS');
@@ -123,7 +128,7 @@ export default function RecqShareCard({ job, onSaved }) {
         {agencyUrl && <LinkRow label="All your open roles" url={agencyUrl} />}
         {!agencyUrl && (
           <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            Set up your public link first (Dashboard → your careers link) to share these.
+            Set up your candidate link first (Jobs → Your candidate link) to share these.
           </p>
         )}
       </div>

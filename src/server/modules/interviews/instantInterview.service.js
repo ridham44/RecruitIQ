@@ -31,7 +31,7 @@ function tokenFor(interview) {
 
 export function interviewLinkFor(interview) {
   if (!interview?.inviteNonce) return null;
-  return `${env.clientUrl.split(',')[0].trim()}/interview/${tokenFor(interview)}`;
+  return `${env.publicAppUrl}/interview/${tokenFor(interview)}`;
 }
 
 function assertEnabled() {

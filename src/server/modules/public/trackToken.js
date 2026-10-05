@@ -10,7 +10,8 @@ import { ApiError } from '../../utils/ApiError.js';
 export const TRACK_TOKEN_TTL = '30d';
 
 function clientOrigin() {
-  return env.clientUrl.split(',')[0].trim();
+  // Links in emails use the live product address (PUBLIC_APP_URL).
+  return env.publicAppUrl;
 }
 
 export function trackUrl(token) {

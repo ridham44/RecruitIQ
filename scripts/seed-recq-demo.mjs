@@ -386,13 +386,19 @@ async function seed() {
 
   await realisticTimeline();
 
+  writeSampleResumes();
+}
+
+// Resumes for the live part of the demo (never seeded): demo-resumes/ for a
+// local recording, and public/sample-resumes/ so /live-demo can offer them
+// as downloads (fictional people, .demo emails).
+function writeSampleResumes() {
   step('Live-demo resumes (not seeded)');
-  const dir = path.resolve('demo-resumes');
-  fs.mkdirSync(dir, { recursive: true });
-  for (const r of LIVE_RESUMES) {
-    fs.writeFileSync(path.join(dir, r.file), buildDocx(r.lines(r.name, r.email)));
-    info(`demo-resumes/${r.file}`);
+  for (const dir of [path.resolve('demo-resumes'), path.resolve('public', 'sample-resumes')]) {
+    fs.mkdirSync(dir, { recursive: true });
+    for (const r of LIVE_RESUMES) fs.writeFileSync(path.join(dir, r.file), buildDocx(r.lines(r.name, r.email)));
   }
+  info(`demo-resumes/ and public/sample-resumes/: ${LIVE_RESUMES.map((r) => r.file).join(', ')}`);
 }
 
 // The seed runs every step within minutes, which would show 1-minute

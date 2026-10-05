@@ -3,19 +3,32 @@
 // domain, so no real inbox ever receives these emails, and `--reset` can
 // find and remove exactly this set.
 
-export const RECQ_DEMO_DOMAINS = ['platform.demo', 'nexora.demo', 'brightline.demo', 'finlytics.demo', 'mail.demo'];
+import {
+  DEMO_ACCOUNTS,
+  DEMO_AGENCY_NAME,
+  DEMO_AGENCY_SLUG,
+  DEMO_AGENCY_B_NAME,
+  DEMO_AGENCY_B_SLUG,
+  DEMO_COMPANY_NAME,
+} from '../../src/shared/constants/demo.js';
 
+// recruitiq.demo = the previous (pre-P9) demo set, superseded by this one —
+// --reset removes it too so a demo database ends up with a single demo set.
+export const RECQ_DEMO_DOMAINS = ['platform.demo', 'nexora.demo', 'brightline.demo', 'finlytics.demo', 'mail.demo', 'recruitiq.demo'];
+
+// The accounts shown on /live-demo (src/shared/constants/demo.js).
+const byKey = Object.fromEntries(DEMO_ACCOUNTS.map((a) => [a.key, { email: a.email, name: a.fullName }]));
 export const ACCOUNTS = {
-  admin: { email: 'admin@platform.demo', name: 'Portal Admin' },
-  owner: { email: 'owner@nexora.demo', name: 'Nexora Talent Partners' },
-  recruiter: { email: 'recruiter@nexora.demo', name: 'Ritika Bansal' },
-  hr: { email: 'hr@finlytics.demo', name: 'Kunal Shah' },
-  agencyB: { email: 'owner@brightline.demo', name: 'Brightline Staffing' },
+  admin: byKey.admin,
+  owner: byKey.agency,
+  recruiter: byKey.recruiter,
+  hr: byKey.hr,
+  agencyB: byKey.agencyB,
 };
 
 export const AGENCY = {
-  name: 'Nexora Talent Partners',
-  slug: 'nexora',
+  name: DEMO_AGENCY_NAME,
+  slug: DEMO_AGENCY_SLUG,
   profile: {
     industry: 'Technology recruitment',
     size: '51-200',
@@ -26,9 +39,9 @@ export const AGENCY = {
   },
 };
 
-export const AGENCY_B = { name: 'Brightline Staffing', slug: 'brightline' };
+export const AGENCY_B = { name: DEMO_AGENCY_B_NAME, slug: DEMO_AGENCY_B_SLUG };
 
-export const CLIENT = { name: 'Finlytics Software Pvt Ltd', industry: 'FinTech', website: 'https://finlytics.example.com', department: 'Engineering' };
+export const CLIENT = { name: DEMO_COMPANY_NAME, industry: 'FinTech', website: 'https://finlytics.example.com', department: 'Engineering' };
 
 const H = 3600 * 1000;
 const D = 24 * H;

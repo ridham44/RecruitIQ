@@ -9,7 +9,8 @@ import FormField, { inputClass } from '../../components/ui/FormField.jsx';
 import { checkForm } from '../../../shared/schemas/common.js';
 import { careersSlugSchema } from '../../../shared/schemas/public.schema.js';
 
-// Build plan P4 — the company's public careers page link (Jobs page).
+// Build plan P4 — the company's public link (Jobs page). Build plan P9: it is
+// the /recq agency link on the live product's address (PUBLIC_APP_URL).
 export default function CareersLinkCard() {
   const { isOwner } = usePermissions();
   const [link, setLink] = useState(null);
@@ -63,11 +64,14 @@ export default function CareersLinkCard() {
         <div className="flex min-w-0 flex-1 items-start gap-3">
           <Globe className="mt-0.5 h-5 w-5 shrink-0 text-brand-600" />
           <div className="min-w-0">
-            <p className="text-sm font-medium text-slate-900">Your careers page</p>
-            <p className="break-all font-mono text-xs text-slate-500">{link.url}</p>
+            <p className="text-sm font-medium text-slate-900">Your candidate link</p>
+            <p className="text-xs text-slate-500">
+              Share it with candidates — they see only your open roles, check their resume match, verify their email and take the AI interview.
+            </p>
+            <p className="mt-1 break-all font-mono text-xs text-slate-600">{link.url}</p>
             {!link.enabled && (
               <p className="mt-1 text-xs text-amber-700">
-                Not live yet — the careers portal is switched off (FEATURE_GUEST_APPLY). Candidates will see "not enabled" until it's turned on.
+                Not live yet — the candidate link flow is switched off (FEATURE_RECQ). Candidates will see "not available" until it's turned on.
               </p>
             )}
           </div>
@@ -99,7 +103,7 @@ export default function CareersLinkCard() {
 
       <Modal
         open={editing}
-        title="Rename careers link"
+        title="Rename candidate link"
         onClose={() => setEditing(false)}
         footer={
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
