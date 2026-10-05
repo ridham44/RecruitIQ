@@ -183,6 +183,14 @@ export default function RecqJobPage() {
             >
               {upload.match.pass ? 'Use a different resume' : 'Try another resume'}
             </button>
+            {!upload.match.pass && (
+              <Link
+                to={`/recq/${agencySlug}`}
+                className="mt-3 flex min-h-[44px] w-full items-center justify-center rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Browse other open roles
+              </Link>
+            )}
           </div>
         </div>
       )}

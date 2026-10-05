@@ -21,6 +21,64 @@ import { updateJobSchema } from '../../../shared/schemas/job.schema.js';
 import { bulkUpdateApplicationStatusSchema } from '../../../shared/schemas/application.schema.js';
 import { checkForm } from '../../../shared/schemas/common.js';
 
+// Build plan P9 (§32): latest interview per row — status pill + AI score.
+const INTERVIEW_PILL = {
+  SCHEDULED: ['Pending', 'bg-amber-50 text-amber-700'],
+  IN_PROGRESS: ['In progress', 'bg-blue-50 text-blue-700'],
+  COMPLETED: ['Completed', 'bg-emerald-50 text-emerald-700'],
+};
+function InterviewCell({ app }) {
+  const iv = app.interviews?.[0];
+  if (!iv) return <span className="text-xs text-slate-400">Not started</span>;
+  const [label, cls] = INTERVIEW_PILL[iv.status] || [iv.status, 'bg-slate-100 text-slate-600'];
+  const score = iv.report?.status === 'COMPLETED' && iv.report.overallScore != null ? Math.round(iv.report.overallScore) : null;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>{label}</span>
+      {score != null && <span className="text-xs font-semibold text-slate-700">{score}/100</span>}
+    </span>
+  );
+}
+
+// Build plan P9 (§33): actions relevant to the application's state. View and
+// the interview report lead; Reject is a quiet secondary action and is gone
+// once the candidate is rejected or already sent to the company.
+function RowActions({ app, jobId, canReview, onReject, onCv, rejecting, compact = false }) {
+  const iv = app.interviews?.[0];
+  const canReject = canReview && !['REJECTED', 'SUBMITTED_TO_CLIENT'].includes(app.status);
+  const link = 'inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700';
+  return (
+    <div className={`flex flex-wrap items-center ${compact ? 'gap-x-4 gap-y-2' : 'gap-x-3 gap-y-1.5'}`}>
+      <Link
+        to={`/company/jobs/${jobId}/candidates/${app.candidate.id}`}
+        className="inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 hover:border-brand-300 hover:text-brand-700"
+      >
+        <Eye className="h-3.5 w-3.5" /> View
+      </Link>
+      {iv?.status === 'COMPLETED' && (
+        <Link to={`/company/jobs/${jobId}/interviews/${iv.id}`} className={link}>
+          <Bot className="h-3.5 w-3.5" /> Report
+        </Link>
+      )}
+      {app.resume && (
+        <button type="button" onClick={onCv} className={link}>
+          <Download className="h-3.5 w-3.5" /> CV
+        </button>
+      )}
+      {canReject && (
+        <button
+          type="button"
+          onClick={onReject}
+          disabled={rejecting}
+          className={`inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-60 ${compact ? 'ml-auto' : ''}`}
+        >
+          <XCircle className="h-3.5 w-3.5" /> Reject
+        </button>
+      )}
+    </div>
+  );
+}
+
 // "3 shortlisted, 2 skipped (…)" from the bulk endpoint's { updatedCount, skippedCount }.
 function bulkResultMessage(result, status) {
   const verb = status === 'SHORTLISTED' ? 'shortlisted' : 'rejected';
@@ -433,17 +491,22 @@ export default function JobApplicationsPage() {
         <div>
           <h2 className="text-xl font-semibold text-slate-900">Applications — {job.title}</h2>
           <p className="text-sm text-slate-500">
-            {applications.length} total · {pendingCount} pending screening
+            {applications.length} total{pendingCount > 0 ? ` · ${pendingCount} not yet scored` : ''}
           </p>
         </div>
         {canReview && (
         <div className="flex flex-col gap-2 sm:flex-row flex-wrap">
-          <Button variant="secondary" onClick={handleShortlistAllScreened} disabled={screenedNotShortlistedIds.length === 0} loading={bulkLoading} className="w-full sm:w-auto">
-            <UserCheck className="h-4 w-4" /> Shortlist All Screened
-          </Button>
+          {/* Build plan P9: shortlisting is no longer the main flow — only
+              offered while old-flow (careers / logged-in) applicants are
+              actually waiting for that decision. */}
+          {screenedNotShortlistedIds.length > 0 && (
+            <Button variant="secondary" onClick={handleShortlistAllScreened} loading={bulkLoading} className="w-full sm:w-auto">
+              <UserCheck className="h-4 w-4" /> Shortlist All Screened
+            </Button>
+          )}
           <Link to={`/company/jobs/${jobId}/interviews`} className="w-full sm:w-auto">
             <Button className="w-full sm:w-auto">
-              <CalendarCheck className="h-4 w-4" /> Interview Scheduling
+              <CalendarCheck className="h-4 w-4" /> Interviews &amp; setup
             </Button>
           </Link>
         </div>
@@ -513,86 +576,6 @@ export default function JobApplicationsPage() {
           </div>
         </div>
       </Card>
-      )}
-
-      {/* Job-level screening decision settings */}
-      {canReview && (
-      <Card className="mb-6 p-5">
-        <h3 className="mb-3 font-semibold text-slate-900">Screening settings</h3>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-6">
-          <div className="w-full sm:w-48">
-            <label htmlFor="minAcceptableScore" className="mb-1 block text-sm font-medium text-slate-700">Minimum acceptable score</label>
-            <input
-              id="minAcceptableScore"
-              type="number"
-              min={0}
-              max={100}
-              aria-invalid={settingsErrors.minAcceptableScore ? true : undefined}
-              aria-describedby={settingsErrors.minAcceptableScore ? 'minAcceptableScore-error' : undefined}
-              className={`${inputClass} min-h-[44px]`}
-              value={settings.minAcceptableScore}
-              onChange={(e) => setSettings({ ...settings, minAcceptableScore: e.target.value })}
-            />
-            {settingsErrors.minAcceptableScore && (
-              <p id="minAcceptableScore-error" role="alert" className="mt-1 text-xs text-red-600">
-                {settingsErrors.minAcceptableScore}
-              </p>
-            )}
-          </div>
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={settings.autoRejectBelowMinScore}
-              onChange={(e) => setSettings({ ...settings, autoRejectBelowMinScore: e.target.checked })}
-            />
-            Automatically reject candidates below this score
-          </label>
-          {/* Build plan P4 (§8) */}
-          <label className="flex min-h-[44px] items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={settings.autoAdvanceOnMatch}
-              onChange={(e) => setSettings({ ...settings, autoAdvanceOnMatch: e.target.checked })}
-            />
-            Auto-advance: screen every new application and shortlist or reject it on this score
-          </label>
-          <Button variant="secondary" onClick={handleSaveSettings} loading={settingsSaving} className="sm:ml-auto">
-            <Save className="h-4 w-4" /> Save
-          </Button>
-        </div>
-        {settingsSaved && (
-          <p className="mt-2 text-sm text-emerald-600">
-            Settings saved.{' '}
-            {rerunnableCount > 0 && (
-              <button type="button" onClick={() => setConfirmRerun(true)} className="font-medium underline underline-offset-2">
-                Re-run screening for {rerunnableCount} already-scored candidate{rerunnableCount === 1 ? '' : 's'} to apply it
-              </button>
-            )}
-          </p>
-        )}
-        <p className="mt-2 text-xs text-slate-400">
-          When enabled, screened applications scoring below this threshold are auto-marked Rejected. When disabled
-          (default), all screened applications stay available for manual review — use the checkboxes below to
-          Shortlist or Reject in bulk.
-        </p>
-        {/* Build plan P4 */}
-        <p className="mt-1 text-xs text-slate-400">
-          Auto-advance (off by default): each new application — from logged-in candidates or your careers page — is
-          screened right away and moved to Shortlisted (score at or above the minimum) or Rejected, and the candidate
-          is emailed.
-        </p>
-      </Card>
-      )}
-
-      {/* Build plan P7 */}
-      {canReview && (
-      <FinalScoreSettingsCard
-        job={job}
-        onSaved={(updated) => {
-          setJob(updated);
-          load();
-        }}
-      />
       )}
 
       {/* Filters */}
@@ -762,14 +745,20 @@ export default function JobApplicationsPage() {
                   {score != null ? <ScoreRing score={score} size={36} /> : <span className="text-sm text-slate-400">—</span>}
                 </div>
 
-                <dl className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2.5 text-xs">
+                  <div>
+                    <dt className="text-slate-400">Resume match</dt>
+                    <dd className="font-medium text-slate-700">{score != null ? `${Math.round(score)}%` : '—'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-400">Interview</dt>
+                    <dd>
+                      <InterviewCell app={app} />
+                    </dd>
+                  </div>
                   <div>
                     <dt className="text-slate-400">Experience</dt>
                     <dd className="font-medium text-slate-700">{getExperience(app)} yrs</dd>
-                  </div>
-                  <div>
-                    <dt className="text-slate-400">Match</dt>
-                    <dd className="font-medium text-slate-700">{score != null ? Math.round(score) : '—'}</dd>
                   </div>
                   <div>
                     <dt className="text-slate-400">Final</dt>
@@ -791,34 +780,16 @@ export default function JobApplicationsPage() {
                   </div>
                 </dl>
 
-                <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3">
-                  <Link
-                    to={`/company/jobs/${jobId}/candidates/${app.candidate.id}`}
-                    className="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700"
-                  >
-                    <Eye className="h-3.5 w-3.5" /> View
-                  </Link>
-                  {app.resume && (
-                    <button
-                      type="button"
-                      onClick={() => downloadCv(app)}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700"
-                    >
-                      <Download className="h-3.5 w-3.5" /> CV
-                    </button>
-                  )}
-                  {canReview && (
-                    <Button
-                      variant="danger"
-                      className="ml-auto px-3 py-1.5 text-xs"
-                      disabled={actions.reject.disabled}
-                      loading={rejecting && confirmRejectId === app.id}
-                      title={actions.reject.title}
-                      onClick={() => setConfirmRejectId(app.id)}
-                    >
-                      <XCircle className="h-3.5 w-3.5" /> {actions.reject.label}
-                    </Button>
-                  )}
+                <div className="mt-3 border-t border-slate-100 pt-3">
+                  <RowActions
+                    compact
+                    app={app}
+                    jobId={jobId}
+                    canReview={canReview && !actions.reject.disabled}
+                    rejecting={rejecting && confirmRejectId === app.id}
+                    onReject={() => setConfirmRejectId(app.id)}
+                    onCv={() => downloadCv(app)}
+                  />
                 </div>
                 {rowError[app.id] && <p className="mt-2 text-xs text-red-600">{rowError[app.id]}</p>}
               </Card>
@@ -836,11 +807,12 @@ export default function JobApplicationsPage() {
                 <th className="px-4 py-3">Rank</th>
                 <th className="px-4 py-3">Candidate</th>
                 <th className="px-4 py-3">Match</th>
+                {/* Build plan P9 (§32) */}
+                <th className="px-4 py-3">Interview</th>
                 {/* Build plan P7 */}
                 <th className="px-4 py-3">Final</th>
                 <th className="px-4 py-3">Experience</th>
                 <th className="px-4 py-3">Education</th>
-                <th className="px-4 py-3">Matched skills</th>
                 <th className="px-4 py-3">Actions</th>
               </tr>
             </thead>
@@ -860,6 +832,9 @@ export default function JobApplicationsPage() {
                     <td className="px-4 py-3">
                       {getScore(app) != null ? <ScoreRing score={getScore(app)} size={36} /> : <span className="text-slate-400">—</span>}
                     </td>
+                    <td className="px-4 py-3">
+                      <InterviewCell app={app} />
+                    </td>
                     {/* Build plan P7: CV + interview combined */}
                     <td className="px-4 py-3">
                       {app.finalScore != null ? (
@@ -878,39 +853,17 @@ export default function JobApplicationsPage() {
                     </td>
                     <td className="px-4 py-3 text-slate-600">{getExperience(app)} yrs</td>
                     <td className="max-w-[160px] px-4 py-3 text-slate-600">{getDegree(app) || '—'}</td>
-                    <td className="max-w-xs px-4 py-3 text-slate-600">
-                      {(app.screeningResult?.matchedSkills || []).slice(0, 4).join(', ') || '—'}
-                    </td>
                     <td className="px-4 py-3">
-                      <div className="flex min-w-[140px] flex-col gap-1.5">
-                        {canReview && (
-                        <Button
-                          variant="danger"
-                          className="w-full justify-start px-3 py-1.5 text-xs"
-                          disabled={actions.reject.disabled}
-                          loading={rejecting && confirmRejectId === app.id}
-                          title={actions.reject.title}
-                          onClick={() => setConfirmRejectId(app.id)}
-                        >
-                          <XCircle className="h-3.5 w-3.5" /> {actions.reject.label}
-                        </Button>
-                        )}
-                        {rowError[app.id] && <p className="text-xs text-red-600">{rowError[app.id]}</p>}
-                        <Link
-                          to={`/company/jobs/${jobId}/candidates/${app.candidate.id}`}
-                          className="mt-0.5 inline-flex items-center gap-1 text-xs text-brand-600 hover:text-brand-700"
-                        >
-                          <Eye className="h-3.5 w-3.5" /> View
-                        </Link>
-                        {app.resume && (
-                          <button
-                            type="button"
-                            onClick={() => downloadCv(app)}
-                            className="inline-flex items-center gap-1 text-left text-xs text-brand-600 hover:text-brand-700"
-                          >
-                            <Download className="h-3.5 w-3.5" /> CV
-                          </button>
-                        )}
+                      <div className="min-w-[170px]">
+                        <RowActions
+                          app={app}
+                          jobId={jobId}
+                          canReview={canReview && !actions.reject.disabled}
+                          rejecting={rejecting && confirmRejectId === app.id}
+                          onReject={() => setConfirmRejectId(app.id)}
+                          onCv={() => downloadCv(app)}
+                        />
+                        {rowError[app.id] && <p className="mt-1 text-xs text-red-600">{rowError[app.id]}</p>}
                       </div>
                     </td>
                   </tr>
@@ -920,6 +873,89 @@ export default function JobApplicationsPage() {
           </table>
         </Card>
         </>
+      )}
+
+      {/* Build plan P9 (§21): settings below the list — applications come first. */}
+      {canReview && <h3 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Job settings</h3>}
+      {/* Job-level screening decision settings */}
+      {canReview && (
+      <Card className="mb-6 p-5">
+        <h3 className="mb-1 font-semibold text-slate-900">Screening settings</h3>
+        <p className="mb-3 text-xs text-slate-500">Candidates applying through your /recq links need at least this resume match to get interview access.</p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-6">
+          <div className="w-full sm:w-48">
+            <label htmlFor="minAcceptableScore" className="mb-1 block text-sm font-medium text-slate-700">Minimum acceptable score</label>
+            <input
+              id="minAcceptableScore"
+              type="number"
+              min={0}
+              max={100}
+              aria-invalid={settingsErrors.minAcceptableScore ? true : undefined}
+              aria-describedby={settingsErrors.minAcceptableScore ? 'minAcceptableScore-error' : undefined}
+              className={`${inputClass} min-h-[44px]`}
+              value={settings.minAcceptableScore}
+              onChange={(e) => setSettings({ ...settings, minAcceptableScore: e.target.value })}
+            />
+            {settingsErrors.minAcceptableScore && (
+              <p id="minAcceptableScore-error" role="alert" className="mt-1 text-xs text-red-600">
+                {settingsErrors.minAcceptableScore}
+              </p>
+            )}
+          </div>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={settings.autoRejectBelowMinScore}
+              onChange={(e) => setSettings({ ...settings, autoRejectBelowMinScore: e.target.checked })}
+            />
+            Automatically reject candidates below this score
+          </label>
+          {/* Build plan P4 (§8) */}
+          <label className="flex min-h-[44px] items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={settings.autoAdvanceOnMatch}
+              onChange={(e) => setSettings({ ...settings, autoAdvanceOnMatch: e.target.checked })}
+            />
+            Auto-advance: screen every new application and shortlist or reject it on this score
+          </label>
+          <Button variant="secondary" onClick={handleSaveSettings} loading={settingsSaving} className="sm:ml-auto">
+            <Save className="h-4 w-4" /> Save
+          </Button>
+        </div>
+        {settingsSaved && (
+          <p className="mt-2 text-sm text-emerald-600">
+            Settings saved.{' '}
+            {rerunnableCount > 0 && (
+              <button type="button" onClick={() => setConfirmRerun(true)} className="font-medium underline underline-offset-2">
+                Re-run screening for {rerunnableCount} already-scored candidate{rerunnableCount === 1 ? '' : 's'} to apply it
+              </button>
+            )}
+          </p>
+        )}
+        <p className="mt-2 text-xs text-slate-400">
+          When enabled, screened applications scoring below this threshold are auto-marked Rejected. When disabled
+          (default), all screened applications stay available for manual review — use the checkboxes below to
+          Shortlist or Reject in bulk.
+        </p>
+        {/* Build plan P4 */}
+        <p className="mt-1 text-xs text-slate-400">
+          Auto-advance (off by default): each new application — from logged-in candidates or your careers page — is
+          screened right away and moved to Shortlisted (score at or above the minimum) or Rejected, and the candidate
+          is emailed.
+        </p>
+      </Card>
+      )}
+
+      {/* Build plan P7 */}
+      {canReview && (
+      <FinalScoreSettingsCard
+        job={job}
+        onSaved={(updated) => {
+          setJob(updated);
+          load();
+        }}
+      />
       )}
 
       <ConfirmDialog

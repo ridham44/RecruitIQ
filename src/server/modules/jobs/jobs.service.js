@@ -195,6 +195,19 @@ export async function updateJob(userId, jobId, jobData) {
     },
   });
 
+  // Build plan P9: the interview window changed → links already issued to
+  // /recq candidates on this job follow the new window (their expiry is the
+  // window end, or the normal link validity when the window was cleared).
+  const sameTime = (a, b) => (a ? new Date(a).getTime() : null) === (b ? new Date(b).getTime() : null);
+  if (!sameTime(job.interviewAvailabilityStart, updated.interviewAvailabilityStart) || !sameTime(job.interviewAvailabilityEnd, updated.interviewAvailabilityEnd)) {
+    await prisma.interview.updateMany({
+      where: { status: 'SCHEDULED', slotId: null, application: { jobId: updated.id, source: 'RECQ' } },
+      data: {
+        inviteExpiresAt: updated.interviewAvailabilityEnd ?? new Date(Date.now() + (updated.inviteValidDays || 7) * 24 * 3600 * 1000),
+      },
+    });
+  }
+
   // Switched to instant links: everyone already shortlisted gets theirs now.
   if (job.interviewFlow !== 'INSTANT' && updated.interviewFlow === 'INSTANT') {
     const instantInvites = await inviteAllShortlisted(updated.id);

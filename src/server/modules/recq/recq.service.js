@@ -129,6 +129,22 @@ function resumeEmail(upload) {
   return normalizeEmail(upload.parsedData?.email || '');
 }
 
+// The match shown to the candidate is cached on the upload (server-side only)
+// and reused at apply, so the stored score is exactly the one they saw — an
+// LLM scores the same pair slightly differently on every call. A job edited
+// in between is re-scored.
+async function cacheMatches(uploadId, entries) {
+  const upload = await prisma.guestUpload.findUnique({ where: { id: uploadId }, select: { recqMatches: true } });
+  const cache = { ...(upload?.recqMatches || {}) };
+  for (const { job, match } of entries) cache[job.id] = { jobUpdatedAt: job.updatedAt.toISOString(), match };
+  await prisma.guestUpload.update({ where: { id: uploadId }, data: { recqMatches: cache } });
+}
+
+function cachedMatch(upload, job) {
+  const hit = upload.recqMatches?.[job.id];
+  return hit && hit.jobUpdatedAt === job.updatedAt.toISOString() ? hit.match : null;
+}
+
 // Candidate-facing match shape — scores and skill lists only, never the AI's
 // internal reasoning/concerns (§16).
 function candidateFacingMatch(job, match) {
@@ -159,6 +175,7 @@ export async function matchForJob(agencySlug, jobSlug, file) {
 
   const upload = await parseAndStore(file);
   const match = await computeMatch(job, { parsedData: upload.parsedData, rawText: upload.rawText });
+  await cacheMatches(upload.id, [{ job, match }]);
 
   const email = resumeEmail(upload);
   return {
@@ -219,6 +236,8 @@ export async function discoverJobs(agencySlug, file) {
       }
     })
   );
+
+  await cacheMatches(upload.id, scored.filter(Boolean));
 
   const results = scored
     .filter(Boolean)
@@ -313,12 +332,14 @@ export async function apply(agencySlug, { uploadId, jobSlugs, recqToken }) {
   });
   if (jobs.length === 0) throw ApiError.badRequest('These jobs are no longer accepting applications', 'JOB_NOT_OPEN');
 
-  // Re-score every selected job authoritatively — eligibility is decided on
-  // the server, never trusted from the earlier client-side match (§4).
+  // Eligibility is decided on the server from the server's own match — the
+  // one cached when the candidate uploaded (identical to what they were
+  // shown), or a fresh score for a job not matched yet / edited since. The
+  // client never supplies a score (§4).
   const scored = await Promise.all(
     jobs.map(async (job) => {
       try {
-        const match = await computeMatch(job, { parsedData: upload.parsedData, rawText: upload.rawText });
+        const match = cachedMatch(upload, job) ?? (await computeMatch(job, { parsedData: upload.parsedData, rawText: upload.rawText }));
         return { job, match, eligible: match.overallScore >= job.minAcceptableScore };
       } catch (err) {
         console.error('[recq] apply match failed for job', job.id, err.message);
@@ -458,6 +479,9 @@ export async function apply(agencySlug, { uploadId, jobSlugs, recqToken }) {
       window: { start: job.interviewAvailabilityStart, end: job.interviewAvailabilityEnd },
     });
   }
+
+  // Best matches first, eligible before not eligible.
+  applications.sort((a, b) => Number(b.eligible) - Number(a.eligible) || (b.matchScore ?? -1) - (a.matchScore ?? -1));
 
   return {
     account: accountKind,

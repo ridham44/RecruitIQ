@@ -718,6 +718,10 @@ model GuestUpload {
   fileSize   Int
   rawText    String?
   parsedData Json?
+  // Build plan P9: { [jobId]: { jobUpdatedAt, match } } — the /recq match
+  // computed at upload time, reused at apply so the score never changes
+  // between what the candidate saw and what is stored.
+  recqMatches Json?
   consumedAt DateTime?
   expiresAt  DateTime
   createdAt  DateTime  @default(now())

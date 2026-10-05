@@ -8,6 +8,7 @@ import { APPLICATION_STATUS, INTERVIEW_STATUS } from '../../../shared/constants/
 import { sendInterviewInviteEmail, sendInterviewConfirmationEmail } from '../notifications/email.service.js';
 import { smsDriver } from '../notifications/sms/index.js';
 import { maskPhone } from '../../utils/phone.js';
+import { interviewAccessBlocker } from './interviewAccess.util.js';
 
 // Build plan P5 (§9) — instant interview link: attend now or later, no slot.
 //
@@ -44,7 +45,7 @@ const INCLUDE = {
   slot: true,
   application: {
     include: {
-      job: { include: { company: { select: { name: true, logoUrl: true } } } },
+      job: { include: { company: { select: { name: true, logoUrl: true, status: true } } } },
       candidate: { include: { user: { select: { id: true, email: true, isActive: true } } } },
     },
   },
@@ -194,17 +195,14 @@ function blocker(interview) {
   if (interview.status === INTERVIEW_STATUS.CANCELLED) {
     return { code: 'INTERVIEW_CANCELLED', message: 'This interview has been cancelled.' };
   }
-  // Build plan P9 (§7): the agency's interview window is enforced here on the
-  // backend, not only in the UI. "Not yet open" blocks a SCHEDULED interview
-  // before its start; an in-progress interview is never blocked (a dropped
-  // connection must always be able to rejoin).
-  const windowStart = interview.application?.job?.interviewAvailabilityStart;
-  if (interview.status === INTERVIEW_STATUS.SCHEDULED && windowStart && new Date(windowStart) > new Date()) {
-    return { code: 'INTERVIEW_NOT_OPEN', message: 'Your interview is not available yet.', availableFrom: windowStart };
-  }
+  // Build plan P9 (§7, §26): suspended agency + the /recq interview window,
+  // shared with the interview engine's start so the API can't be used to
+  // bypass them. An in-progress interview is never blocked (rejoin).
+  const access = interviewAccessBlocker(interview);
+  if (access) return access;
   // An interview already in progress can always be rejoined (dropped connection).
   if (interview.status === INTERVIEW_STATUS.SCHEDULED && interview.inviteExpiresAt && interview.inviteExpiresAt <= new Date()) {
-    return { code: 'INVITE_EXPIRED', message: 'Your interview window has expired. Please contact the recruitment agency if you need assistance.' };
+    return { code: 'INVITE_EXPIRED', message: 'This interview link has expired. Please contact the recruiter for a new one.' };
   }
   if (!interview.application.candidate.user.isActive) {
     return { code: 'ACCOUNT_INACTIVE', message: 'This account is inactive.' };

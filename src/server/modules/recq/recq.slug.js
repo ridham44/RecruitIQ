@@ -16,6 +16,8 @@ export function slugifyJob(title) {
     String(title || '')
       .toLowerCase()
       .normalize('NFKD')
+      // "AI/ML Engineer" → "ai-ml-engineer", "R&D Lead" → "r-d-lead"
+      .replace(/[/\\&+]/g, ' ')
       .replace(/[^\w\s-]/g, '')
       .trim()
       .replace(/[\s_]+/g, '-')

@@ -24,6 +24,7 @@ export default function RecqAgencyPage() {
   const [query, setQuery] = useState('');
 
   // Option B flow
+  const [discoverOpen, setDiscoverOpen] = useState(false);
   const [flow, setFlow] = useState(null); // null | 'result' | 'otp' | 'done'
   const [matching, setMatching] = useState(false);
   const [flowError, setFlowError] = useState('');
@@ -199,8 +200,8 @@ export default function RecqAgencyPage() {
             <h2 className="text-center text-lg font-semibold text-slate-900">You&apos;re all set ✓</h2>
             <p className="mt-1 text-center text-sm text-slate-500">
               {result.applications.filter((a) => a.eligible).length > 1
-                ? 'Your interviews are ready. Each role has its own link — we&apos;ve emailed them too.'
-                : 'Your interview is ready. We&apos;ve also emailed you the link.'}
+                ? 'Your interviews are ready. Each role has its own link — we’ve emailed them too.'
+                : 'Your interview is ready. We’ve also emailed you the link.'}
             </p>
             <div className="mt-5 space-y-3">
               {result.applications.map((a) => (
@@ -223,21 +224,43 @@ export default function RecqAgencyPage() {
         </p>
       </div>
 
-      {/* Option B — discovery */}
+      {/* Option B — discovery (compact until the candidate opts in, so the
+          job list stays above the fold on phones) */}
       <div className="mt-5 rounded-xl border border-brand-200 bg-brand-50/50 p-4 sm:p-5">
-        <div className="flex items-start gap-3">
-          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-brand-600">
-            <Sparkles className="h-5 w-5" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="font-semibold text-slate-900">Not sure which role fits?</p>
-            <p className="text-sm text-slate-500">Upload your resume and we&apos;ll find matching opportunities.</p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 flex-1 items-start gap-3">
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-brand-600">
+              <Sparkles className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="font-semibold text-slate-900">Not sure which role fits?</p>
+              <p className="text-sm text-slate-500">Upload your resume and we&apos;ll find matching opportunities.</p>
+            </div>
           </div>
+          {!discoverOpen && (
+            <Button onClick={() => setDiscoverOpen(true)} className="w-full shrink-0 sm:w-auto">
+              Find my matches
+            </Button>
+          )}
         </div>
-        <div className="mt-4">
-          <ResumeDropzone onSubmit={onDiscover} loading={matching} ctaLabel="Find matching jobs" />
-          {flowError && <p className="mt-2 text-sm text-red-600">{flowError}</p>}
-        </div>
+        {discoverOpen && (
+          <div className="mt-4 sm:mx-auto sm:max-w-md">
+            <ResumeDropzone onSubmit={onDiscover} loading={matching} ctaLabel="Find matching jobs" />
+            {flowError && <p className="mt-2 text-sm text-red-600">{flowError}</p>}
+            {!matching && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDiscoverOpen(false);
+                  setFlowError('');
+                }}
+                className="mt-2 w-full text-sm font-medium text-slate-500 hover:text-slate-700"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Option A — browse */}

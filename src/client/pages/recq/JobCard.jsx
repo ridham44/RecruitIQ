@@ -22,7 +22,7 @@ export default function JobCard({ job, onApply }) {
   const exp = experienceLabel(job.minimumExperience, job.maximumExperience);
   const skills = (job.requiredSkills?.length ? job.requiredSkills : job.preferredSkills) || [];
   return (
-    <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md sm:p-5">
+    <div className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md sm:p-5">
       <h3 className="text-base font-semibold text-slate-900 sm:text-lg">{job.title}</h3>
 
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-slate-600">
@@ -61,7 +61,8 @@ export default function JobCard({ job, onApply }) {
         </div>
       )}
 
-      <div className="mt-4 pt-1">
+      {/* mt-auto pins the CTA to the bottom so buttons line up across a row */}
+      <div className="mt-auto pt-4">
         <Button onClick={() => onApply(job)} className="w-full sm:w-auto">
           View &amp; Apply
         </Button>
