@@ -57,6 +57,14 @@ export async function applyToJob(userId, { jobId, resumeId }) {
 // Build plan P7: candidates see post-interview decisions (qualified / not
 // qualified / submitted to client) as INTERVIEW_COMPLETED, and never the
 // combined final score.
+export function needsInstantLink(application) {
+  return (
+    env.features.instantInterview &&
+    application.status === APPLICATION_STATUS.SHORTLISTED &&
+    application.job?.interviewFlow === 'INSTANT'
+  );
+}
+
 function forCandidate({ finalScore, finalScoredAt, ...application }) {
   return { ...application, status: candidateFacingStatus(application.status) };
 }
@@ -78,12 +86,25 @@ export async function listMyApplications(userId) {
 // scheduling with before picking a slot.
 export async function getMyApplicationById(userId, applicationId) {
   const candidateId = await getCandidateIdForUser(userId);
-  const application = await prisma.application.findUnique({
-    where: { id: applicationId },
-    include: { job: { include: { company: true } }, resume: true, screeningResult: true },
-  });
+  const load = () =>
+    prisma.application.findUnique({
+      where: { id: applicationId },
+      include: { job: { include: { company: true } }, resume: true, screeningResult: true },
+    });
+  let application = await load();
   if (!application || application.candidateId !== candidateId) {
     throw ApiError.notFound('Application not found');
+  }
+  // Shortlisted on an instant-link job but no link yet (e.g. shortlisted
+  // before the job switched to instant links): create it now, so the
+  // candidate never waits for a link that isn't coming.
+  if (needsInstantLink(application)) {
+    try {
+      await inviteApplication(application.id);
+      application = await load();
+    } catch (err) {
+      console.error('[applications] on-demand instant link failed:', err.message);
+    }
   }
   const { aiName, aiTitle } = await getEffectiveConfig(application.jobId);
   // return { ...application, aiInterviewConfig: { aiName, aiTitle } };

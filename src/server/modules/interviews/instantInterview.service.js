@@ -352,6 +352,28 @@ export async function roundsForApplication(applicationId, { withLink = false } =
   };
 }
 
+// A job switched to instant links: every shortlisted candidate who has no
+// interview yet gets their link now (email + their application/status page).
+export async function inviteAllShortlisted(jobId) {
+  if (!env.features.instantInterview) return { invited: 0, failed: 0 };
+  const applications = await prisma.application.findMany({
+    where: { jobId, status: APPLICATION_STATUS.SHORTLISTED, interviews: { none: { status: { in: ACTIVE } } } },
+    select: { id: true },
+  });
+  let invited = 0;
+  let failed = 0;
+  for (const { id } of applications) {
+    try {
+      await inviteApplication(id);
+      invited++;
+    } catch (err) {
+      failed++;
+      console.error('[instant-interview] invite failed for application', id, err.message);
+    }
+  }
+  return { invited, failed };
+}
+
 // Used after auto-advance (P4) and by the recruiter's "Send interview link"
 // button: create/refresh the link, then email it.
 export async function inviteApplication(applicationId, { rotate = false } = {}) {

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { EMPLOYMENT_TYPE, JOB_STATUS } from '../constants/statuses.js';
 import { requiredText, optionalText, tagListSchema, idSchema } from './common.js';
+import { AUTO_FILL_FIELDS } from './job-analysis.schema.js';
 
 const years = (label) =>
   z.coerce
@@ -63,7 +64,18 @@ function checkJob(data, ctx) {
   }
 }
 
-export const createJobSchema = jobFields.superRefine(checkJob);
+export const createJobSchema = jobFields
+  .extend({
+    // Fields the user never touched; the server fills them from the description.
+    autoFillFields: z.array(z.enum(AUTO_FILL_FIELDS)).max(AUTO_FILL_FIELDS.length).optional(),
+  })
+  .superRefine(checkJob);
+
+// "Auto-fill from description" — read-only AI extraction, nothing is saved.
+export const extractJobDetailsSchema = z.object({
+  title: requiredText('Title', 200),
+  description: requiredText('Description', 20000).refine((v) => v.length >= 30, 'Description must be at least 30 characters'),
+});
 
 export const updateJobSchema = jobFields.partial().superRefine(checkJob);
 

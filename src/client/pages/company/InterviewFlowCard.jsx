@@ -53,7 +53,20 @@ export default function InterviewFlowCard({ job, onSaved }) {
     try {
       const { job: updated } = await jobsApi.update(job.id, data);
       onSaved?.(updated);
-      setSaved(true);
+      const inv = updated.instantInvites;
+      setSaved(
+        inv
+          ? inv.invited
+            ? `Saved. Interview links sent to ${inv.invited} shortlisted candidate${inv.invited === 1 ? '' : 's'}${inv.failed ? ` (${inv.failed} failed — use Send link for them)` : ''}.`
+            : 'Saved. No shortlisted candidates are waiting — new ones get their link as soon as they are shortlisted.'
+          : 'Saved.',
+      );
+      if (inv?.invited) {
+        interviewsApi
+          .listForJob(job.id)
+          .then((d) => setLinkInterviews((d.interviews || []).filter((i) => !i.slotId)))
+          .catch(() => {});
+      }
     } catch (err) {
       const fields = err.fields || {};
       setFieldErrors(fields);
@@ -135,16 +148,20 @@ export default function InterviewFlowCard({ job, onSaved }) {
       )}
 
       {canEdit && (
-        <div className="mt-4 flex items-center gap-3">
-          <Button variant="secondary" onClick={save} loading={saving}>
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+          <Button variant="secondary" onClick={save} loading={saving} className="w-full sm:w-auto">
             <Save className="h-4 w-4" /> Save
           </Button>
-          {saved && <span className="text-sm text-emerald-600">Saved.</span>}
+          {saved && (
+            <span role="status" className="text-sm text-emerald-600">
+              {saved}
+            </span>
+          )}
         </div>
       )}
       <p className="mt-2 text-xs text-slate-400">
-        With auto-advance on (Applications → Screening settings), candidates who pass the score get the link automatically. You can
-        also send it from a candidate's page.
+        Switching to Instant link sends the interview link to every candidate who is already shortlisted. After that, each candidate
+        gets their link the moment they are shortlisted (by you, or by auto-advance) — by email and on their own application page.
       </p>
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
 

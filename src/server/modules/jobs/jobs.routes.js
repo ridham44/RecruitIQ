@@ -6,7 +6,13 @@ import { validate } from '../../middleware/validate.js';
 import { COMPANY_SIDE_ROLES } from '../../../shared/constants/roles.js';
 import { PERMISSIONS } from '../../../shared/constants/permissions.js';
 import { requirePermission } from '../../middleware/permission.js';
-import { createJobSchema, updateJobSchema, publicJobsQuerySchema, companyJobsQuerySchema } from '../../../shared/schemas/job.schema.js';
+import {
+  createJobSchema,
+  updateJobSchema,
+  publicJobsQuerySchema,
+  companyJobsQuerySchema,
+  extractJobDetailsSchema,
+} from '../../../shared/schemas/job.schema.js';
 
 const router = Router();
 
@@ -27,6 +33,7 @@ router.get('/:id/client-link', authenticate, authorize(...COMPANY_SIDE_ROLES), j
 // router.delete('/:id', authenticate, authorize(...COMPANY_SIDE_ROLES), jobsController.closeJob);
 const manageJobs = requirePermission(PERMISSIONS.MANAGE_JOBS);
 router.post('/', authenticate, authorize(...COMPANY_SIDE_ROLES), manageJobs, validate(createJobSchema), jobsController.createJob);
+router.post('/extract', authenticate, authorize(...COMPANY_SIDE_ROLES), manageJobs, validate(extractJobDetailsSchema), jobsController.extractJobDetails);
 router.patch('/:id', authenticate, authorize(...COMPANY_SIDE_ROLES), manageJobs, validate(updateJobSchema), jobsController.updateJob);
 router.delete('/:id', authenticate, authorize(...COMPANY_SIDE_ROLES), manageJobs, jobsController.closeJob);
 

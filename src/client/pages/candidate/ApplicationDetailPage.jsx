@@ -90,7 +90,10 @@ export default function ApplicationDetailPage() {
 
   const load = () => {
     setError('');
-    Promise.all([applicationsApi.getMine(id), schedulingApi.getInterview(id)])
+    // In order: opening the application can create the instant interview link.
+    applicationsApi
+      .getMine(id)
+      .then((appData) => schedulingApi.getInterview(id).then((interviewData) => [appData, interviewData]))
       .then(([appData, interviewData]) => {
         setApplication(appData.application);
         setInterview(interviewData.interview);

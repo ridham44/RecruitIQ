@@ -2,6 +2,8 @@ import { prisma } from '../../config/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { JOB_STATUS } from '../../../shared/constants/statuses.js';
 import { analyzeJobDescription } from '../../ai/job-analyzer.service.js';
+import { analysisToJobFields } from '../../../shared/schemas/job-analysis.schema.js';
+import { inviteAllShortlisted } from '../interviews/instantInterview.service.js';
 import { getCompanyContext, jobScopeWhere, canAccessJob } from '../companies/companyContext.js';
 import { resolveJobClientLink } from '../clients/clients.service.js';
 
@@ -15,6 +17,37 @@ import { resolveJobClientLink } from '../clients/clients.service.js';
 async function getCompanyIdForUser(userId) {
   const ctx = await getCompanyContext(userId);
   return ctx.companyId;
+}
+
+// Case-insensitive merge that keeps the user's spelling first.
+function mergeTags(mine, extra) {
+  const seen = new Set(mine.map((v) => v.toLowerCase()));
+  return [...mine, ...extra.filter((v) => !seen.has(v.toLowerCase()) && seen.add(v.toLowerCase()))].slice(0, 40);
+}
+
+// Values from the description for the fields the user never touched. A field
+// the user set is never overwritten, and the experience range stays valid.
+function autoFilledFields(job, analysis, autoFillFields = []) {
+  const found = analysisToJobFields(analysis);
+  const out = Object.fromEntries(autoFillFields.filter((k) => k in found).map((k) => [k, found[k]]));
+  const min = out.minimumExperience ?? job.minimumExperience;
+  const max = 'maximumExperience' in out ? out.maximumExperience : job.maximumExperience;
+  if (max != null && max < min) {
+    delete out.minimumExperience;
+    delete out.maximumExperience;
+  }
+  return out;
+}
+
+// AI read of a description for the "Auto-fill from description" button.
+export async function extractJobDetails({ title, description }) {
+  const analysis = await analyzeJobDescription({ title, description });
+  return {
+    fields: analysisToJobFields(analysis),
+    requiredSkills: analysis.requiredSkills,
+    preferredSkills: analysis.preferredSkills,
+    summary: analysis.summary,
+  };
 }
 
 // Creates the job immediately, then augments it with AI-extracted structured
@@ -76,8 +109,9 @@ export async function createJob(userId, jobData) {
       data: {
         structuredRequirements: analysis,
         // Merge AI-derived skills with whatever the company explicitly entered.
-        requiredSkills: Array.from(new Set([...job.requiredSkills, ...analysis.requiredSkills])),
-        preferredSkills: Array.from(new Set([...job.preferredSkills, ...analysis.preferredSkills])),
+        requiredSkills: mergeTags(job.requiredSkills, analysis.requiredSkills),
+        preferredSkills: mergeTags(job.preferredSkills, analysis.preferredSkills),
+        ...autoFilledFields(job, analysis, jobData.autoFillFields),
       },
     });
   } catch (err) {
@@ -105,7 +139,7 @@ export async function updateJob(userId, jobId, jobData) {
   }
   // Build plan P3: {} when the request doesn't touch the client link.
   const clientLink = await resolveJobClientLink(job.companyId, jobData, job);
-  return prisma.job.update({
+  const updated = await prisma.job.update({
     where: { id: job.id },
     data: {
       title: jobData.title ?? job.title,
@@ -140,6 +174,13 @@ export async function updateJob(userId, jobId, jobData) {
       ...clientLink,
     },
   });
+
+  // Switched to instant links: everyone already shortlisted gets theirs now.
+  if (job.interviewFlow !== 'INSTANT' && updated.interviewFlow === 'INSTANT') {
+    const instantInvites = await inviteAllShortlisted(updated.id);
+    return { ...updated, instantInvites };
+  }
+  return updated;
 }
 
 // Build plan P3: company-side view of a job's client link.

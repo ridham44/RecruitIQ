@@ -8,6 +8,10 @@ export const createJob = asyncHandler(async (req, res) => {
   created(res, { job });
 });
 
+export const extractJobDetails = asyncHandler(async (req, res) => {
+  ok(res, await jobsService.extractJobDetails(req.body));
+});
+
 export const updateJob = asyncHandler(async (req, res) => {
   const job = await jobsService.updateJob(req.user.id, req.params.id, req.body);
   ok(res, { job });

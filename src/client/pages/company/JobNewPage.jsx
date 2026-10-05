@@ -1,14 +1,15 @@
 import { useState } from 'react';
 // import { useNavigate } from 'react-router-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import ClientLinkFields, { clientLinkPayload, EMPTY_CLIENT_LINK } from './ClientLinkFields.jsx';
 import { jobsApi } from '../../services/jobs.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import FormField, { inputClass } from '../../components/ui/FormField.jsx';
 import TagInput from '../../components/ui/TagInput.jsx';
-import { createJobSchema } from '../../../shared/schemas/job.schema.js';
+import { createJobSchema, extractJobDetailsSchema } from '../../../shared/schemas/job.schema.js';
+import { AUTO_FILL_FIELDS } from '../../../shared/schemas/job-analysis.schema.js';
 import { checkForm } from '../../../shared/schemas/common.js';
 
 // Fields that live in the collapsible "More details" section.
@@ -51,6 +52,24 @@ export default function JobNewPage() {
     languagesRequired: [],
     certifications: [],
   });
+  // Fields the user changed by hand (never overwritten by the AI) and fields
+  // the "Auto-fill from description" button filled in.
+  const [touched, setTouched] = useState(() => new Set());
+  const [aiFilled, setAiFilled] = useState(() => new Set());
+  const [extracting, setExtracting] = useState(false);
+  const [extractNote, setExtractNote] = useState(null);
+  const setField = (key, value) => {
+    setForm((f) => ({ ...f, [key]: value }));
+    setTouched((t) => new Set(t).add(key));
+    setAiFilled((a) => {
+      if (!a.has(key)) return a;
+      const next = new Set(a);
+      next.delete(key);
+      return next;
+    });
+  };
+  const fromAi = (key) => (aiFilled.has(key) ? 'Filled from the description — change it if needed' : undefined);
+
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const fe = (key) => errorFor(fieldErrors, key);
@@ -59,11 +78,54 @@ export default function JobNewPage() {
   const [clientLink, setClientLink] = useState({ ...EMPTY_CLIENT_LINK, clientCompanyId: searchParams.get('clientId') || '' });
   const [showMore, setShowMore] = useState(false);
 
+  const canExtract = form.title.trim().length > 0 && form.description.trim().length >= 30;
+
+  const autoFill = async () => {
+    setExtractNote(null);
+    const { data, errors } = checkForm(extractJobDetailsSchema, { title: form.title, description: form.description });
+    if (!data) {
+      setFieldErrors(errors);
+      return;
+    }
+    setExtracting(true);
+    try {
+      const result = await jobsApi.extract(data);
+      const filled = new Set();
+      const next = { ...form };
+      for (const [key, value] of Object.entries(result.fields || {})) {
+        if (touched.has(key)) continue;
+        next[key] = value;
+        filled.add(key);
+      }
+      for (const key of ['requiredSkills', 'preferredSkills']) {
+        const extra = (result[key] || []).filter((s) => !next[key].some((x) => x.toLowerCase() === s.toLowerCase()));
+        if (extra.length) {
+          next[key] = [...next[key], ...extra];
+          filled.add(key);
+        }
+      }
+      setForm(next);
+      setAiFilled(filled);
+      setShowMore(true);
+      setExtractNote(
+        filled.size
+          ? { ok: true, text: `Filled ${filled.size} field${filled.size === 1 ? '' : 's'} from the description. Check them below and change anything that's wrong.` }
+          : { ok: false, text: "The description doesn't mention any more details — fill them in below if you want." },
+      );
+    } catch (err) {
+      setExtractNote({ ok: false, text: err.message || "Couldn't read the description. Fill in the details below." });
+    } finally {
+      setExtracting(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     const payload = {
       ...form,
+      // Untouched fields are filled from the description on the server.
+      autoFillFields: AUTO_FILL_FIELDS.filter((k) => !touched.has(k) && !aiFilled.has(k)),
       openings: form.openings === '' ? '' : Number(form.openings),
       maximumExperience: form.maximumExperience === '' ? null : Number(form.maximumExperience),
       minimumExperience: form.minimumExperience === '' ? 0 : Number(form.minimumExperience),
@@ -101,7 +163,7 @@ export default function JobNewPage() {
               required
               className={inputClass}
               value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
+              onChange={(e) => setField('title', e.target.value)}
               placeholder="e.g. React Developer"
               maxLength={200}
             />
@@ -113,12 +175,36 @@ export default function JobNewPage() {
               rows={6}
               className={inputClass}
               value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder="Describe the role, responsibilities, and requirements. Our AI will also extract structured requirements from this text."
+              onChange={(e) => setField('description', e.target.value)}
+              placeholder="Describe the role: responsibilities, skills, experience, education, location, work mode, salary, notice period… Anything you write here can fill the details below."
               minLength={30}
               maxLength={20000}
             />
           </FormField>
+
+          <div className="-mt-2 mb-4">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={autoFill}
+              loading={extracting}
+              disabled={!canExtract || extracting}
+              className="w-full sm:w-auto"
+            >
+              <Sparkles className="h-4 w-4" />
+              Auto-fill details from description
+            </Button>
+            <p className="mt-1.5 text-xs text-slate-500">
+              {canExtract
+                ? "Fills the details below from your description. Anything you've already set yourself is kept. Details you leave untouched are also filled when you publish."
+                : 'Add a title and a description (at least 30 characters) to auto-fill the details.'}
+            </p>
+            {extractNote && (
+              <p role="status" className={`mt-2 text-sm ${extractNote.ok ? 'text-emerald-700' : 'text-amber-700'}`}>
+                {extractNote.text}
+              </p>
+            )}
+          </div>
 
           {/* Build plan P3 (§5): optional Client → Department → HR link */}
           <ClientLinkFields value={clientLink} onChange={setClientLink} />
@@ -136,18 +222,18 @@ export default function JobNewPage() {
             aria-expanded={showMore}
             className="mb-4 flex min-h-[44px] w-full items-center justify-between rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
-            <span>More details (optional)</span>
+            <span>More details (optional — filled from the description when you leave them)</span>
             {showMore ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
 
           {showMore && (
           <div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="Work mode" error={fe('workMode')}>
+            <FormField label="Work mode" error={fe('workMode')} hint={fromAi('workMode')}>
               <select
                 className={inputClass}
                 value={form.workMode}
-                onChange={(e) => setForm({ ...form, workMode: e.target.value })}
+                onChange={(e) => setField('workMode', e.target.value)}
               >
                 {WORK_MODES.map((mode) => (
                   <option key={mode} value={mode}>
@@ -157,7 +243,7 @@ export default function JobNewPage() {
               </select>
             </FormField>
 
-            <FormField label="Number of openings (required)" error={fe('openings')}>
+            <FormField label="Number of openings (required)" error={fe('openings')} hint={fromAi('openings')}>
               <input
                 type="number"
                 required
@@ -166,18 +252,18 @@ export default function JobNewPage() {
                 step={1}
                 className={inputClass}
                 value={form.openings}
-                onChange={(e) => setForm({ ...form, openings: e.target.value })}
+                onChange={(e) => setField('openings', e.target.value)}
                 placeholder="e.g. 3"
               />
             </FormField>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="Job level" error={fe('jobLevel')}>
+            <FormField label="Job level" error={fe('jobLevel')} hint={fromAi('jobLevel')}>
               <select
                 className={inputClass}
                 value={form.jobLevel}
-                onChange={(e) => setForm({ ...form, jobLevel: e.target.value })}
+                onChange={(e) => setField('jobLevel', e.target.value)}
               >
                 {JOB_LEVELS.map((level) => (
                   <option key={level} value={level}>
@@ -187,13 +273,13 @@ export default function JobNewPage() {
               </select>
             </FormField>
 
-            <FormField label="Notice period" error={fe('noticePeriod')}>
+            <FormField label="Notice period" error={fe('noticePeriod')} hint={fromAi('noticePeriod')}>
               <select
                 className={inputClass}
                 value={form.noticePeriod}
-                onChange={(e) => setForm({ ...form, noticePeriod: e.target.value })}
+                onChange={(e) => setField('noticePeriod', e.target.value)}
               >
-                {NOTICE_PERIODS.map((np) => (
+                {(NOTICE_PERIODS.includes(form.noticePeriod) || !form.noticePeriod ? NOTICE_PERIODS : [...NOTICE_PERIODS, form.noticePeriod]).map((np) => (
                   <option key={np} value={np}>
                     {np}
                   </option>
@@ -203,21 +289,21 @@ export default function JobNewPage() {
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="Salary range" error={fe('salaryRange')}>
+            <FormField label="Salary range" error={fe('salaryRange')} hint={fromAi('salaryRange')}>
               <input
                 className={inputClass}
                 value={form.salaryRange}
-                onChange={(e) => setForm({ ...form, salaryRange: e.target.value })}
+                onChange={(e) => setField('salaryRange', e.target.value)}
                 placeholder="e.g. ₹6–10 LPA"
                 maxLength={60}
               />
             </FormField>
 
-            <FormField label="Employment type" error={fe('employmentType')}>
+            <FormField label="Employment type" error={fe('employmentType')} hint={fromAi('employmentType')}>
               <select
                 className={inputClass}
                 value={form.employmentType}
-                onChange={(e) => setForm({ ...form, employmentType: e.target.value })}
+                onChange={(e) => setField('employmentType', e.target.value)}
               >
                 {EMPLOYMENT_TYPES.map((type) => (
                   <option key={type} value={type}>
@@ -229,7 +315,7 @@ export default function JobNewPage() {
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="Minimum experience (years)" error={fe('minimumExperience')}>
+            <FormField label="Minimum experience (years)" error={fe('minimumExperience')} hint={fromAi('minimumExperience')}>
               <input
                 type="number"
                 min={0}
@@ -237,10 +323,10 @@ export default function JobNewPage() {
                 step={0.5}
                 className={inputClass}
                 value={form.minimumExperience}
-                onChange={(e) => setForm({ ...form, minimumExperience: e.target.value })}
+                onChange={(e) => setField('minimumExperience', e.target.value)}
               />
             </FormField>
-            <FormField label="Maximum experience (years, optional)" error={fe('maximumExperience')}>
+            <FormField label="Maximum experience (years, optional)" error={fe('maximumExperience')} hint={fromAi('maximumExperience')}>
               <input
                 type="number"
                 min={0}
@@ -248,57 +334,57 @@ export default function JobNewPage() {
                 step={0.5}
                 className={inputClass}
                 value={form.maximumExperience}
-                onChange={(e) => setForm({ ...form, maximumExperience: e.target.value })}
+                onChange={(e) => setField('maximumExperience', e.target.value)}
               />
             </FormField>
           </div>
 
-          <FormField label="Location" error={fe('location')}>
+          <FormField label="Location" error={fe('location')} hint={fromAi('location')}>
             <input
               className={inputClass}
               value={form.location}
-              onChange={(e) => setForm({ ...form, location: e.target.value })}
+              onChange={(e) => setField('location', e.target.value)}
               placeholder="e.g. Ahmedabad, Gujarat / Remote"
               maxLength={200}
             />
           </FormField>
 
-          <FormField label="Required skills" error={fe('requiredSkills')}>
+          <FormField label="Required skills" error={fe('requiredSkills')} hint={fromAi('requiredSkills')}>
             <TagInput
               value={form.requiredSkills}
-              onChange={(v) => setForm({ ...form, requiredSkills: v })}
+              onChange={(v) => setField('requiredSkills', v)}
               placeholder="Type a skill and press Enter (e.g. React, JavaScript)"
             />
           </FormField>
 
-          <FormField label="Preferred skills" error={fe('preferredSkills')}>
+          <FormField label="Preferred skills" error={fe('preferredSkills')} hint={fromAi('preferredSkills')}>
             <TagInput
               value={form.preferredSkills}
-              onChange={(v) => setForm({ ...form, preferredSkills: v })}
+              onChange={(v) => setField('preferredSkills', v)}
               placeholder="Type a skill and press Enter (e.g. TypeScript, Redux)"
             />
           </FormField>
 
-          <FormField label="Languages required" error={fe('languagesRequired')}>
+          <FormField label="Languages required" error={fe('languagesRequired')} hint={fromAi('languagesRequired')}>
             <TagInput
               value={form.languagesRequired}
-              onChange={(v) => setForm({ ...form, languagesRequired: v })}
+              onChange={(v) => setField('languagesRequired', v)}
               placeholder="Type a language and press Enter (e.g. English, Hindi)"
             />
           </FormField>
 
-          <FormField label="Certifications" error={fe('certifications')}>
+          <FormField label="Certifications" error={fe('certifications')} hint={fromAi('certifications')}>
             <TagInput
               value={form.certifications}
-              onChange={(v) => setForm({ ...form, certifications: v })}
+              onChange={(v) => setField('certifications', v)}
               placeholder="Type a certification and press Enter (e.g. AWS, Azure, PMP)"
             />
           </FormField>
 
-          <FormField label="Education requirements" error={fe('educationRequirements')}>
+          <FormField label="Education requirements" error={fe('educationRequirements')} hint={fromAi('educationRequirements')}>
             <TagInput
               value={form.educationRequirements}
-              onChange={(v) => setForm({ ...form, educationRequirements: v })}
+              onChange={(v) => setField('educationRequirements', v)}
               placeholder="e.g. B.Tech Computer Science, BCA"
             />
           </FormField>
