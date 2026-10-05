@@ -112,6 +112,11 @@ export const env = {
     instantInterview: flag('FEATURE_INSTANT_INTERVIEW', false),
     // P8 — client HR / hiring person portal.
     clientPortal: flag('FEATURE_CLIENT_PORTAL', false),
+    // P9 — /recq agency-link candidate flow (resume match → email OTP →
+    // interview access). The new canonical public candidate journey, so it
+    // defaults ON; /careers/* redirects into it. Turn off to hide every
+    // /recq route (they answer 404, and the careers redirect goes nowhere).
+    recq: flag('FEATURE_RECQ', true),
     // "Start here" demo page: when on, /start shows the demo accounts'
     // password (DEMO_PASSWORD). Off → the page still lists roles and links.
     demoPage: flag('DEMO_PAGE', false),

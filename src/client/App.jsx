@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 
 import LandingPage from './pages/LandingPage.jsx';
@@ -37,10 +37,9 @@ import CompanyRecruitersPage from './pages/company/RecruitersPage.jsx';
 // Build plan P3 — clients
 import CompanyClientsPage from './pages/company/ClientsPage.jsx';
 import CompanyClientDetailPage from './pages/company/ClientDetailPage.jsx';
-// Build plan P4 — careers portal + CV pool
-import CareersPage from './pages/careers/CareersPage.jsx';
-import CareersJobPage from './pages/careers/CareersJobPage.jsx';
-import CareersSubmitCvPage from './pages/careers/CareersSubmitCvPage.jsx';
+// Build plan P4 — careers portal + CV pool. The public careers entry pages
+// (CareersPage/CareersJobPage/CareersSubmitCvPage) are retired in P9 and now
+// redirect to /recq; only the status-link page stays routed.
 import CareersTrackPage from './pages/careers/CareersTrackPage.jsx';
 import CompanyCvPoolPage from './pages/company/CvPoolPage.jsx';
 // Build plan P5
@@ -53,6 +52,16 @@ import ClientCandidatesPage from './pages/client/ClientCandidatesPage.jsx';
 import ClientCandidateDetailPage from './pages/client/ClientCandidateDetailPage.jsx';
 // "Start here" demo page
 import StartHerePage from './pages/StartHerePage.jsx';
+// Build plan P9 — /recq agency-link candidate flow (replaces the public
+// careers entry; old /careers/* links redirect here).
+import RecqAgencyPage from './pages/recq/RecqAgencyPage.jsx';
+import RecqJobPage from './pages/recq/RecqJobPage.jsx';
+
+// Redirects an old /careers/:slug (and sub-paths) to the new /recq/:slug.
+function CareersToRecq() {
+  const { slug } = useParams();
+  return <Navigate to={`/recq/${slug}`} replace />;
+}
 
 export default function App() {
   return (
@@ -67,11 +76,17 @@ export default function App() {
       <Route path="/auth/set-password" element={<SetPasswordPage />} />
       <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
 
-      {/* Build plan P4 — public careers portal (no login) */}
+      {/* Build plan P9 — /recq agency-link candidate flow (public, no login) */}
+      <Route path="/recq/:slug" element={<RecqAgencyPage />} />
+      <Route path="/recq/:slug/:jobSlug" element={<RecqJobPage />} />
+
+      {/* Build plan P4 — public careers portal. Retired in P9: the entry pages
+          redirect to /recq. The status link (/careers/track) stays alive so
+          existing candidate emails keep working. */}
       <Route path="/careers/track" element={<CareersTrackPage />} />
-      <Route path="/careers/:slug" element={<CareersPage />} />
-      <Route path="/careers/:slug/jobs/:jobId" element={<CareersJobPage />} />
-      <Route path="/careers/:slug/submit-cv" element={<CareersSubmitCvPage />} />
+      <Route path="/careers/:slug" element={<CareersToRecq />} />
+      <Route path="/careers/:slug/jobs/:jobId" element={<CareersToRecq />} />
+      <Route path="/careers/:slug/submit-cv" element={<CareersToRecq />} />
       {/* Build plan P5 — instant interview link (no login; the link is the key) */}
       <Route path="/interview/:token" element={<InterviewLinkPage />} />
       {/* Build plan P7 — read-only candidate package for client HR */}

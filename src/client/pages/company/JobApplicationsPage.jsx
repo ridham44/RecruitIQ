@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 // import { Sparkles, Eye, Users, SlidersHorizontal, X, Save, RefreshCw, ArrowLeft, CalendarCheck, XCircle, UserCheck } from 'lucide-react';
-import { Sparkles, Eye, Users, SlidersHorizontal, X, Save, RefreshCw, ArrowLeft, CalendarCheck, XCircle, UserCheck, Download } from 'lucide-react';
+import { Sparkles, Eye, Users, SlidersHorizontal, X, Save, RefreshCw, ArrowLeft, CalendarCheck, XCircle, UserCheck, Download, Bot } from 'lucide-react';
 import { usePermissions } from '../../hooks/usePermissions.js';
 import { screeningApi } from '../../services/screening.js';
 import { jobsApi } from '../../services/jobs.js';
@@ -143,6 +143,13 @@ export default function JobApplicationsPage() {
   const [applications, setApplications] = useState(null);
   const [error, setError] = useState('');
   const [running, setRunning] = useState(false);
+  // Build plan P9 (§22): two independent screening modes, each with its own
+  // loading / success / error state so one never clobbers the other.
+  const [runningFinal, setRunningFinal] = useState(false);
+  const [screenMsg, setScreenMsg] = useState('');
+  const [screenErr, setScreenErr] = useState('');
+  const [finalMsg, setFinalMsg] = useState('');
+  const [finalErr, setFinalErr] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [selected, setSelected] = useState(new Set());
@@ -190,6 +197,18 @@ export default function JobApplicationsPage() {
     () => (applications || []).filter((a) => a.screeningResult?.status !== 'COMPLETED').length,
     [applications]
   );
+
+  // Build plan P9 (§21): summary metrics derived from the loaded list.
+  const metrics = useMemo(() => {
+    const apps = applications || [];
+    const inStatus = (statuses) => apps.filter((a) => statuses.includes(a.status)).length;
+    return {
+      totalApplied: apps.length,
+      interviewCompleted: inStatus(['INTERVIEW_COMPLETED', 'QUALIFIED', 'NOT_QUALIFIED', 'SUBMITTED_TO_CLIENT']),
+      interviewPending: inStatus(['INTERVIEW_SCHEDULED']),
+      notEligible: inStatus(['REJECTED', 'NOT_QUALIFIED']),
+    };
+  }, [applications]);
 
   // Eligible for a forced re-screen: already scored, but not a manual
   // SHORTLISTED decision (screening never revisits those — see
@@ -239,12 +258,15 @@ export default function JobApplicationsPage() {
 
   const handleRunScreening = async () => {
     setRunning(true);
-    setError('');
+    setScreenErr('');
+    setScreenMsg('');
     try {
-      await screeningApi.runForJob(jobId);
+      const result = await screeningApi.runForJob(jobId);
+      const n = result?.screenedCount ?? 0;
+      setScreenMsg(`Screened ${n} applicant${n === 1 ? '' : 's'}.`);
       load();
     } catch (err) {
-      setError(err.message);
+      setScreenErr(err.message);
     } finally {
       setRunning(false);
     }
@@ -252,15 +274,38 @@ export default function JobApplicationsPage() {
 
   const handleRerunScreening = async () => {
     setRerunning(true);
-    setError('');
+    setScreenErr('');
+    setScreenMsg('');
     try {
-      await screeningApi.runForJob(jobId, true);
+      const result = await screeningApi.runForJob(jobId, true);
+      const n = result?.screenedCount ?? 0;
+      setScreenMsg(`Re-screened ${n} applicant${n === 1 ? '' : 's'}.`);
       setConfirmRerun(false);
       load();
     } catch (err) {
-      setError(err.message);
+      setScreenErr(err.message);
     } finally {
       setRerunning(false);
+    }
+  };
+
+  // Build plan P9 (§22 mode 2): re-evaluate candidates who completed interviews.
+  const handleRunFinal = async () => {
+    setRunningFinal(true);
+    setFinalErr('');
+    setFinalMsg('');
+    try {
+      const { evaluatedCount = 0, candidateCount = 0 } = await screeningApi.runFinalForJob(jobId);
+      setFinalMsg(
+        candidateCount === 0
+          ? 'No interviewed candidates to evaluate yet.'
+          : `Re-evaluated ${evaluatedCount} of ${candidateCount} interviewed candidate${candidateCount === 1 ? '' : 's'}.`
+      );
+      load();
+    } catch (err) {
+      setFinalErr(err.message);
+    } finally {
+      setRunningFinal(false);
     }
   };
 
@@ -393,20 +438,11 @@ export default function JobApplicationsPage() {
         </div>
         {canReview && (
         <div className="flex flex-col gap-2 sm:flex-row flex-wrap">
-          <Button onClick={handleRunScreening} loading={running} disabled={pendingCount === 0} className="w-full sm:w-auto">
-            <Sparkles className="h-4 w-4" />
-            {pendingCount === 0 ? 'All screened' : `Run AI Screening (${pendingCount})`}
-          </Button>
-          {rerunnableCount > 0 && (
-            <Button variant="secondary" onClick={() => setConfirmRerun(true)} className="w-full sm:w-auto">
-              <RefreshCw className="h-4 w-4" /> Re-run Screening ({rerunnableCount})
-            </Button>
-          )}
           <Button variant="secondary" onClick={handleShortlistAllScreened} disabled={screenedNotShortlistedIds.length === 0} loading={bulkLoading} className="w-full sm:w-auto">
             <UserCheck className="h-4 w-4" /> Shortlist All Screened
           </Button>
           <Link to={`/company/jobs/${jobId}/interviews`} className="w-full sm:w-auto">
-            <Button variant="secondary" className="w-full sm:w-auto">
+            <Button className="w-full sm:w-auto">
               <CalendarCheck className="h-4 w-4" /> Interview Scheduling
             </Button>
           </Link>
@@ -414,11 +450,69 @@ export default function JobApplicationsPage() {
         )}
       </div>
 
+      {/* Build plan P9 (§21): summary metrics derived from the loaded list. */}
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatTile label="Total applied" value={metrics.totalApplied} />
+        <StatTile label="Interview completed" value={metrics.interviewCompleted} />
+        <StatTile label="Interview pending" value={metrics.interviewPending} />
+        <StatTile label="Not eligible / rejected" value={metrics.notEligible} />
+      </div>
+
       {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
       {bulkMessage && (
         <p role="status" className="mb-4 text-sm text-emerald-700">
           {bulkMessage}
         </p>
+      )}
+
+      {/* Build plan P9 (§22, §33): AI screening is a secondary tool, not the
+          primary action. Two clearly distinct modes, each with its own state. */}
+      {canReview && (
+      <Card className="mb-6 p-5">
+        <h3 className="flex items-center gap-2 font-semibold text-slate-900">
+          <Sparkles className="h-4 w-4 text-brand-600" /> AI screening
+        </h3>
+        <p className="mt-0.5 text-sm text-slate-500">Optional AI scoring — the actions above stay your main workflow.</p>
+        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+          {/* Mode 1: applicants (CV match) */}
+          <div className="flex flex-col rounded-lg border border-slate-200 p-4">
+            <p className="text-sm font-medium text-slate-900">Applicants</p>
+            <p className="mb-3 text-xs text-slate-500">Score CVs of everyone who applied.</p>
+            <div className="mt-auto flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <Button
+                variant="secondary"
+                onClick={handleRunScreening}
+                loading={running}
+                disabled={pendingCount === 0}
+                className="w-full sm:w-auto"
+              >
+                <Sparkles className="h-4 w-4" />
+                {pendingCount === 0 ? 'All screened' : `Run AI Screening · Applicants (${pendingCount})`}
+              </Button>
+              {rerunnableCount > 0 && (
+                <Button variant="ghost" onClick={() => setConfirmRerun(true)} className="w-full sm:w-auto">
+                  <RefreshCw className="h-4 w-4" /> Re-run ({rerunnableCount})
+                </Button>
+              )}
+            </div>
+            {screenMsg && <p role="status" className="mt-2 text-xs text-emerald-700">{screenMsg}</p>}
+            {screenErr && <p role="alert" className="mt-2 text-xs text-red-600">{screenErr}</p>}
+          </div>
+
+          {/* Mode 2: interviewed (final score) */}
+          <div className="flex flex-col rounded-lg border border-slate-200 p-4">
+            <p className="text-sm font-medium text-slate-900">Interviewed</p>
+            <p className="mb-3 text-xs text-slate-500">Re-evaluate candidates who finished their interview.</p>
+            <div className="mt-auto">
+              <Button variant="secondary" onClick={handleRunFinal} loading={runningFinal} className="w-full sm:w-auto">
+                <Bot className="h-4 w-4" /> Run AI Screening · Interviewed
+              </Button>
+            </div>
+            {finalMsg && <p role="status" className="mt-2 text-xs text-emerald-700">{finalMsg}</p>}
+            {finalErr && <p role="alert" className="mt-2 text-xs text-red-600">{finalErr}</p>}
+          </div>
+        </div>
+      </Card>
       )}
 
       {/* Job-level screening decision settings */}
@@ -637,7 +731,102 @@ export default function JobApplicationsPage() {
       ) : filtered.length === 0 ? (
         <EmptyState icon={SlidersHorizontal} title="No candidates match these filters" description="Try adjusting or clearing your filters." />
       ) : (
-        <Card className="overflow-x-auto">
+        <>
+        {/* Build plan P9 (§32): card list on phones — no horizontal overflow. */}
+        <div className="space-y-3 md:hidden">
+          {filtered.map((app, index) => {
+            const actions = getApplicationActionState(app);
+            const score = getScore(app);
+            return (
+              <Card key={app.id} className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-2">
+                    {canReview && (
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={selected.has(app.id)}
+                        onChange={() => toggleSelected(app.id)}
+                        aria-label={`Select ${app.candidate.fullName}`}
+                      />
+                    )}
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-slate-900">
+                        <span className="text-slate-400">#{index + 1}</span> {app.candidate.fullName}
+                      </p>
+                      <div className="mt-1">
+                        <StatusBadge status={app.status} />
+                      </div>
+                    </div>
+                  </div>
+                  {score != null ? <ScoreRing score={score} size={36} /> : <span className="text-sm text-slate-400">—</span>}
+                </div>
+
+                <dl className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                  <div>
+                    <dt className="text-slate-400">Experience</dt>
+                    <dd className="font-medium text-slate-700">{getExperience(app)} yrs</dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-400">Match</dt>
+                    <dd className="font-medium text-slate-700">{score != null ? Math.round(score) : '—'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-400">Final</dt>
+                    <dd>
+                      {app.finalScore != null ? (
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 font-semibold ${
+                            job.finalThreshold != null && app.finalScore < job.finalThreshold
+                              ? 'bg-orange-50 text-orange-700'
+                              : 'bg-emerald-50 text-emerald-700'
+                          }`}
+                        >
+                          {Math.round(app.finalScore)}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+
+                <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3">
+                  <Link
+                    to={`/company/jobs/${jobId}/candidates/${app.candidate.id}`}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700"
+                  >
+                    <Eye className="h-3.5 w-3.5" /> View
+                  </Link>
+                  {app.resume && (
+                    <button
+                      type="button"
+                      onClick={() => downloadCv(app)}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700"
+                    >
+                      <Download className="h-3.5 w-3.5" /> CV
+                    </button>
+                  )}
+                  {canReview && (
+                    <Button
+                      variant="danger"
+                      className="ml-auto px-3 py-1.5 text-xs"
+                      disabled={actions.reject.disabled}
+                      loading={rejecting && confirmRejectId === app.id}
+                      title={actions.reject.title}
+                      onClick={() => setConfirmRejectId(app.id)}
+                    >
+                      <XCircle className="h-3.5 w-3.5" /> {actions.reject.label}
+                    </Button>
+                  )}
+                </div>
+                {rowError[app.id] && <p className="mt-2 text-xs text-red-600">{rowError[app.id]}</p>}
+              </Card>
+            );
+          })}
+        </div>
+
+        <Card className="hidden overflow-x-auto md:block">
           <table className="w-full min-w-[900px] text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
@@ -730,6 +919,7 @@ export default function JobApplicationsPage() {
             </tbody>
           </table>
         </Card>
+        </>
       )}
 
       <ConfirmDialog
@@ -762,6 +952,15 @@ export default function JobApplicationsPage() {
         loading={rejecting}
       />
     </div>
+  );
+}
+
+function StatTile({ label, value }) {
+  return (
+    <Card className="p-4">
+      <p className="text-2xl font-bold leading-tight text-slate-900">{value}</p>
+      <p className="mt-0.5 text-xs font-medium text-slate-500">{label}</p>
+    </Card>
   );
 }
 

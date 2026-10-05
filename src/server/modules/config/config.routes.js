@@ -16,6 +16,8 @@ router.get('/public', (req, res) => {
     instantInterview: env.features.instantInterview,
     // Build plan P8
     clientPortal: env.features.clientPortal,
+    // Build plan P9 — /recq agency-link candidate flow
+    recq: env.features.recq,
   });
 });
 

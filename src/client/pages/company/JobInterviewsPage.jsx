@@ -12,6 +12,7 @@ import ErrorState from '../../components/ui/ErrorState.jsx';
 import EmptyState from '../../components/ui/EmptyState.jsx';
 import StatusBadge from '../../components/ui/StatusBadge.jsx';
 import InterviewFlowCard from './InterviewFlowCard.jsx';
+import RecqShareCard from './RecqShareCard.jsx';
 import TagInput from '../../components/ui/TagInput.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import { upsertInterviewConfigSchema } from '../../../shared/schemas/interview.schema.js';
@@ -307,6 +308,9 @@ export default function JobInterviewsPage() {
       <p className="mb-6 text-sm text-slate-500">Configure the AI interviewer, publish slots, and review completed interviews.</p>
 
       {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+
+      {/* Build plan P9 — /recq share links + interview window */}
+      <RecqShareCard job={job} onSaved={setJob} />
 
       {/* Build plan P5 */}
       <InterviewFlowCard job={job} onSaved={setJob} />
