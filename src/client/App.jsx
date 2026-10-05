@@ -16,8 +16,6 @@ import CompanyInterviewDetailPage from './pages/company/InterviewDetailPage.jsx'
 
 import CandidateLayout from './layouts/CandidateLayout.jsx';
 import CandidateDashboardPage from './pages/candidate/DashboardPage.jsx';
-import CandidateJobsPage from './pages/candidate/JobsListPage.jsx';
-import CandidateJobDetailPage from './pages/candidate/JobDetailPage.jsx';
 import CandidateApplicationsPage from './pages/candidate/ApplicationsPage.jsx';
 import CandidateApplicationDetailPage from './pages/candidate/ApplicationDetailPage.jsx';
 import CandidateProfilePage from './pages/candidate/ProfilePage.jsx';
@@ -161,8 +159,8 @@ export default function App() {
         }
       >
         <Route path="dashboard" element={<CandidateDashboardPage />} />
-        <Route path="jobs" element={<CandidateJobsPage />} />
-        <Route path="jobs/:id" element={<CandidateJobDetailPage />} />
+        <Route path="jobs" element={<Navigate to="/candidate/applications" replace />} />
+        <Route path="jobs/:id" element={<Navigate to="/candidate/applications" replace />} />
         <Route path="applications" element={<CandidateApplicationsPage />} />
         <Route path="applications/:id" element={<CandidateApplicationDetailPage />} />
         <Route path="profile" element={<CandidateProfilePage />} />

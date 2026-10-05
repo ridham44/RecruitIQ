@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { FileText, Search } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { FileText } from 'lucide-react';
 import { applicationsApi } from '../../services/applications.js';
 import Card from '../../components/ui/Card.jsx';
-import Button from '../../components/ui/Button.jsx';
 import LoadingState from '../../components/ui/LoadingState.jsx';
 import ErrorState from '../../components/ui/ErrorState.jsx';
 import EmptyState from '../../components/ui/EmptyState.jsx';
@@ -32,14 +31,7 @@ export default function ApplicationsPage() {
       <EmptyState
         icon={FileText}
         title="No applications yet"
-        description="Browse open jobs and apply to get started."
-        action={
-          <Link to="/candidate/jobs">
-            <Button>
-              <Search className="h-4 w-4" /> Find jobs
-            </Button>
-          </Link>
-        }
+        description="Apply through the link your recruitment agency shared with you — your applications appear here."
       />
     );
   }

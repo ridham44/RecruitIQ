@@ -427,6 +427,18 @@ async function main() {
   check((await call('/admin/companies', { token: A.token })).status === 403, 'agency cannot reach admin API');
   check((await call(`/screening/job/${reactJob.id}/run`, { method: 'POST', token: loginJwt })).status === 403, 'candidate cannot run screening');
 
+  if (health.data.candidateJobBoard === false) {
+    step('No cross-agency job board (§1)');
+    const board = await call('/jobs');
+    check(board.status === 404 && board.code === 'JOB_BOARD_DISABLED', 'GET /jobs (all agencies) is refused', board.status);
+    check((await call(`/jobs/${reactJob.id}`)).status === 404, 'job by id without login → 404');
+    check((await call(`/jobs/${reactJob.id}`, { token: loginJwt })).status === 404, "a candidate can't open a job they didn't apply to");
+    const winJobView = await call(`/jobs/${windowJob.id}`, { token: loginJwt });
+    check(winJobView.status === 200 && winJobView.data?.job?.title === windowJob.title, 'a candidate can open the job they applied to');
+    const direct = await call('/applications', { method: 'POST', token: loginJwt, body: { jobId: bJob.id, resumeId: 'x' } });
+    check(direct.status === 403 && direct.code === 'APPLY_VIA_AGENCY_LINK', "logged-in candidate can't apply to any job id directly", direct.status);
+  }
+
   step('Backward compatibility — old careers API still answers');
   const careers = await call(`/public/careers/${A.slug}`);
   check(careers.status === 200 && careers.data.jobs.some((j) => j.title === 'React Frontend Developer'), 'old /public/careers endpoint unchanged');

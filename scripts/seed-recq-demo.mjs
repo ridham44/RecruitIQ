@@ -40,10 +40,14 @@ import {
   CANDIDATES_B,
   LIVE_RESUMES,
 } from './lib/recqDemoData.mjs';
+import { CANDIDATES_EXTRA, EXTRA_DAYS_AGO } from './lib/recqDemoExtra.mjs';
 
 const PORT = Number(process.env.RECQ_SEED_PORT || 3094);
 const BASE = `http://localhost:${PORT}`;
 const PASSWORD = (process.env.DEMO_PASSWORD || 'Demo@123').trim();
+// Optional separate password for the Portal Admin (e.g. on a shared/live
+// database, where the shared demo password is written in login.md).
+const ADMIN_PASSWORD = (process.env.RECQ_ADMIN_PASSWORD || PASSWORD).trim();
 const prisma = new PrismaClient();
 const step = (t) => console.log(`\n▸ ${t}`);
 const info = (t) => console.log(`    ${t}`);
@@ -225,8 +229,8 @@ async function recqApply(agencySlug, candidate, jobsByKey) {
 
 async function seed() {
   step('Portal Admin');
-  await prisma.user.create({ data: { email: ACCOUNTS.admin.email, passwordHash: await bcrypt.hash(PASSWORD, 10), role: 'ADMIN' } });
-  const tAdmin = (await call('/auth/login', { method: 'POST', body: { email: ACCOUNTS.admin.email, password: PASSWORD } })).token;
+  await prisma.user.create({ data: { email: ACCOUNTS.admin.email, passwordHash: await bcrypt.hash(ADMIN_PASSWORD, 10), role: 'ADMIN' } });
+  const tAdmin = (await call('/auth/login', { method: 'POST', body: { email: ACCOUNTS.admin.email, password: ADMIN_PASSWORD } })).token;
   // Agencies are onboarded by the Portal Admin (there is no sign-up): the
   // owner gets an invite link and sets a password from it.
   const onboardAgency = async (name, ownerEmail, extra = {}) => {
@@ -344,6 +348,10 @@ async function seed() {
     console.log(`  ${c.name}`);
     appsByEmail[c.email] = await recqApply(AGENCY.slug, c, jobsByKey);
   }
+  for (const c of CANDIDATES_EXTRA) {
+    console.log(`  ${c.name}`);
+    appsByEmail[c.email] = await recqApply(AGENCY.slug, c, jobsByKey);
+  }
   for (const c of CANDIDATES_B) {
     console.log(`  ${c.name} (Brightline)`);
     appsByEmail[c.email] = await recqApply(AGENCY_B.slug, c, jobsB);
@@ -430,16 +438,17 @@ const DAYS_AGO = {
   'rahul.deshmukh@mail.demo': 1,
 };
 
-async function realisticTimeline() {
+async function realisticTimeline(daysAgo = { ...DAYS_AGO, ...EXTRA_DAYS_AGO }) {
   step('Realistic timeline (applications over the past week, interviews the next day)');
   const now = Date.now();
   const at = (base, sec) => new Date(base.getTime() + sec * 1000);
   let k = 0;
-  for (const [email, days] of Object.entries(DAYS_AGO)) {
+  for (const [email, days] of Object.entries(daysAgo)) {
     k++;
     const applied = new Date(now);
     applied.setDate(applied.getDate() - days);
     applied.setHours(9 + (k % 8), (k * 13) % 60, 0, 0);
+    if (applied.getTime() > now - 3600 * 1000) applied.setTime(now - (2 + k) * 3600 * 1000); // "today" stays in the past
     const user = await prisma.user.findUnique({ where: { email }, include: { candidate: true } });
     if (!user?.candidate) continue;
     await prisma.user.update({ where: { id: user.id }, data: { createdAt: applied } });
@@ -489,8 +498,40 @@ async function realisticTimeline() {
   }
 }
 
+// --extra: add only the extra applicants to an existing demo set.
+async function addExtraCandidates() {
+  const agency = await prisma.company.findUnique({ where: { slug: AGENCY.slug }, include: { jobs: true } });
+  if (!agency) {
+    console.error('The demo agency does not exist yet — run the full seed first.');
+    process.exitCode = 1;
+    return;
+  }
+  const jobsByKey = Object.fromEntries(
+    [...JOBS, ...CLOSED_JOBS].map((j) => [j.key, agency.jobs.find((x) => x.title === j.title)]).filter(([, job]) => job),
+  );
+  const todo = [];
+  for (const c of CANDIDATES_EXTRA) {
+    if (await prisma.user.findUnique({ where: { email: c.email } })) console.log(`  ${c.name}: already in the demo set — skipped`);
+    else todo.push(c);
+  }
+  if (!todo.length) return console.log('All extra candidates are already there.');
+  const server = await startServer();
+  try {
+    step(`Extra candidates apply through /recq (${todo.length})`);
+    for (const c of todo) {
+      console.log(`  ${c.name}`);
+      await recqApply(AGENCY.slug, c, jobsByKey);
+    }
+    await realisticTimeline(Object.fromEntries(todo.map((c) => [c.email, EXTRA_DAYS_AGO[c.email] ?? 1])));
+  } finally {
+    server.kill();
+  }
+  console.log(`\nAdded ${todo.length} candidates to ${AGENCY.name}.`);
+}
+
 async function main() {
   assertSafeTarget();
+  if (process.argv.includes('--extra')) return addExtraCandidates();
   const reset = process.argv.includes('--reset');
   const existing = await prisma.user.findUnique({ where: { email: ACCOUNTS.owner.email } });
   if (existing && !reset) {

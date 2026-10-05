@@ -4,24 +4,26 @@ Demo dataset for the **RecQ agency-link flow**, created by `node scripts/seed-re
 (also `node scripts/seed-demo.mjs`). Everything is fictional and every account is on a
 non-routable `.demo` domain — no real inbox receives anything.
 
-- **Password for every account:** the `DEMO_PASSWORD` value used when the seed ran. It is not
-  written here on purpose — the set includes a **Portal Admin**. Use a strong `DEMO_PASSWORD` on
-  any shared or live database, never the default.
+- **Password for every account:** `Demo@123` (the `DEMO_PASSWORD` value used when seeding — the default).
+  The set includes a real **Portal Admin**: if you seed it on a shared or live database, use a
+  different, strong `DEMO_PASSWORD` and update this file.
 - **Sign in:** `/auth/login`. There is **no sign-up** — agencies are added by the Portal Admin.
-- **Live product:** `https://recruitiq-eta.vercel.app` · local: `http://localhost:5173`
+- **Where these logins work:** the **local demo environment** (`http://localhost:5173`, demo database
+  seeded by the script below). They do **not** exist on the live site
+  (`https://recruitiq-eta.vercel.app`) until the demo set is seeded there.
 - Overview of every role and link: **`/live-demo`** (shows the password only when `DEMO_PAGE=true`).
 
 ---
 
 ## Accounts
 
-| Role | Email | Lands on | Notes |
-| --- | --- | --- | --- |
-| Portal Admin | `admin@platform.demo` | `/admin/companies` | Adds / suspends agencies, sees all users |
-| Agency owner — **Nexora Talent Partners** | `owner@nexora.demo` | `/company/dashboard` | All jobs, companies, recruiters |
-| Agency recruiter — Ritika Bansal | `recruiter@nexora.demo` | `/company/dashboard` | Assigned to MERN, Backend, React + client Finlytics (so also sees AI/ML); not the Data Analyst job |
-| Company HR — Kunal Shah, **Finlytics Software Pvt Ltd** | `hr@finlytics.demo` | `/client/candidates` | Sees only candidates submitted to them |
-| Second agency — **Brightline Staffing** | `owner@brightline.demo` | `/company/dashboard` | Isolation check: never sees Nexora data |
+| Role | Email | Password | Lands on | Notes |
+| --- | --- | --- | --- | --- |
+| Portal Admin | `admin@platform.demo` | `Demo@123` | `/admin/companies` | Adds / suspends agencies, sees all users |
+| Agency owner — **Nexora Talent Partners** | `owner@nexora.demo` | `Demo@123` | `/company/dashboard` | All jobs, companies, recruiters |
+| Agency recruiter — Ritika Bansal | `recruiter@nexora.demo` | `Demo@123` | `/company/dashboard` | Assigned to MERN, Backend, React + client Finlytics (so also sees AI/ML); not the Data Analyst job |
+| Company HR — Kunal Shah, **Finlytics Software Pvt Ltd** | `hr@finlytics.demo` | `Demo@123` | `/client/candidates` | Sees only candidates submitted to them |
+| Second agency — **Brightline Staffing** | `owner@brightline.demo` | `Demo@123` | `/company/dashboard` | Isolation check: never sees Nexora data |
 
 Recruiter permissions: view candidates, review candidates, configure interviews, manage jobs,
 submit candidates.

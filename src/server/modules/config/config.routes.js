@@ -31,6 +31,8 @@ router.get('/public', (req, res) => {
     recq: env.features.recq,
     // Public address used for links recruiters share with candidates.
     publicAppUrl: env.publicAppUrl,
+    // Legacy cross-agency candidate job board (off by default).
+    candidateJobBoard: env.features.candidateJobBoard,
   });
 });
 

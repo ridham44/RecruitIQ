@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { env } from '../../config/env.js';
+import { ApiError } from '../../utils/ApiError.js';
 import * as applicationsController from './applications.controller.js';
 import { authenticate, authorize } from '../../middleware/auth.js';
 import { validate } from '../../middleware/validate.js';
@@ -14,7 +16,16 @@ const router = Router();
 router.use(authenticate);
 
 // Candidate
-router.post('/', authorize(ROLES.CANDIDATE), validate(applyToJobSchema), applicationsController.apply);
+// Build plan P9 (§1): logged-in candidates can't apply to an arbitrary job id
+// (any agency) — applications come through the agency's /recq link, unless
+// the legacy FEATURE_CANDIDATE_JOB_BOARD is on.
+function requireJobBoard(req, res, next) {
+  if (!env.features.candidateJobBoard) {
+    return next(ApiError.forbidden("Please apply through the link your recruitment agency shared with you", 'APPLY_VIA_AGENCY_LINK'));
+  }
+  return next();
+}
+router.post('/', authorize(ROLES.CANDIDATE), requireJobBoard, validate(applyToJobSchema), applicationsController.apply);
 router.get('/mine', authorize(ROLES.CANDIDATE), applicationsController.listMine);
 router.get('/mine/:id', authorize(ROLES.CANDIDATE), applicationsController.getMine);
 
