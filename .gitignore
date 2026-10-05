@@ -4,8 +4,6 @@ build
 .vercel
 
 # Secrets (database password, API keys) — never commit
-.env
-.env.*
 !.env.example
 
 *.log
