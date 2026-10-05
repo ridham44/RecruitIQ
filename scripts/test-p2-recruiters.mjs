@@ -89,7 +89,7 @@ async function main() {
   const otherCoJob = await call('/recruiters', {
     method: 'POST',
     token: ownerB.token,
-    body: { email: `x2-${ts}@test.com`, fullName: 'X2', jobIds: [jobX.id] },
+    body: { email: `x2-${ts}@test.com`, fullName: 'Xavier Test', jobIds: [jobX.id] },
   });
   assert(otherCoJob.status === 400, "company B can't assign company A's job");
   const info = await req(`/auth/password-token/${tokenFrom(inv.setupLink)}`);

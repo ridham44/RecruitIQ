@@ -13,11 +13,20 @@ import TagInput from '../../components/ui/TagInput.jsx';
 import { usePermissions } from '../../hooks/usePermissions.js';
 import JobRecruitersCard from './JobRecruitersCard.jsx';
 import ClientLinkFields, { clientLinkPayload, EMPTY_CLIENT_LINK } from './ClientLinkFields.jsx';
+import { updateJobSchema } from '../../../shared/schemas/job.schema.js';
+import { checkForm } from '../../../shared/schemas/common.js';
 
 const EMPLOYMENT_TYPES = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP', 'FREELANCE'];
 const WORK_MODES = ['On-site', 'Remote', 'Hybrid'];
 const JOB_LEVELS = ['Junior', 'Mid', 'Senior', 'Lead'];
 const NOTICE_PERIODS = ['Immediate', '15 days', '30 days', '60 days', '90 days'];
+
+// First error for a field, including nested ones like "requiredSkills.2".
+function errorFor(errors, key) {
+  if (errors[key]) return errors[key];
+  const hit = Object.keys(errors).find((p) => p.startsWith(`${key}.`));
+  return hit ? errors[hit] : undefined;
+}
 
 export default function JobDetailPage() {
   const { can } = usePermissions();
@@ -28,6 +37,8 @@ export default function JobDetailPage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const fe = (key) => errorFor(fieldErrors, key);
   const [confirmClose, setConfirmClose] = useState(false);
   const [closing, setClosing] = useState(false);
 
@@ -73,22 +84,28 @@ export default function JobDetailPage() {
       departmentId: link?.department?.id || '',
       hiringPersonId: link?.hiringPerson?.id || '',
     });
+    setFieldErrors({});
+    setError('');
     setEditing(true);
   };
 
   const handleSave = async (e) => {
     e.preventDefault();
+    setError('');
+    const { data, errors } = checkForm(updateJobSchema, {
+      ...form,
+      openings: form.openings === '' ? '' : Number(form.openings),
+      maximumExperience: form.maximumExperience === '' ? null : Number(form.maximumExperience),
+      minimumExperience: form.minimumExperience === '' ? 0 : Number(form.minimumExperience),
+      salaryRange: form.salaryRange?.trim() || null,
+      noticePeriod: form.noticePeriod?.trim() || null,
+      ...clientLinkPayload(clientLink),
+    });
+    setFieldErrors(errors);
+    if (!data) return setError('Please fix the highlighted fields');
     setSaving(true);
     try {
-      const { job: updated } = await jobsApi.update(id, {
-        ...form,
-        openings: Math.max(1, parseInt(form.openings, 10) || 1),
-        maximumExperience: form.maximumExperience === '' ? null : Number(form.maximumExperience),
-        minimumExperience: Number(form.minimumExperience),
-        salaryRange: form.salaryRange?.trim() || null,
-        noticePeriod: form.noticePeriod?.trim() || null,
-        ...clientLinkPayload(clientLink),
-      });
+      const { job: updated } = await jobsApi.update(id, data);
       setJob(updated);
       jobsApi
         .getClientLink(id)
@@ -96,7 +113,9 @@ export default function JobDetailPage() {
         .catch(() => {});
       setEditing(false);
     } catch (err) {
-      setError(err.message);
+      const fields = err.fields || {};
+      setFieldErrors(fields);
+      setError(Object.keys(fields).length ? 'Please fix the highlighted fields' : err.message);
     } finally {
       setSaving(false);
     }
@@ -124,13 +143,15 @@ export default function JobDetailPage() {
         <h2 className="mb-6 text-xl font-semibold text-slate-900">Edit job</h2>
         <Card className="p-6">
           <form onSubmit={handleSave}>
-            <FormField label="Job title">
-              <input required className={inputClass} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            <FormField label="Job title" error={fe('title')}>
+              <input required maxLength={200} className={inputClass} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
             </FormField>
 
-            <FormField label="Description">
+            <FormField label="Description" error={fe('description')} hint="At least 30 characters">
               <textarea
                 required
+                minLength={30}
+                maxLength={20000}
                 rows={6}
                 className={inputClass}
                 value={form.description}
@@ -144,9 +165,14 @@ export default function JobDetailPage() {
               departmentId: link?.department?.id || '',
               hiringPersonId: link?.hiringPerson?.id || '',
             }} />
+            {(fe('clientCompanyId') || fe('departmentId') || fe('hiringPersonId')) && (
+              <p role="alert" className="-mt-2 mb-4 text-xs text-red-600">
+                {fe('clientCompanyId') || fe('departmentId') || fe('hiringPersonId')}
+              </p>
+            )}
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormField label="Work mode">
+              <FormField label="Work mode" error={fe('workMode')}>
                 <select className={inputClass} value={form.workMode} onChange={(e) => setForm({ ...form, workMode: e.target.value })}>
                   {WORK_MODES.map((mode) => (
                     <option key={mode} value={mode}>
@@ -156,11 +182,13 @@ export default function JobDetailPage() {
                 </select>
               </FormField>
 
-              <FormField label="Number of openings (required)">
+              <FormField label="Number of openings (required)" error={fe('openings')}>
                 <input
                   type="number"
                   required
                   min={1}
+                  max={1000}
+                  step={1}
                   className={inputClass}
                   value={form.openings}
                   onChange={(e) => setForm({ ...form, openings: e.target.value })}
@@ -169,7 +197,7 @@ export default function JobDetailPage() {
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormField label="Job level">
+              <FormField label="Job level" error={fe('jobLevel')}>
                 <select className={inputClass} value={form.jobLevel} onChange={(e) => setForm({ ...form, jobLevel: e.target.value })}>
                   {JOB_LEVELS.map((level) => (
                     <option key={level} value={level}>
@@ -179,7 +207,7 @@ export default function JobDetailPage() {
                 </select>
               </FormField>
 
-              <FormField label="Notice period">
+              <FormField label="Notice period" error={fe('noticePeriod')}>
                 <select className={inputClass} value={form.noticePeriod} onChange={(e) => setForm({ ...form, noticePeriod: e.target.value })}>
                   {NOTICE_PERIODS.map((np) => (
                     <option key={np} value={np}>
@@ -191,16 +219,17 @@ export default function JobDetailPage() {
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormField label="Salary range">
+              <FormField label="Salary range" error={fe('salaryRange')}>
                 <input
                   className={inputClass}
                   value={form.salaryRange}
                   onChange={(e) => setForm({ ...form, salaryRange: e.target.value })}
                   placeholder="e.g. ₹6–10 LPA"
+                  maxLength={60}
                 />
               </FormField>
 
-              <FormField label="Employment type">
+              <FormField label="Employment type" error={fe('employmentType')}>
                 <select
                   className={inputClass}
                   value={form.employmentType}
@@ -216,20 +245,22 @@ export default function JobDetailPage() {
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormField label="Minimum experience (years)">
+              <FormField label="Minimum experience (years)" error={fe('minimumExperience')}>
                 <input
                   type="number"
                   min={0}
+                  max={50}
                   step={0.5}
                   className={inputClass}
                   value={form.minimumExperience}
                   onChange={(e) => setForm({ ...form, minimumExperience: e.target.value })}
                 />
               </FormField>
-              <FormField label="Maximum experience (years)">
+              <FormField label="Maximum experience (years)" error={fe('maximumExperience')}>
                 <input
                   type="number"
                   min={0}
+                  max={50}
                   step={0.5}
                   className={inputClass}
                   value={form.maximumExperience}
@@ -238,27 +269,27 @@ export default function JobDetailPage() {
               </FormField>
             </div>
 
-            <FormField label="Location">
-              <input className={inputClass} value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+            <FormField label="Location" error={fe('location')}>
+              <input maxLength={200} className={inputClass} value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
             </FormField>
 
-            <FormField label="Required skills">
+            <FormField label="Required skills" error={fe('requiredSkills')}>
               <TagInput value={form.requiredSkills} onChange={(v) => setForm({ ...form, requiredSkills: v })} />
             </FormField>
 
-            <FormField label="Preferred skills">
+            <FormField label="Preferred skills" error={fe('preferredSkills')}>
               <TagInput value={form.preferredSkills} onChange={(v) => setForm({ ...form, preferredSkills: v })} />
             </FormField>
 
-            <FormField label="Languages required">
+            <FormField label="Languages required" error={fe('languagesRequired')}>
               <TagInput value={form.languagesRequired} onChange={(v) => setForm({ ...form, languagesRequired: v })} placeholder="e.g. English, Hindi" />
             </FormField>
 
-            <FormField label="Certifications">
+            <FormField label="Certifications" error={fe('certifications')}>
               <TagInput value={form.certifications} onChange={(v) => setForm({ ...form, certifications: v })} placeholder="e.g. AWS, Azure, PMP" />
             </FormField>
 
-            <FormField label="Education requirements">
+            <FormField label="Education requirements" error={fe('educationRequirements')}>
               <TagInput value={form.educationRequirements} onChange={(v) => setForm({ ...form, educationRequirements: v })} />
             </FormField>
 

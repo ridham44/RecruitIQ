@@ -1,6 +1,6 @@
 # RecruitIQ Demo Login Credentials
 
-All accounts use the same password: **`Demo@1234`**
+All demo accounts use the same password: **`Demo@1234`** (except `ceo@nfs.com` — see below)
 
 ---
 
@@ -37,6 +37,88 @@ in **APPLIED** status (not yet screened) — screen them from the company dashbo
 - Riya Mehta
 - Ridham Patel
 - Priya Sharma
+
+---
+
+## Nfs Agency — Ferrari & McLaren
+
+| Field    | Value                                   |
+|----------|-----------------------------------------|
+| Email    | `ceo@nfs.com`                           |
+| Password | the password set when the agency was created (not `Demo@1234`) |
+| Agency   | Nfs                                     |
+| Role     | COMPANY (Agency owner)                  |
+
+**Login redirects to → `/company/dashboard`**
+
+Client companies and their Company HR (shown under **Companies** in the agency menu):
+
+| Company | Department       | Company HR | HR email              |
+|---------|------------------|------------|-----------------------|
+| Ferrari | Scuderia Ferrari | Rachel     | `rachel@ferrari.com`  |
+| McLaren | McLaren Racing   | Remsi      | `remsi@mclaren.com`   |
+
+Company HR can only log in after the agency invites them to the portal (company page → Company HR →
+**Invite to portal**) and they set a password from the invite link. With `FEATURE_CLIENT_PORTAL=true`
+they land on `/client/candidates`.
+
+### Jobs and applicants
+
+4 open jobs, 6 applicants each — all in **APPLIED** status (not yet screened). Each job has strong,
+medium and weak fits, so **Run AI Screening** gives a spread of scores. Every applicant has a profile,
+education and a downloadable `.docx` CV.
+
+All 24 fake candidates use password **`Demo@1234`** and log in at `/auth/login`. Their emails are on the
+`@nfsdemo.example` domain (no real inbox).
+
+**Ferrari — Full Stack Developer – Race Telemetry Platform** (3–7 yrs, Maranello, Hybrid)
+
+| Name          | Email                              | Exp     | Background                     | Expected fit |
+|---------------|------------------------------------|---------|--------------------------------|--------------|
+| Luca Bianchi  | `luca.bianchi@nfsdemo.example`     | 5.5 yrs | React/Node/TS, WebSockets, AWS | Strong       |
+| Aarav Shah    | `aarav.shah@nfsdemo.example`       | 4 yrs   | MERN + TypeScript, PostgreSQL  | Strong       |
+| Sofia Romano  | `sofia.romano@nfsdemo.example`     | 3 yrs   | React + TS frontend            | Medium       |
+| Neha Kulkarni | `neha.kulkarni@nfsdemo.example`    | 6 yrs   | Java Spring Boot + Angular     | Medium       |
+| Marco Conti   | `marco.conti@nfsdemo.example`      | 1 yr    | Junior React                   | Weak         |
+| Rohan Gupta   | `rohan.gupta@nfsdemo.example`      | 2.5 yrs | QA automation (Selenium)       | Weak         |
+
+**Ferrari — Data Engineer – Performance Analytics** (2–6 yrs, Maranello, On-site)
+
+| Name           | Email                              | Exp   | Background                      | Expected fit |
+|----------------|------------------------------------|-------|---------------------------------|--------------|
+| Giulia Ferraro | `giulia.ferraro@nfsdemo.example`   | 4 yrs | Spark, Kafka, AWS, Airflow, dbt | Strong       |
+| Vikram Rao     | `vikram.rao@nfsdemo.example`       | 3 yrs | Python, Airflow, BigQuery (GCP) | Strong       |
+| Elena Russo    | `elena.russo@nfsdemo.example`      | 2 yrs | Data analyst, SQL, Tableau      | Medium       |
+| Arjun Menon    | `arjun.menon@nfsdemo.example`      | 5 yrs | Java backend + Kafka            | Medium       |
+| Pooja Reddy    | `pooja.reddy@nfsdemo.example`      | 0 yrs | M.Sc Data Science graduate      | Weak         |
+| Daniel Moretti | `daniel.moretti@nfsdemo.example`   | 3 yrs | Mechanical engineer, MATLAB     | Weak         |
+
+**McLaren — Embedded Software Engineer – Vehicle Control Systems** (3–8 yrs, Woking, On-site)
+
+| Name           | Email                              | Exp   | Background                         | Expected fit |
+|----------------|------------------------------------|-------|------------------------------------|--------------|
+| Oliver Hughes  | `oliver.hughes@nfsdemo.example`    | 6 yrs | Automotive AUTOSAR, CAN, ISO 26262 | Strong       |
+| Siddharth Iyer | `siddharth.iyer@nfsdemo.example`   | 4 yrs | C/C++, FreeRTOS, CAN (EV, drones)  | Strong       |
+| Emily Clarke   | `emily.clarke@nfsdemo.example`     | 3 yrs | IoT firmware, Zephyr RTOS          | Medium       |
+| Thomas Wright  | `thomas.wright@nfsdemo.example`    | 7 yrs | C++/Qt desktop on Linux            | Medium       |
+| Harsh Vora     | `harsh.vora@nfsdemo.example`       | 2 yrs | Simulink controls engineer         | Weak         |
+| Ananya Das     | `ananya.das@nfsdemo.example`       | 0 yrs | ECE graduate, Arduino projects     | Weak         |
+
+**McLaren — Frontend Developer – Fan Engagement App** (2–5 yrs, London, Hybrid)
+
+| Name            | Email                              | Exp   | Background                         | Expected fit |
+|-----------------|------------------------------------|-------|------------------------------------|--------------|
+| Chloe Bennett   | `chloe.bennett@nfsdemo.example`    | 4 yrs | Next.js, TS, Tailwind, GraphQL     | Strong       |
+| Kabir Malhotra  | `kabir.malhotra@nfsdemo.example`   | 3 yrs | React + TS, some Next.js           | Strong       |
+| Isabella Turner | `isabella.turner@nfsdemo.example`  | 2 yrs | Vue.js / Nuxt                      | Medium       |
+| Nikhil Jain     | `nikhil.jain@nfsdemo.example`      | 5 yrs | React Native mobile                | Medium       |
+| Sam Wilson      | `sam.wilson@nfsdemo.example`       | 1 yr  | WordPress / PHP                    | Weak         |
+| Tanvi Shah      | `tanvi.shah@nfsdemo.example`       | 3 yrs | UI/UX designer (Figma)             | Weak         |
+
+"Expected fit" is how the CVs were written, not a stored score — the real score comes from AI screening.
+
+To recreate this data: `node scripts/seed-nfs.mjs` (replaces only these 4 jobs and the
+`@nfsdemo.example` candidates).
 
 ---
 

@@ -60,6 +60,7 @@ async function request(path, { method = 'GET', body, isFormData = false } = {}) 
     const err = new Error(message);
     err.code = json?.error;
     err.status = response.status;
+    err.fields = json?.fields || {};
 
     // Auto-evict a stale or wrong-role JWT so the user is cleanly redirected
     // to login by ProtectedRoute instead of seeing a looping 403/401 error.

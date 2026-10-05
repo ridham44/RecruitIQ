@@ -2,6 +2,7 @@ import { prisma } from '../../config/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { getCompanyContext, clientScopeWhere } from '../companies/companyContext.js';
 import { portalStatusFor } from '../clientPortal/clientPortal.service.js';
+import { assertSelfUnchanged } from '../recruiters/recruiters.service.js';
 
 // Build plan P3 — a recruitment company's clients (§4), their departments
 // (§4.1) and HR / hiring persons (§4.2). Everything is scoped to the caller's
@@ -167,6 +168,8 @@ export async function setClientRecruiters(userId, clientId, memberIds) {
   const ctx = await getCompanyContext(userId);
   await loadClient(ctx, clientId, { write: true });
   const unique = [...new Set(memberIds)];
+  const current = await prisma.clientRecruiter.findMany({ where: { clientCompanyId: clientId }, select: { memberId: true } });
+  assertSelfUnchanged(ctx, current.map((r) => r.memberId), unique);
   if (unique.length) {
     const count = await prisma.companyMember.count({
       where: { id: { in: unique }, companyId: ctx.companyId, role: 'RECRUITER' },

@@ -7,8 +7,9 @@ import Button from '../../components/ui/Button.jsx';
 import Modal from '../../components/ui/Modal.jsx';
 import StatusBadge from '../../components/ui/StatusBadge.jsx';
 import FormField, { inputClass } from '../../components/ui/FormField.jsx';
+import { submitCandidateSchema } from '../../../shared/schemas/submission.schema.js';
+import { checkForm } from '../../../shared/schemas/common.js';
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const fmt = (d) => new Date(d).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 
 function Score({ label, value }) {
@@ -29,6 +30,7 @@ export default function SubmitToClientCard({ application, onChanged }) {
   const [form, setForm] = useState({ mode: 'hr', hiringPersonId: '', recipientEmail: '', recipientName: '', note: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [sentLink, setSentLink] = useState('');
 
   const load = () =>
@@ -48,6 +50,7 @@ export default function SubmitToClientCard({ application, onChanged }) {
 
   const openModal = () => {
     setError('');
+    setFieldErrors({});
     setSentLink('');
     setForm({
       mode: data.recipients.length ? 'hr' : 'email',
@@ -61,22 +64,29 @@ export default function SubmitToClientCard({ application, onChanged }) {
 
   const submit = async () => {
     setError('');
-    if (form.mode === 'email' && !EMAIL_REGEX.test(form.recipientEmail.trim())) return setError('Enter a valid email');
-    if (form.mode === 'hr' && !form.hiringPersonId) return setError('Choose a Company HR');
+    if (form.mode === 'hr' && !form.hiringPersonId) {
+      setFieldErrors({ hiringPersonId: 'Choose a Company HR' });
+      return setError('Please fix the highlighted fields');
+    }
+    const { data, errors } = checkForm(submitCandidateSchema, {
+      applicationId: application.id,
+      ...(form.mode === 'hr'
+        ? { hiringPersonId: form.hiringPersonId }
+        : { recipientEmail: form.recipientEmail, recipientName: form.recipientName.trim() || undefined }),
+      ...(form.note.trim() ? { note: form.note } : {}),
+    });
+    setFieldErrors(errors);
+    if (!data) return setError('Please fix the highlighted fields');
     setSaving(true);
     try {
-      const r = await submissionsApi.submit({
-        applicationId: application.id,
-        ...(form.mode === 'hr'
-          ? { hiringPersonId: form.hiringPersonId }
-          : { recipientEmail: form.recipientEmail.trim(), recipientName: form.recipientName.trim() || undefined }),
-        ...(form.note.trim() ? { note: form.note.trim() } : {}),
-      });
+      const r = await submissionsApi.submit(data);
       setSentLink(r.link);
       await load();
       onChanged?.();
     } catch (err) {
-      setError(err.message);
+      const fields = err.fields || {};
+      setFieldErrors(fields);
+      setError(Object.keys(fields).length ? 'Please fix the highlighted fields' : err.message);
     } finally {
       setSaving(false);
     }
@@ -212,7 +222,7 @@ export default function SubmitToClientCard({ application, onChanged }) {
             )}
 
             {form.mode === 'hr' ? (
-              <FormField label="Company HR">
+              <FormField label="Company HR" error={fieldErrors.hiringPersonId}>
                 <select
                   className={`${inputClass} min-h-[44px]`}
                   value={form.hiringPersonId}
@@ -230,22 +240,24 @@ export default function SubmitToClientCard({ application, onChanged }) {
               </FormField>
             ) : (
               <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-                <FormField label="HR email">
+                <FormField label="HR email" error={fieldErrors.recipientEmail}>
                   <input
                     type="email"
                     inputMode="email"
+                    autoComplete="off"
+                    maxLength={254}
                     className={`${inputClass} min-h-[44px]`}
                     value={form.recipientEmail}
                     onChange={(e) => setForm({ ...form, recipientEmail: e.target.value })}
                   />
                 </FormField>
-                <FormField label="Name (optional)">
-                  <input className={`${inputClass} min-h-[44px]`} value={form.recipientName} onChange={(e) => setForm({ ...form, recipientName: e.target.value })} />
+                <FormField label="Name (optional)" error={fieldErrors.recipientName}>
+                  <input maxLength={120} className={`${inputClass} min-h-[44px]`} value={form.recipientName} onChange={(e) => setForm({ ...form, recipientName: e.target.value })} />
                 </FormField>
               </div>
             )}
 
-            <FormField label="Note to the company (optional)">
+            <FormField label="Note to the company (optional)" error={fieldErrors.note}>
               <textarea rows={3} maxLength={1000} className={inputClass} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
             </FormField>
             {error && <p className="text-sm text-red-600">{error}</p>}

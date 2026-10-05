@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import FormField, { inputClass } from '../../components/ui/FormField.jsx';
 import Button from '../../components/ui/Button.jsx';
-
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const URL_REGEX = /^https?:\/\/\S+\.\S+/i;
+import { adminCreateCompanySchema, adminUpdateCompanySchema } from '../../../shared/schemas/admin.schema.js';
+import { checkForm } from '../../../shared/schemas/common.js';
 
 export const SIZE_OPTIONS = ['1-10', '11-50', '51-200', '201-500', '501-1000', '1000+'];
 
@@ -19,35 +18,30 @@ export default function CompanyForm({ initial = {}, withOwnerEmail = false, subm
     location: initial.location || '',
     description: initial.description || '',
   });
+  const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+  const cls = `${inputClass} min-h-[44px]`;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!form.companyName.trim()) return setError('Agency name is required');
-    if (withOwnerEmail && !EMAIL_REGEX.test(form.ownerEmail.trim())) return setError('Enter a valid agency owner email');
-    if (form.website.trim() && !URL_REGEX.test(form.website.trim())) {
-      return setError('Website must start with http:// or https://');
-    }
 
-    const payload = {
-      companyName: form.companyName.trim(),
-      website: form.website.trim(),
-      industry: form.industry.trim(),
-      size: form.size,
-      location: form.location.trim(),
-      description: form.description.trim(),
-      ...(withOwnerEmail ? { ownerEmail: form.ownerEmail.trim() } : {}),
-    };
+    const { ownerEmail, ...fields } = form;
+    const { data, errors } = withOwnerEmail
+      ? checkForm(adminCreateCompanySchema, { ...fields, ownerEmail })
+      : checkForm(adminUpdateCompanySchema, fields);
+    setFieldErrors(errors);
+    if (!data) return setError(errors._form || 'Please fix the highlighted fields');
 
     setSaving(true);
     try {
-      await onSubmit(payload);
+      await onSubmit(data);
     } catch (err) {
-      setError(err.message);
+      setFieldErrors(err.fields || {});
+      setError(Object.keys(err.fields || {}).length ? 'Please fix the highlighted fields' : err.message);
     } finally {
       setSaving(false);
     }
@@ -57,34 +51,34 @@ export default function CompanyForm({ initial = {}, withOwnerEmail = false, subm
     <form onSubmit={handleSubmit} noValidate>
       <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
-          <FormField label="Agency name *">
-            <input className={`${inputClass} min-h-[44px]`} value={form.companyName} onChange={set('companyName')} placeholder="e.g. Acme Talent Partners" />
+          <FormField label="Agency name *" error={fieldErrors.companyName}>
+            <input className={cls} value={form.companyName} onChange={set('companyName')} placeholder="e.g. Acme Talent Partners" autoComplete="organization" maxLength={200} />
           </FormField>
         </div>
         {withOwnerEmail && (
           <div className="sm:col-span-2">
-            <FormField label="Agency owner email *">
+            <FormField label="Agency owner email *" error={fieldErrors.ownerEmail} hint="We'll email this person a link to set their password.">
               <input
                 type="email"
                 inputMode="email"
                 autoComplete="off"
-                className={`${inputClass} min-h-[44px]`}
+                className={cls}
                 value={form.ownerEmail}
                 onChange={set('ownerEmail')}
                 placeholder="owner@agency.com"
+                maxLength={254}
               />
-              <p className="mt-1 text-xs text-slate-500">We'll email this person a link to set their password.</p>
             </FormField>
           </div>
         )}
-        <FormField label="Website">
-          <input type="url" inputMode="url" className={`${inputClass} min-h-[44px]`} value={form.website} onChange={set('website')} placeholder="https://" />
+        <FormField label="Website" error={fieldErrors.website}>
+          <input type="url" inputMode="url" className={cls} value={form.website} onChange={set('website')} placeholder="https://example.com" maxLength={500} />
         </FormField>
-        <FormField label="Industry">
-          <input className={`${inputClass} min-h-[44px]`} value={form.industry} onChange={set('industry')} placeholder="e.g. IT staffing" />
+        <FormField label="Industry" error={fieldErrors.industry}>
+          <input className={cls} value={form.industry} onChange={set('industry')} placeholder="e.g. IT staffing" maxLength={120} />
         </FormField>
-        <FormField label="Agency size">
-          <select className={`${inputClass} min-h-[44px]`} value={form.size} onChange={set('size')}>
+        <FormField label="Agency size" error={fieldErrors.size}>
+          <select className={cls} value={form.size} onChange={set('size')}>
             <option value="">Not specified</option>
             {SIZE_OPTIONS.map((s) => (
               <option key={s} value={s}>
@@ -94,12 +88,12 @@ export default function CompanyForm({ initial = {}, withOwnerEmail = false, subm
             {form.size && !SIZE_OPTIONS.includes(form.size) && <option value={form.size}>{form.size}</option>}
           </select>
         </FormField>
-        <FormField label="Location">
-          <input className={`${inputClass} min-h-[44px]`} value={form.location} onChange={set('location')} placeholder="e.g. Pune, India" />
+        <FormField label="Location" error={fieldErrors.location}>
+          <input className={cls} value={form.location} onChange={set('location')} placeholder="e.g. Pune, India" maxLength={200} />
         </FormField>
         <div className="sm:col-span-2">
-          <FormField label="Description">
-            <textarea rows={4} className={inputClass} value={form.description} onChange={set('description')} />
+          <FormField label="Description" error={fieldErrors.description}>
+            <textarea rows={4} className={inputClass} value={form.description} onChange={set('description')} maxLength={4000} />
           </FormField>
         </div>
       </div>

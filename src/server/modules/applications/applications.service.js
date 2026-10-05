@@ -108,13 +108,32 @@ export async function listApplicationsForJob(userId, jobId) {
 export async function bulkUpdateApplicationStatus(userId, jobId, { applicationIds, status }) {
   await getOwnedJob(userId, jobId);
 
-  const result = await prisma.application.updateMany({
-    where: { id: { in: applicationIds }, jobId },
-    data: { status },
+  // Only applicants still being decided can change. Booked, interviewed or
+  // submitted ones are skipped (moving them would orphan their interview),
+  // and ones already in the target status aren't re-emailed.
+  const decidable = [
+    APPLICATION_STATUS.APPLIED,
+    APPLICATION_STATUS.SCREENING,
+    APPLICATION_STATUS.SHORTLISTED,
+    APPLICATION_STATUS.REJECTED,
+  ].filter((s) => s !== status);
+  const eligible = await prisma.application.findMany({
+    where: { id: { in: applicationIds }, jobId, status: { in: decidable } },
+    select: { id: true, status: true },
   });
 
+  const changedIds = [];
+  for (const app of eligible) {
+    const { count } = await prisma.application.updateMany({
+      where: { id: app.id, status: app.status },
+      data: { status },
+    });
+    if (count) changedIds.push(app.id);
+  }
+  const result = { count: changedIds.length };
+
   const updatedApplications = await prisma.application.findMany({
-    where: { id: { in: applicationIds }, jobId, status },
+    where: { id: { in: changedIds } },
     include: { candidate: { include: { user: true } }, job: { include: { company: true } } },
   });
   // await Promise.all(updatedApplications.map(sendApplicationStatusEmail));
@@ -123,7 +142,7 @@ export async function bulkUpdateApplicationStatus(userId, jobId, { applicationId
   // and a failed invite — gets the usual status email.
   await Promise.all(updatedApplications.map(notifyStatusChange));
 
-  return { updatedCount: result.count };
+  return { updatedCount: result.count, skippedCount: applicationIds.length - result.count };
 }
 
 async function notifyStatusChange(application) {

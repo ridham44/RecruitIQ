@@ -69,7 +69,7 @@ async function startServer() {
 
 async function completedApplication(owner, jobId, label) {
   const email = `p8-${label}-${ts}@test.com`;
-  const cand = await req('/auth/register/candidate', { method: 'POST', body: { email, password: PASSWORD, fullName: `P8 ${label}` } });
+  const cand = await req('/auth/register/candidate', { method: 'POST', body: { email, password: PASSWORD, fullName: `Portal ${label}` } });
   const form = new FormData();
   form.append('resume', new Blob([buildDocx(reactResumeLines(`P8 ${label}`, email, '+919812300008'))], { type: DOCX_MIME }), 'cv.docx');
   const { resume } = await req('/resumes', { method: 'POST', token: cand.token, form });
@@ -129,7 +129,7 @@ async function main() {
   assert(again.status === 400 && again.json?.error === 'INVITE_NOT_PENDING', 'no re-invite once the login is active');
 
   const list = await req('/client-portal/submissions', { token: tIt });
-  assert(list.submissions.length === 1 && list.submissions[0].isNew && list.submissions[0].candidateName === 'P8 alice', 'portal lists the one submission as New');
+  assert(list.submissions.length === 1 && list.submissions[0].isNew && list.submissions[0].candidateName === 'Portal alice', 'portal lists the one submission as New');
   assert(list.me.department === 'IT' && list.jobs[0]?.id === job.id, 'portal knows the HR person and job filter');
   const detail = await req(`/client-portal/submissions/${list.submissions[0].id}`, { token: tIt });
   assert(detail.snapshot.candidate.email === a.email && detail.snapshot.finalScore === 77, 'candidate package with contact + final score');

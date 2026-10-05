@@ -54,7 +54,7 @@ function cvForm(name, email, phone) {
 
 async function candidateApplies(jobId, label) {
   const email = `p5-${label}-${ts}@test.com`;
-  const { token } = await req('/auth/register/candidate', { method: 'POST', body: { email, password: PASSWORD, fullName: `P5 ${label}` } });
+  const { token } = await req('/auth/register/candidate', { method: 'POST', body: { email, password: PASSWORD, fullName: `Instant ${label}` } });
   const { resume } = await req('/resumes', { method: 'POST', token, form: cvForm(`P5 ${label}`, email, '+919812300000') });
   const { application } = await req('/applications', { method: 'POST', token, body: { jobId, resumeId: resume.id } });
   return { token, application };

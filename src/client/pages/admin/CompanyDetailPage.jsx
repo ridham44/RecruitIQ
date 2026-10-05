@@ -10,6 +10,7 @@ import StatusBadge from '../../components/ui/StatusBadge.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import CompanyForm from './CompanyForm.jsx';
 import SetupLinkNotice from './SetupLinkNotice.jsx';
+import { safeHttpUrl } from '../../utils/safeUrl.js';
 
 const formatDate = (d) => new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -155,11 +156,14 @@ export default function CompanyDetailPage() {
           ) : (
             <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Detail label="Website">
-                {company.website && (
-                  <a href={company.website} target="_blank" rel="noreferrer" className="text-brand-600 hover:underline">
-                    {company.website}
-                  </a>
-                )}
+                {company.website &&
+                  (safeHttpUrl(company.website) ? (
+                    <a href={safeHttpUrl(company.website)} target="_blank" rel="noopener noreferrer" className="break-all text-brand-600 hover:underline">
+                      {company.website}
+                    </a>
+                  ) : (
+                    <span className="break-all">{company.website}</span>
+                  ))}
               </Detail>
               <Detail label="Industry">{company.industry}</Detail>
               <Detail label="Size">{company.size && `${company.size} employees`}</Detail>

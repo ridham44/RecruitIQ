@@ -1,6 +1,7 @@
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { created, ok } from '../../utils/apiResponse.js';
 import * as jobsService from './jobs.service.js';
+import { isCompanySide } from '../../../shared/constants/roles.js';
 
 export const createJob = asyncHandler(async (req, res) => {
   const job = await jobsService.createJob(req.user.id, req.body);
@@ -37,6 +38,10 @@ export const getJobClientLink = asyncHandler(async (req, res) => {
 });
 
 export const getJob = asyncHandler(async (req, res) => {
-  const job = await jobsService.getJobById(req.params.id);
+  if (req.user && isCompanySide(req.user.role)) {
+    const job = await jobsService.getOwnedJob(req.user.id, req.params.id).catch(() => null);
+    if (job) return ok(res, { job });
+  }
+  const job = await jobsService.getPublicJobById(req.params.id);
   ok(res, { job });
 });

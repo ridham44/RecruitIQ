@@ -12,12 +12,14 @@ import ErrorState from '../../components/ui/ErrorState.jsx';
 import StatusBadge from '../../components/ui/StatusBadge.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import FormField, { inputClass } from '../../components/ui/FormField.jsx';
-import ClientForm, { clientToForm, validateClientForm, trimClientForm } from './ClientForm.jsx';
+import ClientForm, { clientToForm, validateClientForm } from './ClientForm.jsx';
+import { checkForm } from '../../../shared/schemas/common.js';
+import { departmentSchema, createHiringPersonSchema } from '../../../shared/schemas/client.schema.js';
 // Build plan P8
 import { configApi } from '../../services/config.js';
 import SetupLinkNotice from '../admin/SetupLinkNotice.jsx';
+import { safeHttpUrl } from '../../utils/safeUrl.js';
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // const EMPTY_PERSON = { fullName: '', email: '', phone: '', designation: '' };
 const EMPTY_PERSON = { fullName: '', email: '', phone: '', designation: '', departmentId: '' };
 // const TABS = [
@@ -75,6 +77,7 @@ export default function ClientDetailPage() {
   // modal state: { kind: 'client' | 'department' | 'person' | 'recruiters', ... }
   const [modal, setModal] = useState(null);
   const [modalError, setModalError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [confirm, setConfirm] = useState(null);
   const [allRecruiters, setAllRecruiters] = useState([]);
 
@@ -87,6 +90,12 @@ export default function ClientDetailPage() {
   };
 
   useEffect(load, [id]);
+
+  // Each modal opens with a clean slate of errors.
+  useEffect(() => {
+    setFieldErrors({});
+    setModalError('');
+  }, [modal?.kind]);
 
   // Build plan P8: client HR portal invites
   const [portalOn, setPortalOn] = useState(false);
@@ -116,6 +125,7 @@ export default function ClientDetailPage() {
     setBusy(key);
     setActionError('');
     setModalError('');
+    setFieldErrors({});
     try {
       const data = await fn();
       if (data?.client) setClient(data.client);
@@ -123,8 +133,10 @@ export default function ClientDetailPage() {
       setConfirm(null);
       return true;
     } catch (err) {
-      if (modal) setModalError(err.message);
-      else setActionError(err.message);
+      if (modal) {
+        setFieldErrors(err.fields || {});
+        setModalError(err.fields && Object.keys(err.fields).length ? 'Please fix the highlighted fields' : err.message);
+      } else setActionError(err.message);
       return false;
     } finally {
       setBusy('');
@@ -145,32 +157,29 @@ export default function ClientDetailPage() {
   if (error) return <ErrorState message={error} onRetry={load} />;
   if (!client) return <LoadingState />;
 
+  const invalid = (errors) => {
+    setFieldErrors(errors);
+    setModalError('Please fix the highlighted fields');
+  };
+
   const saveModal = () => {
     if (!modal) return;
     if (modal.kind === 'client') {
-      const msg = validateClientForm(modal.form);
-      if (msg) return setModalError(msg);
-      return run('modal', () => clientsApi.update(id, trimClientForm(modal.form)), { closeModal: true });
+      const { data, errors } = validateClientForm(modal.form);
+      if (!data) return invalid(errors);
+      return run('modal', () => clientsApi.update(id, data), { closeModal: true });
     }
     if (modal.kind === 'department') {
-      const name = modal.name.trim();
-      if (!name) return setModalError('Department name is required');
+      const { data, errors } = checkForm(departmentSchema, { name: modal.name || '' });
+      if (!data) return invalid(errors);
+      const { name } = data;
       return run('modal', () => (modal.department ? clientsApi.renameDepartment(modal.department.id, name) : clientsApi.addDepartment(id, name)), {
         closeModal: true,
       }).then((ok) => ok && !modal.department && setOpen((o) => ({ ...o, [`new:${name}`]: true })));
     }
     if (modal.kind === 'person') {
-      const f = modal.form;
-      if (!f.fullName.trim()) return setModalError('Name is required');
-      if (!EMAIL_REGEX.test(f.email.trim())) return setModalError('Enter a valid email');
-      // const payload = { fullName: f.fullName.trim(), email: f.email.trim(), phone: f.phone.trim(), designation: f.designation.trim() };
-      const payload = {
-        fullName: f.fullName.trim(),
-        email: f.email.trim(),
-        phone: f.phone.trim(),
-        designation: f.designation.trim(),
-        departmentId: f.departmentId || null,
-      };
+      const { data: payload, errors } = checkForm(createHiringPersonSchema, { ...modal.form, departmentId: modal.form.departmentId || null });
+      if (!payload) return invalid(errors);
       return run(
         'modal',
         // () => (modal.person ? clientsApi.updateHiringPerson(modal.person.id, payload) : clientsApi.addHiringPerson(modal.departmentId, payload)),
@@ -271,11 +280,14 @@ export default function ClientDetailPage() {
           <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Detail label="Industry">{client.industry}</Detail>
             <Detail label="Website">
-              {client.website && (
-                <a href={client.website} target="_blank" rel="noreferrer" className="text-brand-600 hover:underline">
-                  {client.website}
-                </a>
-              )}
+              {client.website &&
+                (safeHttpUrl(client.website) ? (
+                  <a href={safeHttpUrl(client.website)} target="_blank" rel="noopener noreferrer" className="break-all text-brand-600 hover:underline">
+                    {client.website}
+                  </a>
+                ) : (
+                  <span className="break-all">{client.website}</span>
+                ))}
             </Detail>
             <Detail label="Contact person">{client.contactName}</Detail>
             <Detail label="Contact email">{client.contactEmail}</Detail>
@@ -501,7 +513,7 @@ export default function ClientDetailPage() {
         onClose={() => setModal(null)}
         footer={<ModalFooter onCancel={() => setModal(null)} onSave={saveModal} saving={busy === 'modal'} />}
       >
-        {modal?.kind === 'client' && <ClientForm value={modal.form} onChange={(form) => setModal((m) => ({ ...m, form }))} />}
+        {modal?.kind === 'client' && <ClientForm value={modal.form} errors={fieldErrors} onChange={(form) => setModal((m) => ({ ...m, form }))} />}
         {modalError && <p className="text-sm text-red-600">{modalError}</p>}
       </Modal>
 
@@ -511,7 +523,7 @@ export default function ClientDetailPage() {
         onClose={() => setModal(null)}
         footer={<ModalFooter onCancel={() => setModal(null)} onSave={saveModal} saving={busy === 'modal'} label={modal?.department ? 'Save' : 'Add'} />}
       >
-        <FormField label="Department name">
+        <FormField label="Department name" error={fieldErrors.name}>
           <input
             autoFocus
             className={`${inputClass} min-h-[44px]`}
@@ -519,6 +531,7 @@ export default function ClientDetailPage() {
             onChange={(e) => setModal((m) => ({ ...m, name: e.target.value }))}
             onKeyDown={(e) => e.key === 'Enter' && saveModal()}
             placeholder="e.g. IT, Finance, Sales"
+            maxLength={120}
           />
         </FormField>
         {modalError && <p className="text-sm text-red-600">{modalError}</p>}
@@ -539,19 +552,26 @@ export default function ClientDetailPage() {
               ['phone', 'Phone', 'tel'],
               ['designation', 'Designation', 'text'],
             ].map(([key, label, type]) => (
-              <FormField key={key} label={label}>
+              <FormField
+                key={key}
+                label={label}
+                error={fieldErrors[key]}
+                hint={key === 'phone' ? 'Include the country code, e.g. +91 98765 43210' : undefined}
+              >
                 <input
                   type={type}
                   inputMode={type === 'email' ? 'email' : type === 'tel' ? 'tel' : undefined}
                   className={`${inputClass} min-h-[44px]`}
                   value={modal.form[key]}
+                  maxLength={key === 'email' ? 254 : key === 'phone' ? 24 : 120}
+                  autoComplete={key === 'fullName' ? 'name' : key === 'email' ? 'email' : key === 'phone' ? 'tel' : 'off'}
                   onChange={(e) => setModal((m) => ({ ...m, form: { ...m.form, [key]: e.target.value } }))}
                 />
               </FormField>
             ))}
             {/* Optional label — HR belongs to the company either way */}
             {departments.length > 0 && (
-              <FormField label="Department (optional)">
+              <FormField label="Department (optional)" error={fieldErrors.departmentId}>
                 <select
                   className={`${inputClass} min-h-[44px]`}
                   value={modal.form.departmentId || ''}

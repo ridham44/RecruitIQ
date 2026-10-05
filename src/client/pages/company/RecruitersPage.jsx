@@ -13,8 +13,9 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import FormField, { inputClass } from '../../components/ui/FormField.jsx';
 import SetupLinkNotice from '../admin/SetupLinkNotice.jsx';
 import { useAuth } from '../../hooks/useAuth.jsx';
+import { inviteRecruiterSchema, updateRecruiterSchema } from '../../../shared/schemas/recruiter.schema.js';
+import { checkForm } from '../../../shared/schemas/common.js';
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PERMISSION_LABEL = Object.fromEntries(PERMISSION_OPTIONS.map((p) => [p.key, p.label]));
 
 function memberStatus(m) {
@@ -52,11 +53,14 @@ function RecruiterModal({ open, member, jobs, onClose, onSaved }) {
   const editing = Boolean(member);
   const [form, setForm] = useState({ fullName: '', email: '', permissions: DEFAULT_RECRUITER_PERMISSIONS, jobIds: [] });
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+  const listError = (key) => Object.entries(fieldErrors).find(([k]) => k.split('.')[0] === key)?.[1];
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setError('');
+    setFieldErrors({});
     setForm(
       member
         ? { fullName: member.fullName || '', email: member.email, permissions: member.permissions, jobIds: member.jobs.map((j) => j.id) }
@@ -68,26 +72,26 @@ function RecruiterModal({ open, member, jobs, onClose, onSaved }) {
 
   const save = async () => {
     setError('');
-    if (!form.fullName.trim()) return setError('Name is required');
-    if (!editing && !EMAIL_REGEX.test(form.email.trim())) return setError('Enter a valid email');
+    const { data, errors } = editing
+      ? checkForm(updateRecruiterSchema, { fullName: form.fullName })
+      : checkForm(inviteRecruiterSchema, { fullName: form.fullName, email: form.email, permissions: form.permissions, jobIds: form.jobIds });
+    setFieldErrors(errors);
+    if (!data) return setError('Please fix the highlighted fields');
     setSaving(true);
     try {
       if (editing) {
-        if (form.fullName.trim() !== (member.fullName || '')) await recruitersApi.update(member.id, { fullName: form.fullName.trim() });
+        if (data.fullName !== (member.fullName || '')) await recruitersApi.update(member.id, data);
         await recruitersApi.setPermissions(member.id, form.permissions);
         const { recruiter } = await recruitersApi.setJobs(member.id, form.jobIds);
         onSaved({ recruiter });
       } else {
-        const result = await recruitersApi.invite({
-          fullName: form.fullName.trim(),
-          email: form.email.trim(),
-          permissions: form.permissions,
-          jobIds: form.jobIds,
-        });
+        const result = await recruitersApi.invite(data);
         onSaved(result);
       }
     } catch (err) {
-      setError(err.message);
+      const fields = err.fields || {};
+      setFieldErrors(fields);
+      setError(Object.keys(fields).length ? 'Please fix the highlighted fields' : err.message);
     } finally {
       setSaving(false);
     }
@@ -109,15 +113,22 @@ function RecruiterModal({ open, member, jobs, onClose, onSaved }) {
         </div>
       }
     >
-      <FormField label="Full name">
-        <input className={`${inputClass} min-h-[44px]`} value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} placeholder="e.g. Riya Sharma" />
+      <FormField label="Full name" error={fieldErrors.fullName}>
+        <input
+          className={`${inputClass} min-h-[44px]`}
+          value={form.fullName}
+          onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+          placeholder="e.g. Riya Sharma"
+          autoComplete="off"
+          maxLength={120}
+        />
       </FormField>
       {editing ? (
         <FormField label="Email">
           <p className="break-all rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{form.email}</p>
         </FormField>
       ) : (
-        <FormField label="Email">
+        <FormField label="Email" error={fieldErrors.email}>
           <input
             type="email"
             inputMode="email"
@@ -126,16 +137,23 @@ function RecruiterModal({ open, member, jobs, onClose, onSaved }) {
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
             placeholder="recruiter@agency.com"
+            maxLength={254}
           />
         </FormField>
       )}
 
       <p className="mb-1 mt-2 text-sm font-medium text-slate-700">Permissions</p>
       <CheckList options={PERMISSION_OPTIONS} selected={form.permissions} onToggle={(k) => setForm({ ...form, permissions: toggleIn(form.permissions, k) })} />
+      {listError('permissions') && (
+        <p role="alert" className="mt-1 text-xs text-red-600">{listError('permissions')}</p>
+      )}
 
       <p className="mb-1 mt-4 text-sm font-medium text-slate-700">Assigned jobs</p>
       <p className="mb-1 text-xs text-slate-500">They only see these jobs, plus any job they create.</p>
       <CheckList options={jobOptions} selected={form.jobIds} onToggle={(k) => setForm({ ...form, jobIds: toggleIn(form.jobIds, k) })} empty="No jobs yet." />
+      {listError('jobIds') && (
+        <p role="alert" className="mt-1 text-xs text-red-600">{listError('jobIds')}</p>
+      )}
 
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
     </Modal>

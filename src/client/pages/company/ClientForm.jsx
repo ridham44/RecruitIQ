@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import FormField, { inputClass } from '../../components/ui/FormField.jsx';
-
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const URL_REGEX = /^https?:\/\/\S+\.\S+/i;
+import { createClientSchema } from '../../../shared/schemas/client.schema.js';
+import { checkForm } from '../../../shared/schemas/common.js';
 
 export const EMPTY_CLIENT = {
   name: '',
@@ -19,20 +18,13 @@ export function clientToForm(client) {
   return Object.fromEntries(Object.keys(EMPTY_CLIENT).map((k) => [k, client?.[k] || '']));
 }
 
-// Returns an error message, or '' when the form is valid.
+// Same rules as the server: { data } when valid, else { errors: { field: message } }.
 export function validateClientForm(form) {
-  if (!form.name.trim()) return 'Company name is required';
-  if (form.website.trim() && !URL_REGEX.test(form.website.trim())) return 'Website must start with http:// or https://';
-  if (form.contactEmail.trim() && !EMAIL_REGEX.test(form.contactEmail.trim())) return 'Enter a valid contact email';
-  return '';
-}
-
-export function trimClientForm(form) {
-  return Object.fromEntries(Object.entries(form).map(([k, v]) => [k, v.trim()]));
+  return checkForm(createClientSchema, form);
 }
 
 // Build plan P3 — client company fields. Single column on phones, two from sm.
-export default function ClientForm({ value, onChange }) {
+export default function ClientForm({ value, onChange, errors = {} }) {
   const [form, setForm] = useState(value);
   useEffect(() => setForm(value), [value]);
   const set = (key) => (e) => {
@@ -45,31 +37,31 @@ export default function ClientForm({ value, onChange }) {
   return (
     <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
       <div className="sm:col-span-2">
-        <FormField label="Company name *">
-          <input className={cls} value={form.name} onChange={set('name')} placeholder="e.g. Infosys" />
+        <FormField label="Company name *" error={errors.name}>
+          <input className={cls} value={form.name} onChange={set('name')} placeholder="e.g. Infosys" maxLength={200} />
         </FormField>
       </div>
-      <FormField label="Industry">
-        <input className={cls} value={form.industry} onChange={set('industry')} placeholder="e.g. IT services" />
+      <FormField label="Industry" error={errors.industry}>
+        <input className={cls} value={form.industry} onChange={set('industry')} placeholder="e.g. IT services" maxLength={120} />
       </FormField>
-      <FormField label="Website">
-        <input type="url" inputMode="url" className={cls} value={form.website} onChange={set('website')} placeholder="https://" />
+      <FormField label="Website" error={errors.website}>
+        <input type="url" inputMode="url" className={cls} value={form.website} onChange={set('website')} placeholder="https://example.com" maxLength={500} />
       </FormField>
-      <FormField label="Contact person">
-        <input className={cls} value={form.contactName} onChange={set('contactName')} />
+      <FormField label="Contact person" error={errors.contactName}>
+        <input className={cls} value={form.contactName} onChange={set('contactName')} autoComplete="name" maxLength={120} />
       </FormField>
-      <FormField label="Contact email">
-        <input type="email" inputMode="email" className={cls} value={form.contactEmail} onChange={set('contactEmail')} />
+      <FormField label="Contact email" error={errors.contactEmail}>
+        <input type="email" inputMode="email" className={cls} value={form.contactEmail} onChange={set('contactEmail')} autoComplete="email" maxLength={254} />
       </FormField>
-      <FormField label="Contact phone">
-        <input type="tel" inputMode="tel" className={cls} value={form.contactPhone} onChange={set('contactPhone')} />
+      <FormField label="Contact phone" error={errors.contactPhone} hint="Include the country code, e.g. +39 319 123 4567">
+        <input type="tel" inputMode="tel" className={cls} value={form.contactPhone} onChange={set('contactPhone')} placeholder="+39 319 123 4567" autoComplete="tel" maxLength={24} />
       </FormField>
-      <FormField label="Address">
-        <input className={cls} value={form.address} onChange={set('address')} />
+      <FormField label="Address" error={errors.address}>
+        <input className={cls} value={form.address} onChange={set('address')} maxLength={500} />
       </FormField>
       <div className="sm:col-span-2">
-        <FormField label="Description">
-          <textarea rows={3} className={inputClass} value={form.description} onChange={set('description')} />
+        <FormField label="Description" error={errors.description}>
+          <textarea rows={3} className={inputClass} value={form.description} onChange={set('description')} maxLength={4000} />
         </FormField>
       </div>
     </div>

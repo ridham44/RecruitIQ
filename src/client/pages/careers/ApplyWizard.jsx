@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { FileUp, FileCheck2, ShieldCheck, ArrowLeft, Check } from 'lucide-react';
 import { publicApi } from '../../services/public.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import FormField, { inputClass } from '../../components/ui/FormField.jsx';
+import { checkForm } from '../../../shared/schemas/common.js';
+import { guestApplySchema, otpSendSchema, otpVerifySchema } from '../../../shared/schemas/public.schema.js';
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Same rules as the server's guest-apply body, for the fields on the details step.
+const detailsSchema = guestApplySchema.pick({ fullName: true, email: true, phone: true, consent: true });
+const DETAIL_FIELDS = ['fullName', 'email', 'phone', 'consent'];
 const MAX_MB = 4;
 const STEPS = ['Upload CV', 'Your details', 'Verify phone'];
 
@@ -39,11 +43,30 @@ export default function ApplyWizard({ slug, company, job }) {
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+  // The email already belongs to an account (server code EMAIL_HAS_ACCOUNT).
+  const [emailHasAccount, setEmailHasAccount] = useState(false);
 
   const [upload, setUpload] = useState(null);
   const [form, setForm] = useState({ fullName: '', email: '', phone: '', consent: false });
 
   const [otp, setOtp] = useState({ sentTo: '', code: '', devCode: '', resendIn: 0 });
+
+  // Edit a details field and clear its error.
+  const setField = (key, value) => {
+    setForm((f) => ({ ...f, [key]: value }));
+    setFieldErrors((e) => (e[key] ? { ...e, [key]: undefined } : e));
+    if (key === 'email') setEmailHasAccount(false);
+  };
+
+  // Server errors: per-field messages go next to the field when it is on the
+  // current step; anything else (or a field not shown here) goes in the banner.
+  const showApiError = (err, visible) => {
+    const fields = err.fields || {};
+    const shown = Object.fromEntries(Object.entries(fields).filter(([k]) => visible.includes(k)));
+    setFieldErrors(shown);
+    if (Object.keys(shown).length < Object.keys(fields).length || Object.keys(fields).length === 0) setError(err.message);
+  };
 
   // Resend countdown.
   useEffect(() => {
@@ -81,14 +104,22 @@ export default function ApplyWizard({ slug, company, job }) {
   // ── Step 2 → 3: send the code ──
   const sendCode = async () => {
     setError('');
+    const { data, errors } = checkForm(otpSendSchema, { phone: form.phone });
+    if (!data) {
+      // Only reachable on resend if the number was changed; show it on the details step.
+      setFieldErrors(errors);
+      if (step !== 1) setStep(1);
+      return;
+    }
     setBusy(true);
     try {
-      const res = await publicApi.sendOtp(form.phone.trim());
+      const res = await publicApi.sendOtp(data.phone);
       setOtp({ sentTo: res.phone, code: '', devCode: res.devCode || '', resendIn: res.resendAfterSeconds || 30 });
       setForm((f) => ({ ...f, phone: res.phone }));
+      setFieldErrors({});
       setStep(2);
     } catch (err) {
-      setError(err.message);
+      showApiError(err, step === 1 ? DETAIL_FIELDS : []);
     } finally {
       setBusy(false);
     }
@@ -96,20 +127,27 @@ export default function ApplyWizard({ slug, company, job }) {
 
   const toVerify = () => {
     setError('');
-    if (!form.fullName.trim()) return setError('Please enter your full name.');
-    if (!EMAIL_REGEX.test(form.email.trim())) return setError('Please enter a valid email address.');
-    if (form.phone.replace(/\D/g, '').length < 10) return setError('Please enter a valid phone number.');
-    if (!form.consent) return setError('Please accept how your CV will be used.');
+    setEmailHasAccount(false);
+    const { data, errors } = checkForm(detailsSchema, form);
+    setFieldErrors(errors);
+    if (!data) return undefined;
+    setForm((f) => ({ ...f, fullName: data.fullName, email: data.email, phone: data.phone }));
     return sendCode();
   };
 
   // ── Step 3: verify + submit ──
   const submit = async () => {
     setError('');
-    if (!/^\d{6}$/.test(otp.code)) return setError('Enter the 6-digit code.');
+    const verify = checkForm(otpVerifySchema, { phone: otp.sentTo, code: otp.code });
+    if (!verify.data) {
+      setFieldErrors(verify.errors);
+      if (!verify.errors.code) setError(Object.values(verify.errors)[0]);
+      return;
+    }
+    setFieldErrors({});
     setBusy(true);
     try {
-      const { otpToken } = await publicApi.verifyOtp(otp.sentTo, otp.code);
+      const { otpToken } = await publicApi.verifyOtp(verify.data.phone, verify.data.code);
       const result = await publicApi.apply({
         slug,
         uploadId: upload.uploadId,
@@ -126,13 +164,36 @@ export default function ApplyWizard({ slug, company, job }) {
     } catch (err) {
       if (err.code === 'UPLOAD_EXPIRED') {
         setUpload(null);
+        setFieldErrors({});
         setStep(0);
+        setError(err.message);
+      } else if (err.code === 'EMAIL_HAS_ACCOUNT') {
+        // Show it next to the email, with a way to log in instead.
+        setStep(1);
+        setError('');
+        setEmailHasAccount(true);
+        setFieldErrors({ email: err.message });
+      } else if (Object.keys(err.fields || {}).some((k) => DETAIL_FIELDS.includes(k))) {
+        setStep(1);
+        showApiError(err, DETAIL_FIELDS);
+      } else {
+        showApiError(err, ['code']);
       }
-      setError(err.message);
     } finally {
       setBusy(false);
     }
   };
+
+  const emailError = emailHasAccount ? (
+    <>
+      {fieldErrors.email}{' '}
+      <Link to="/auth/login" className="font-medium text-brand-600 underline">
+        Log in
+      </Link>
+    </>
+  ) : (
+    fieldErrors.email
+  );
 
   const cls = `${inputClass} min-h-[44px]`;
 
@@ -183,38 +244,52 @@ export default function ApplyWizard({ slug, company, job }) {
           <p className="mb-3 text-xs text-slate-500">We filled these in from your CV — please check them.</p>
           <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <FormField label="Full name">
-                <input className={cls} autoComplete="name" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
+              <FormField label="Full name" error={fieldErrors.fullName}>
+                <input
+                  className={cls}
+                  autoComplete="name"
+                  maxLength={120}
+                  value={form.fullName}
+                  onChange={(e) => setField('fullName', e.target.value)}
+                />
               </FormField>
             </div>
-            <FormField label="Email">
+            <FormField label="Email" error={emailError}>
               <input
                 type="email"
                 inputMode="email"
                 autoComplete="email"
+                maxLength={254}
                 className={cls}
                 value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                onChange={(e) => setField('email', e.target.value)}
               />
             </FormField>
-            <FormField label="Mobile number">
+            <FormField label="Mobile number" error={fieldErrors.phone} hint="Include the country code, e.g. +91 98765 43210">
               <input
                 type="tel"
                 inputMode="tel"
                 autoComplete="tel"
+                maxLength={24}
                 className={cls}
                 value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                placeholder="e.g. 98765 43210"
+                onChange={(e) => setField('phone', e.target.value)}
+                placeholder="+91 98765 43210"
               />
             </FormField>
           </div>
-          <label className="mb-4 flex min-h-[44px] cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm text-slate-600">
+          <label
+            className={`flex min-h-[44px] cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm text-slate-600 ${
+              fieldErrors.consent ? 'mb-1 border-red-500' : 'mb-4 border-slate-200'
+            }`}
+          >
             <input
               type="checkbox"
               className="mt-0.5 h-5 w-5 shrink-0 rounded border-slate-300 text-brand-600"
               checked={form.consent}
-              onChange={(e) => setForm({ ...form, consent: e.target.checked })}
+              onChange={(e) => setField('consent', e.target.checked)}
+              aria-invalid={fieldErrors.consent ? true : undefined}
+              aria-describedby={fieldErrors.consent ? 'apply-consent-error' : undefined}
             />
             <span>
               {job
@@ -222,6 +297,11 @@ export default function ApplyWizard({ slug, company, job }) {
                 : `I agree that RecruitIQ may process my CV and contact details and use AI to match me to open jobs — including jobs at other companies hiring on RecruitIQ — and share my application with the company I'm matched to.`}
             </span>
           </label>
+          {fieldErrors.consent && (
+            <p id="apply-consent-error" role="alert" className="mb-4 text-xs text-red-600">
+              {fieldErrors.consent}
+            </p>
+          )}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
             <Button variant="ghost" onClick={() => setStep(0)} className="w-full sm:w-auto">
               <ArrowLeft className="h-4 w-4" /> Back
@@ -246,8 +326,9 @@ export default function ApplyWizard({ slug, company, job }) {
               Development mode — no SMS is sent. Your code is <strong className="font-mono text-sm">{otp.devCode}</strong>
             </p>
           )}
-          <FormField label="Verification code">
+          <FormField label="Verification code" error={fieldErrors.code}>
             <input
+              type="text"
               className={`${inputClass} min-h-[52px] text-center font-mono text-2xl tracking-[0.5em]`}
               inputMode="numeric"
               autoComplete="one-time-code"
@@ -255,7 +336,10 @@ export default function ApplyWizard({ slug, company, job }) {
               maxLength={6}
               autoFocus
               value={otp.code}
-              onChange={(e) => setOtp({ ...otp, code: e.target.value.replace(/\D/g, '').slice(0, 6) })}
+              onChange={(e) => {
+                setOtp({ ...otp, code: e.target.value.replace(/\D/g, '').slice(0, 6) });
+                setFieldErrors((fe) => (fe.code ? { ...fe, code: undefined } : fe));
+              }}
               onKeyDown={(e) => e.key === 'Enter' && submit()}
               aria-label="6-digit verification code"
             />

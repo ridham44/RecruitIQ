@@ -6,6 +6,8 @@ import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import Modal from '../../components/ui/Modal.jsx';
 import FormField, { inputClass } from '../../components/ui/FormField.jsx';
+import { checkForm } from '../../../shared/schemas/common.js';
+import { careersSlugSchema } from '../../../shared/schemas/public.schema.js';
 
 // Build plan P4 — the company's public careers page link (Jobs page).
 export default function CareersLinkCard() {
@@ -15,6 +17,7 @@ export default function CareersLinkCard() {
   const [editing, setEditing] = useState(false);
   const [slug, setSlug] = useState('');
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -38,12 +41,17 @@ export default function CareersLinkCard() {
 
   const save = async () => {
     setError('');
+    const { data, errors } = checkForm(careersSlugSchema, { slug });
+    setFieldErrors(errors);
+    if (!data) return;
     setSaving(true);
     try {
-      setLink(await careersAdminApi.setLink(slug.trim().toLowerCase()));
+      setLink(await careersAdminApi.setLink(data.slug));
       setEditing(false);
     } catch (err) {
-      setError(err.message);
+      const fields = err.fields || {};
+      setFieldErrors(fields);
+      if (!fields.slug) setError(err.message);
     } finally {
       setSaving(false);
     }
@@ -79,6 +87,7 @@ export default function CareersLinkCard() {
               onClick={() => {
                 setSlug(link.slug);
                 setError('');
+                setFieldErrors({});
                 setEditing(true);
               }}
             >
@@ -103,17 +112,28 @@ export default function CareersLinkCard() {
           </div>
         }
       >
-        <FormField label="Link name">
+        <FormField
+          label="Link name"
+          error={fieldErrors.slug}
+          hint="3–50 lowercase letters, numbers and single dashes, e.g. acme-talent."
+        >
           <input
             className={`${inputClass} min-h-[44px] font-mono`}
             value={slug}
-            onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
+            onChange={(e) => {
+              setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'));
+              setFieldErrors({});
+            }}
+            onKeyDown={(e) => e.key === 'Enter' && save()}
             placeholder="e.g. acme-talent"
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            minLength={3}
+            maxLength={50}
           />
         </FormField>
-        <p className="text-xs text-slate-500">
-          Lowercase letters, numbers and dashes. The old link stops working, so update anywhere you've shared it.
-        </p>
+        <p className="text-xs text-slate-500">The old link stops working, so update anywhere you've shared it.</p>
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
       </Modal>
     </Card>

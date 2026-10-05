@@ -1,4 +1,4 @@
-import { prisma } from '../../config/prisma.js';
+import { prisma, TX_OPTIONS } from '../../config/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { APPLICATION_STATUS, INTERVIEW_SLOT_STATUS, INTERVIEW_STATUS } from '../../../shared/constants/statuses.js';
 import { getOwnedJob } from '../jobs/jobs.service.js';
@@ -158,8 +158,16 @@ export async function bookSlot(userId, applicationId, slotId) {
     throw ApiError.badRequest('You can only schedule an interview once you have been shortlisted', 'NOT_SHORTLISTED');
   }
 
+  const job = await prisma.job.findUnique({ where: { id: application.jobId }, select: { interviewFlow: true } });
+  if (job?.interviewFlow === 'INSTANT') {
+    throw ApiError.badRequest('This job uses an interview link instead of time slots', 'INSTANT_FLOW');
+  }
+
   const slot = await prisma.interviewSlot.findUnique({ where: { id: slotId } });
   if (!slot || slot.jobId !== application.jobId) throw ApiError.notFound('Slot not found');
+  if (slot.endTime <= new Date()) {
+    throw ApiError.badRequest('This slot has already passed — please choose another.', 'SLOT_IN_PAST');
+  }
 
   // Atomic check-and-set: only succeeds if the slot is still AVAILABLE right
   // now, so two candidates racing for the same slot can't both win it.
@@ -173,10 +181,16 @@ export async function bookSlot(userId, applicationId, slotId) {
 
   let interview;
   try {
-    [interview] = await prisma.$transaction([
-      prisma.interview.create({ data: { applicationId, slotId, status: INTERVIEW_STATUS.SCHEDULED } }),
-      prisma.application.update({ where: { id: applicationId }, data: { status: APPLICATION_STATUS.INTERVIEW_SCHEDULED } }),
-    ]);
+    interview = await prisma.$transaction(async (tx) => {
+      // Same check-and-set for the application, so two quick clicks on
+      // different slots can't book two interviews.
+      const moved = await tx.application.updateMany({
+        where: { id: applicationId, status: APPLICATION_STATUS.SHORTLISTED },
+        data: { status: APPLICATION_STATUS.INTERVIEW_SCHEDULED },
+      });
+      if (moved.count === 0) throw ApiError.conflict('You already have an interview booked for this job.', 'ALREADY_BOOKED');
+      return tx.interview.create({ data: { applicationId, slotId, status: INTERVIEW_STATUS.SCHEDULED } });
+    }, TX_OPTIONS);
   } catch (err) {
     // Roll the slot back if the booking itself failed after the claim succeeded.
     await prisma.interviewSlot.update({ where: { id: slotId }, data: { status: INTERVIEW_SLOT_STATUS.AVAILABLE } });

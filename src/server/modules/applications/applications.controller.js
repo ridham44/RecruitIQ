@@ -1,6 +1,7 @@
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { created, ok } from '../../utils/apiResponse.js';
 import * as applicationsService from './applications.service.js';
+import { contentDisposition } from '../../utils/contentDisposition.js';
 
 export const apply = asyncHandler(async (req, res) => {
   const application = await applicationsService.applyToJob(req.user.id, req.body);
@@ -35,7 +36,7 @@ export const getCandidateDetail = asyncHandler(async (req, res) => {
 export const getCandidateCv = asyncHandler(async (req, res) => {
   const { buffer, fileName, fileType } = await applicationsService.getCandidateCv(req.user.id, req.params.jobId, req.params.candidateId);
   res.setHeader('Content-Type', fileType || 'application/octet-stream');
-  res.setHeader('Content-Disposition', `${req.query.download ? 'attachment' : 'inline'}; filename="${String(fileName).replace(/"/g, '')}"`);
+  res.setHeader('Content-Disposition', contentDisposition(fileName, req.query.download));
   res.setHeader('Cache-Control', 'private, no-store');
   res.send(buffer);
 });

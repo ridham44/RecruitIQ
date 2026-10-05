@@ -45,7 +45,7 @@ const step = (t) => console.log(`\n== ${t} ==`);
 // Candidate applies → screening → shortlist → slot → interview → end.
 async function interviewedCandidate(owner, jobId, label) {
   const email = `p7-${label}-${ts}@test.com`;
-  const cand = await req('/auth/register/candidate', { method: 'POST', body: { email, password: PASSWORD, fullName: `P7 ${label}` } });
+  const cand = await req('/auth/register/candidate', { method: 'POST', body: { email, password: PASSWORD, fullName: `Final ${label}` } });
   const form = new FormData();
   form.append('resume', new Blob([buildDocx(reactResumeLines(`P7 ${label}`, email, '+919812300007'))], { type: DOCX_MIME }), 'cv.docx');
   const { resume } = await req('/resumes', { method: 'POST', token: cand.token, form });
@@ -110,7 +110,7 @@ async function main() {
   step('4. Submit to the job\'s HR person');
   const overview = await req(`/submissions/applications/${a.application.id}`, { token: owner.token });
   assert(overview.canSubmit && overview.defaultHiringPersonId === hr.id, 'overview offers the job\'s HR person by default');
-  assert(overview.preview.candidate.fullName === 'P7 alice' && overview.preview.interview?.overallScore != null && overview.preview.cvMatch, 'preview package has contact, CV match and interview');
+  assert(overview.preview.candidate.fullName === 'Final alice' && overview.preview.interview?.overallScore != null && overview.preview.cvMatch, 'preview package has contact, CV match and interview');
   const sent = await req('/submissions', { method: 'POST', token: owner.token, body: { applicationId: a.application.id, note: 'Strong React profile.' } });
   assert(sent.submission.recipientEmail === `p7-hr-${ts}@test.com` && sent.link.includes('/submission/'), 'submitted to the HR person with a secure link');
   const { application: aAfter } = await req(`/applications/job/${job.id}/candidates/${a.application.candidateId}`, { token: owner.token });
@@ -158,7 +158,7 @@ async function main() {
   const inv = await req('/recruiters', {
     method: 'POST',
     token: owner.token,
-    body: { email: `p7-rec-${ts}@test.com`, fullName: 'P7 Recruiter', permissions: ['REVIEW_CANDIDATES'], jobIds: [job.id] },
+    body: { email: `p7-rec-${ts}@test.com`, fullName: 'Final Test Recruiter', permissions: ['REVIEW_CANDIDATES'], jobIds: [job.id] },
   });
   const tR = (await req('/auth/set-password', { method: 'POST', body: { token: new URL(inv.setupLink).searchParams.get('token'), password: PASSWORD } })).token;
   const rView = await call(`/submissions/applications/${a.application.id}`, { token: tR });

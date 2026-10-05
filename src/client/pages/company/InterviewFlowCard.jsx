@@ -9,6 +9,8 @@ import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import StatusBadge from '../../components/ui/StatusBadge.jsx';
 import { inputClass } from '../../components/ui/FormField.jsx';
+import { updateJobSchema } from '../../../shared/schemas/job.schema.js';
+import { checkForm } from '../../../shared/schemas/common.js';
 
 // Build plan P5 (§9) — per-job interview flow: slot booking (default) or an
 // instant link. Also lists this job's link-based interviews, which don't
@@ -20,6 +22,7 @@ export default function InterviewFlowCard({ job, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [linkInterviews, setLinkInterviews] = useState([]);
 
   useEffect(() => {
@@ -37,18 +40,24 @@ export default function InterviewFlowCard({ job, onSaved }) {
   if (!enabled && job.interviewFlow !== 'INSTANT' && linkInterviews.length === 0) return null;
 
   const save = async () => {
-    setSaving(true);
     setSaved(false);
     setError('');
+    const { data, errors } = checkForm(updateJobSchema, {
+      interviewFlow: form.interviewFlow,
+      inviteValidDays: form.inviteValidDays === '' ? NaN : Number(form.inviteValidDays),
+    });
+    if (errors.inviteValidDays && form.inviteValidDays === '') errors.inviteValidDays = 'Enter how many days the link stays valid (1–60)';
+    setFieldErrors(errors);
+    if (!data) return setError('Please fix the highlighted fields');
+    setSaving(true);
     try {
-      const { job: updated } = await jobsApi.update(job.id, {
-        interviewFlow: form.interviewFlow,
-        inviteValidDays: Number(form.inviteValidDays),
-      });
+      const { job: updated } = await jobsApi.update(job.id, data);
       onSaved?.(updated);
       setSaved(true);
     } catch (err) {
-      setError(err.message);
+      const fields = err.fields || {};
+      setFieldErrors(fields);
+      setError(Object.keys(fields).length ? 'Please fix the highlighted fields' : err.message);
     } finally {
       setSaving(false);
     }
@@ -107,6 +116,9 @@ export default function InterviewFlowCard({ job, onSaved }) {
               type="number"
               min={1}
               max={60}
+              step={1}
+              aria-invalid={fieldErrors.inviteValidDays ? true : undefined}
+              aria-describedby={fieldErrors.inviteValidDays ? 'inviteValidDays-error' : undefined}
               disabled={!canEdit}
               className={`${inputClass} min-h-[44px] w-24`}
               value={form.inviteValidDays}
@@ -114,6 +126,11 @@ export default function InterviewFlowCard({ job, onSaved }) {
             />
             <span className="text-sm text-slate-500">days</span>
           </div>
+          {fieldErrors.inviteValidDays && (
+            <p id="inviteValidDays-error" role="alert" className="text-xs text-red-600">
+              {fieldErrors.inviteValidDays}
+            </p>
+          )}
         </div>
       )}
 

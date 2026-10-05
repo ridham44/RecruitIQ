@@ -6,6 +6,8 @@ import { ROLES } from '../../../shared/constants/roles.js';
 import * as service from './clientPortal.service.js';
 import { validate } from '../../middleware/validate.js';
 import { secondRoundSchema } from '../../../shared/schemas/scheduling.schema.js';
+import { clientPortalQuerySchema } from '../../../shared/schemas/query.schema.js';
+import { contentDisposition } from '../../utils/contentDisposition.js';
 
 // Build plan P8 — /api/v1/client-portal, CLIENT_HR only, behind
 // FEATURE_CLIENT_PORTAL (checked in the service). No other role can reach
@@ -17,6 +19,7 @@ router.use(authenticate, authorize(ROLES.CLIENT_HR));
 
 router.get(
   '/submissions',
+  validate(clientPortalQuerySchema, 'query'),
   asyncHandler(async (req, res) => ok(res, await service.listSubmissions(req.user.id, { jobId: req.query.jobId })))
 );
 
@@ -38,7 +41,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const { buffer, fileName, fileType } = await service.getSubmissionCv(req.user.id, req.params.id);
     res.setHeader('Content-Type', fileType || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `${req.query.download ? 'attachment' : 'inline'}; filename="${String(fileName).replace(/"/g, '')}"`);
+    res.setHeader('Content-Disposition', contentDisposition(fileName, req.query.download));
     res.setHeader('Cache-Control', 'private, no-store');
     res.send(buffer);
   })

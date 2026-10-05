@@ -3,6 +3,8 @@ import { RotateCcw, Copy, Check } from 'lucide-react';
 import Card from './ui/Card.jsx';
 import Button from './ui/Button.jsx';
 import { inputClass } from './ui/FormField.jsx';
+import { secondRoundSchema } from '../../shared/schemas/scheduling.schema.js';
+import { checkForm } from '../../shared/schemas/common.js';
 
 // Interview rounds for one candidate + the "second round" request form.
 // Used on the agency candidate page and in the Company HR portal.
@@ -49,6 +51,7 @@ export default function SecondRoundPanel({ data, canRequest, onRequest, audience
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [sentNote, setSentNote] = useState('');
 
   const rounds = data?.rounds || [];
@@ -56,15 +59,20 @@ export default function SecondRoundPanel({ data, canRequest, onRequest, audience
   const showForm = canRequest && data.canRequestSecondRound;
 
   const submit = async () => {
-    setBusy(true);
     setError('');
+    const { data, errors } = checkForm(secondRoundSchema, { reason, notes: notes.trim() });
+    setFieldErrors(errors);
+    if (!data) return setError('Please fix the highlighted fields');
+    setBusy(true);
     try {
-      await onRequest({ reason, notes: notes.trim() });
+      await onRequest(data);
       setOpen(false);
       setNotes('');
       setSentNote('Second round created — the candidate has been emailed the new interview link.');
     } catch (err) {
-      setError(err.message);
+      const fields = err.fields || {};
+      setFieldErrors(fields);
+      setError(Object.keys(fields).length ? 'Please fix the highlighted fields' : err.message);
     } finally {
       setBusy(false);
     }
@@ -130,7 +138,15 @@ export default function SecondRoundPanel({ data, canRequest, onRequest, audience
       {sentNote && <p className="mt-3 text-sm text-emerald-700">{sentNote}</p>}
 
       {showForm && !open && (
-        <Button variant="secondary" className="mt-4 w-full sm:w-auto" onClick={() => setOpen(true)}>
+        <Button
+          variant="secondary"
+          className="mt-4 w-full sm:w-auto"
+          onClick={() => {
+            setError('');
+            setFieldErrors({});
+            setOpen(true);
+          }}
+        >
           <RotateCcw className="h-4 w-4" /> {audience === 'hr' ? 'Request second round' : 'Give second interview'}
         </Button>
       )}
@@ -141,13 +157,25 @@ export default function SecondRoundPanel({ data, canRequest, onRequest, audience
             <label htmlFor="sr-reason" className="mb-1 block text-sm font-medium text-slate-700">
               Reason
             </label>
-            <select id="sr-reason" className={`${inputClass} min-h-[44px]`} value={reason} onChange={(e) => setReason(e.target.value)}>
+            <select
+              id="sr-reason"
+              className={`${inputClass} min-h-[44px]`}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              aria-invalid={fieldErrors.reason ? true : undefined}
+              aria-describedby={fieldErrors.reason ? 'sr-reason-error' : undefined}
+            >
               {SECOND_ROUND_REASONS.map(([k, label]) => (
                 <option key={k} value={k}>
                   {label}
                 </option>
               ))}
             </select>
+            {fieldErrors.reason && (
+              <p id="sr-reason-error" role="alert" className="mt-1 text-xs text-red-600">
+                {fieldErrors.reason}
+              </p>
+            )}
           </div>
           <div>
             <label htmlFor="sr-notes" className="mb-1 block text-sm font-medium text-slate-700">
@@ -160,8 +188,15 @@ export default function SecondRoundPanel({ data, canRequest, onRequest, audience
               className={inputClass}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
+              aria-invalid={fieldErrors.notes ? true : undefined}
+              aria-describedby={fieldErrors.notes ? 'sr-notes-error' : undefined}
               placeholder="e.g. Ask more about SQL and team handling"
             />
+            {fieldErrors.notes && (
+              <p id="sr-notes-error" role="alert" className="mt-1 text-xs text-red-600">
+                {fieldErrors.notes}
+              </p>
+            )}
           </div>
           <p className="text-xs text-slate-500">The candidate gets a new AI interview link by email right away. Round 1 and its report are kept.</p>
           {error && <p className="text-sm text-red-600">{error}</p>}

@@ -8,6 +8,7 @@ import { COMPANY_SIDE_ROLES } from '../../../shared/constants/roles.js';
 import { PERMISSIONS } from '../../../shared/constants/permissions.js';
 import { cvPoolApplySchema } from '../../../shared/schemas/public.schema.js';
 import * as service from './cvPool.service.js';
+import { cvPoolQuerySchema } from '../../../shared/schemas/query.schema.js';
 
 // Build plan P4 — owners and recruiters with REVIEW_CANDIDATES.
 const router = Router();
@@ -16,6 +17,7 @@ router.use(authenticate, authorize(...COMPANY_SIDE_ROLES), requirePermission(PER
 
 router.get(
   '/',
+  validate(cvPoolQuerySchema, 'query'),
   asyncHandler(async (req, res) => {
     ok(res, { submissions: await service.listPool(req.user.id, { status: req.query.status }) });
   })

@@ -5,13 +5,14 @@ import AuthShell from './AuthShell.jsx';
 import { api } from '../../services/api.js';
 import FormField, { inputClass } from '../../components/ui/FormField.jsx';
 import Button from '../../components/ui/Button.jsx';
-
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import { forgotPasswordSchema } from '../../../shared/schemas/auth.schema.js';
+import { checkForm } from '../../../shared/schemas/common.js';
 
 // Forgot password — emails a one-time reset link (1 hour). The answer is the
 // same whether or not the account exists.
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -19,13 +20,16 @@ export default function ForgotPasswordPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!EMAIL_REGEX.test(email.trim())) return setError('Please enter a valid email address');
+    const { data, errors } = checkForm(forgotPasswordSchema, { email });
+    setFieldErrors(errors);
+    if (!data) return setError('Please fix the highlighted fields');
     setLoading(true);
     try {
-      await api.post('/auth/forgot-password', { email: email.trim() });
+      await api.post('/auth/forgot-password', data);
       setSent(true);
     } catch (err) {
-      setError(err.message);
+      setFieldErrors(err.fields || {});
+      setError(Object.keys(err.fields || {}).length ? 'Please fix the highlighted fields' : err.message);
     } finally {
       setLoading(false);
     }
@@ -48,11 +52,12 @@ export default function ForgotPasswordPage() {
   return (
     <AuthShell title="Forgot your password?" subtitle="Enter your email and we'll send you a link to reset it.">
       <form onSubmit={handleSubmit} noValidate>
-        <FormField label="Email">
+        <FormField label="Email" error={fieldErrors.email}>
           <input
             type="email"
             inputMode="email"
             autoComplete="email"
+            maxLength={254}
             autoFocus
             className={`${inputClass} min-h-[44px]`}
             value={email}

@@ -1,14 +1,16 @@
 // Thrown from controllers/services and caught by the centralized error
 // handler middleware (Section 23) so route files never format error bodies.
 export class ApiError extends Error {
-  constructor(status, code, message) {
+  constructor(status, code, message, fields) {
     super(message);
     this.status = status;
     this.code = code;
+    // { field: message } for form validation errors.
+    this.fields = fields;
   }
 
-  static badRequest(message, code = 'BAD_REQUEST') {
-    return new ApiError(400, code, message);
+  static badRequest(message, code = 'BAD_REQUEST', fields) {
+    return new ApiError(400, code, message, fields);
   }
 
   static unauthorized(message = 'Unauthorized', code = 'UNAUTHORIZED') {

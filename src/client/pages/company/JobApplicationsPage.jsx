@@ -17,6 +17,19 @@ import FinalScoreSettingsCard from './FinalScoreSettingsCard.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import { inputClass } from '../../components/ui/FormField.jsx';
 import { getApplicationActionState } from '../../utils/applicationActions.js';
+import { updateJobSchema } from '../../../shared/schemas/job.schema.js';
+import { bulkUpdateApplicationStatusSchema } from '../../../shared/schemas/application.schema.js';
+import { checkForm } from '../../../shared/schemas/common.js';
+
+// "3 shortlisted, 2 skipped (…)" from the bulk endpoint's { updatedCount, skippedCount }.
+function bulkResultMessage(result, status) {
+  const verb = status === 'SHORTLISTED' ? 'shortlisted' : 'rejected';
+  const updated = result?.updatedCount ?? 0;
+  const skipped = result?.skippedCount ?? 0;
+  let msg = `${updated} ${verb}`;
+  if (skipped > 0) msg += `, ${skipped} skipped (already ${verb}, or already in interview or later)`;
+  return msg;
+}
 
 const SCORE_PRESETS = [
   { key: 'all', label: 'All' },
@@ -151,6 +164,8 @@ export default function JobApplicationsPage() {
   const [settings, setSettings] = useState(null);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const [settingsErrors, setSettingsErrors] = useState({});
+  const [bulkMessage, setBulkMessage] = useState('');
 
   const load = () => {
     setError('');
@@ -251,10 +266,14 @@ export default function JobApplicationsPage() {
 
   const handleShortlistAllScreened = async () => {
     if (screenedNotShortlistedIds.length === 0) return;
-    setBulkLoading(true);
     setError('');
+    setBulkMessage('');
+    const { data, errors } = checkForm(bulkUpdateApplicationStatusSchema, { applicationIds: screenedNotShortlistedIds, status: 'SHORTLISTED' });
+    if (!data) return setError(Object.values(errors)[0]);
+    setBulkLoading(true);
     try {
-      await applicationsApi.bulkUpdateStatus(jobId, screenedNotShortlistedIds, 'SHORTLISTED');
+      const result = await applicationsApi.bulkUpdateStatus(jobId, data.applicationIds, data.status);
+      setBulkMessage(bulkResultMessage(result, data.status));
       load();
     } catch (err) {
       setError(err.message);
@@ -280,20 +299,26 @@ export default function JobApplicationsPage() {
   };
 
   const handleSaveSettings = async () => {
-    setSettingsSaving(true);
     setSettingsSaved(false);
     setError('');
+    const { data, errors } = checkForm(updateJobSchema, {
+      minAcceptableScore: settings.minAcceptableScore === '' ? NaN : Number(settings.minAcceptableScore),
+      autoRejectBelowMinScore: settings.autoRejectBelowMinScore,
+      // Build plan P4
+      autoAdvanceOnMatch: settings.autoAdvanceOnMatch,
+    });
+    if (errors.minAcceptableScore && settings.minAcceptableScore === '') errors.minAcceptableScore = 'Enter a score between 0 and 100';
+    setSettingsErrors(errors);
+    if (!data) return;
+    setSettingsSaving(true);
     try {
-      const { job: updated } = await jobsApi.update(jobId, {
-        minAcceptableScore: Number(settings.minAcceptableScore),
-        autoRejectBelowMinScore: settings.autoRejectBelowMinScore,
-        // Build plan P4
-        autoAdvanceOnMatch: settings.autoAdvanceOnMatch,
-      });
+      const { job: updated } = await jobsApi.update(jobId, data);
       setJob(updated);
       setSettingsSaved(true);
     } catch (err) {
-      setError(err.message);
+      const fields = err.fields || {};
+      setSettingsErrors(fields);
+      if (!Object.keys(fields).length) setError(err.message);
     } finally {
       setSettingsSaving(false);
     }
@@ -319,13 +344,21 @@ export default function JobApplicationsPage() {
   };
 
   const runBulkAction = async () => {
-    setBulkLoading(true);
     setError('');
-    try {
-      await applicationsApi.bulkUpdateStatus(jobId, Array.from(selected), confirmBulk);
+    setBulkMessage('');
+    const { data, errors } = checkForm(bulkUpdateApplicationStatusSchema, { applicationIds: Array.from(selected), status: confirmBulk });
+    if (!data) {
       setConfirmBulk(null);
+      return setError(Object.values(errors)[0]);
+    }
+    setBulkLoading(true);
+    try {
+      const result = await applicationsApi.bulkUpdateStatus(jobId, data.applicationIds, data.status);
+      setConfirmBulk(null);
+      setBulkMessage(bulkResultMessage(result, data.status));
       load();
     } catch (err) {
+      setConfirmBulk(null);
       setError(err.message);
     } finally {
       setBulkLoading(false);
@@ -382,6 +415,11 @@ export default function JobApplicationsPage() {
       </div>
 
       {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+      {bulkMessage && (
+        <p role="status" className="mb-4 text-sm text-emerald-700">
+          {bulkMessage}
+        </p>
+      )}
 
       {/* Job-level screening decision settings */}
       {canReview && (
@@ -389,15 +427,23 @@ export default function JobApplicationsPage() {
         <h3 className="mb-3 font-semibold text-slate-900">Screening settings</h3>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-6">
           <div className="w-full sm:w-48">
-            <label className="mb-1 block text-sm font-medium text-slate-700">Minimum acceptable score</label>
+            <label htmlFor="minAcceptableScore" className="mb-1 block text-sm font-medium text-slate-700">Minimum acceptable score</label>
             <input
+              id="minAcceptableScore"
               type="number"
               min={0}
               max={100}
-              className={inputClass}
+              aria-invalid={settingsErrors.minAcceptableScore ? true : undefined}
+              aria-describedby={settingsErrors.minAcceptableScore ? 'minAcceptableScore-error' : undefined}
+              className={`${inputClass} min-h-[44px]`}
               value={settings.minAcceptableScore}
               onChange={(e) => setSettings({ ...settings, minAcceptableScore: e.target.value })}
             />
+            {settingsErrors.minAcceptableScore && (
+              <p id="minAcceptableScore-error" role="alert" className="mt-1 text-xs text-red-600">
+                {settingsErrors.minAcceptableScore}
+              </p>
+            )}
           </div>
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input

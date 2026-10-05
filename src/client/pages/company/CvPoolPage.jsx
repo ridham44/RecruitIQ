@@ -11,6 +11,8 @@ import ErrorState from '../../components/ui/ErrorState.jsx';
 import EmptyState from '../../components/ui/EmptyState.jsx';
 import StatusBadge from '../../components/ui/StatusBadge.jsx';
 import FormField, { inputClass } from '../../components/ui/FormField.jsx';
+import { checkForm } from '../../../shared/schemas/common.js';
+import { cvPoolApplySchema } from '../../../shared/schemas/public.schema.js';
 
 const formatDate = (d) => new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -53,6 +55,7 @@ export default function CvPoolPage() {
   const [jobId, setJobId] = useState('');
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState('');
+  const [jobError, setJobError] = useState('');
 
   const load = () => {
     setError('');
@@ -71,15 +74,18 @@ export default function CvPoolPage() {
   }, []);
 
   const place = async () => {
-    if (!jobId) return setModalError('Choose a job');
-    setSaving(true);
     setModalError('');
+    const { data, errors } = checkForm(cvPoolApplySchema, { jobId });
+    setJobError(errors.jobId ? 'Choose a job' : '');
+    if (!data) return;
+    setSaving(true);
     try {
-      const { submission } = await careersAdminApi.placeFromPool(placing.id, jobId);
+      const { submission } = await careersAdminApi.placeFromPool(placing.id, data.jobId);
       setItems((list) => list.map((x) => (x.id === submission.id ? submission : x)));
       setPlacing(null);
     } catch (err) {
-      setModalError(err.message);
+      if (err.fields?.jobId) setJobError(err.fields.jobId);
+      else setModalError(err.message);
     } finally {
       setSaving(false);
     }
@@ -131,7 +137,7 @@ export default function CvPoolPage() {
                   <TopMatches s={s} />
                   <p className="text-xs text-slate-400">Received {formatDate(s.createdAt)}</p>
                 </div>
-                <Button variant="secondary" className="mt-3 w-full" onClick={() => { setPlacing(s); setJobId(''); setModalError(''); }}>
+                <Button variant="secondary" className="mt-3 w-full" onClick={() => { setPlacing(s); setJobId(''); setModalError(''); setJobError(''); }}>
                   <Plus className="h-4 w-4" /> Add to a job
                 </Button>
               </Card>
@@ -172,7 +178,7 @@ export default function CvPoolPage() {
                     </td>
                     <td className="px-5 py-3 text-slate-500">{formatDate(s.createdAt)}</td>
                     <td className="px-5 py-3 text-right">
-                      <Button variant="secondary" onClick={() => { setPlacing(s); setJobId(''); setModalError(''); }}>
+                      <Button variant="secondary" onClick={() => { setPlacing(s); setJobId(''); setModalError(''); setJobError(''); }}>
                         <Plus className="h-4 w-4" /> Add to job
                       </Button>
                     </td>
@@ -207,8 +213,15 @@ export default function CvPoolPage() {
             </Link>
           </p>
         ) : (
-          <FormField label="Job">
-            <select className={`${inputClass} min-h-[44px]`} value={jobId} onChange={(e) => setJobId(e.target.value)}>
+          <FormField label="Job" error={jobError}>
+            <select
+              className={`${inputClass} min-h-[44px]`}
+              value={jobId}
+              onChange={(e) => {
+                setJobId(e.target.value);
+                setJobError('');
+              }}
+            >
               <option value="">Choose a job…</option>
               {jobs.map((j) => (
                 <option key={j.id} value={j.id}>

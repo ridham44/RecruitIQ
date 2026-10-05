@@ -81,7 +81,7 @@ async function main() {
 
   step('2. Candidate interview (slot flow)');
   const email = `p6-cand-${ts}@test.com`;
-  const cand = await req('/auth/register/candidate', { method: 'POST', body: { email, password: PASSWORD, fullName: 'P6 Candidate' } });
+  const cand = await req('/auth/register/candidate', { method: 'POST', body: { email, password: PASSWORD, fullName: 'Guidance Test Candidate' } });
   const form = new FormData();
   form.append('resume', new Blob([buildDocx(reactResumeLines('P6 Candidate', email, '+919812300006'))], { type: DOCX_MIME }), 'cv.docx');
   const { resume } = await req('/resumes', { method: 'POST', token: cand.token, form });

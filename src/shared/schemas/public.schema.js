@@ -1,9 +1,20 @@
 import { z } from 'zod';
-import { emailSchema } from './auth.schema.js';
+import { emailSchema, personNameSchema, idSchema, phoneProblem } from './common.js';
 
 // Build plan P4 — public careers-portal requests (no login).
 
-const phoneInput = z.string().trim().min(6, 'Enter your phone number').max(24);
+// Same shape rules as every other phone field; the server then normalizes it
+// to E.164 for the OTP (src/server/utils/phone.js).
+const phoneInput = z
+  .string({ required_error: 'Enter your phone number' })
+  .trim()
+  .min(1, 'Enter your phone number')
+  .max(24, 'Phone number is too long')
+  .superRefine((v, ctx) => {
+    const problem = phoneProblem(v);
+    if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem });
+  });
+const tokenSchema = z.string().trim().min(1).max(512);
 
 export const otpSendSchema = z.object({
   phone: phoneInput,
@@ -16,24 +27,24 @@ export const otpVerifySchema = z.object({
 
 export const guestApplySchema = z.object({
   slug: z.string().trim().min(1).max(60),
-  uploadId: z.string().trim().min(1),
+  uploadId: idSchema('uploadId'),
   // Omitted = CV-only submission (§6B): the AI finds the best job.
-  jobId: z.string().trim().min(1).optional(),
-  fullName: z.string().trim().min(1, 'Full name is required').max(120),
+  jobId: idSchema('jobId').optional(),
+  fullName: personNameSchema('Full name'),
   email: emailSchema,
   phone: phoneInput,
-  otpToken: z.string().trim().min(1, 'Please verify your phone number'),
+  otpToken: z.string().trim().min(1, 'Please verify your phone number').max(512),
   consent: z.literal(true, { errorMap: () => ({ message: 'Please accept how your CV will be used' }) }),
 });
 
 export const trackTokenSchema = z.object({
-  token: z.string().trim().min(1),
+  token: tokenSchema,
 });
 
 // Book a slot from the status link (no login).
 export const trackBookingSchema = z.object({
-  token: z.string().trim().min(1),
-  slotId: z.string().trim().min(1),
+  token: tokenSchema,
+  slotId: idSchema('slotId'),
 });
 
 export const careersSlugSchema = z.object({
@@ -47,5 +58,5 @@ export const careersSlugSchema = z.object({
 });
 
 export const cvPoolApplySchema = z.object({
-  jobId: z.string().trim().min(1),
+  jobId: idSchema('jobId'),
 });

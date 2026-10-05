@@ -52,7 +52,7 @@ async function main() {
   const inv = await req('/recruiters', {
     method: 'POST',
     token: a.token,
-    body: { email: `p3-rec-${ts}@test.com`, fullName: 'P3 Recruiter', permissions: ['REVIEW_CANDIDATES'] },
+    body: { email: `p3-rec-${ts}@test.com`, fullName: 'Client Test Recruiter', permissions: ['REVIEW_CANDIDATES'] },
   });
   const rId = inv.recruiter.id;
   const tR = (await req('/auth/set-password', { method: 'POST', body: { token: new URL(inv.setupLink).searchParams.get('token'), password: PASSWORD } })).token;

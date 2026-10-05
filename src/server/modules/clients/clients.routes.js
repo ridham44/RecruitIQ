@@ -17,6 +17,7 @@ import {
   updateHiringPersonSchema,
   clientRecruitersSchema,
 } from '../../../shared/schemas/client.schema.js';
+import { clientsQuerySchema } from '../../../shared/schemas/query.schema.js';
 
 // Build plan P3 — client companies → departments → HR / hiring persons.
 // Reading is open to the company side (a recruiter without MANAGE_CLIENTS
@@ -27,7 +28,7 @@ const manageClients = requirePermission(PERMISSIONS.MANAGE_CLIENTS);
 
 router.use(authenticate, authorize(...COMPANY_SIDE_ROLES));
 
-router.get('/', controller.list);
+router.get('/', validate(clientsQuerySchema, 'query'), controller.list);
 router.post('/', manageClients, validate(createClientSchema), controller.create);
 
 router.patch('/departments/:departmentId', manageClients, validate(departmentSchema), controller.updateDepartment);

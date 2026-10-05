@@ -7,8 +7,8 @@ import FormField, { inputClass } from '../../components/ui/FormField.jsx';
 import PasswordInput from '../../components/ui/PasswordInput.jsx';
 import Button from '../../components/ui/Button.jsx';
 import { homePathForRole } from '../../utils/homePath.js';
-
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import { loginSchema } from '../../../shared/schemas/auth.schema.js';
+import { checkForm } from '../../../shared/schemas/common.js';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -17,41 +17,26 @@ export default function LoginPage() {
   // "Start here" demo page links to /auth/login?email=… to pre-fill the email.
   const [searchParams] = useSearchParams();
   const [form, setForm] = useState({ email: searchParams.get('email') || '', password: '' });
-  const [touched, setTouched] = useState({ email: false, password: false });
+  const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const trimmedEmail = form.email.trim();
-  const isEmailValid = EMAIL_REGEX.test(trimmedEmail);
-  const emailError = touched.email && trimmedEmail && !isEmailValid ? 'Please enter a valid email address' : '';
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setTouched({ email: true, password: true });
     setError('');
 
-    if (!trimmedEmail) {
-      setError('Please enter your email');
-      return;
-    }
-
-    if (!isEmailValid) {
-      setError('Please enter a valid email address');
-      return;
-    }
-
-    if (!form.password) {
-      setError('Please enter your password');
-      return;
-    }
+    const { data, errors } = checkForm(loginSchema, form);
+    setFieldErrors(errors);
+    if (!data) return setError('Please fix the highlighted fields');
 
     setLoading(true);
     try {
-      const user = await login(trimmedEmail, form.password);
+      const user = await login(data.email, data.password);
       // navigate(user.role === 'COMPANY' ? '/company/dashboard' : '/candidate/dashboard');
       navigate(homePathForRole(user.role));
     } catch (err) {
-      setError(err.message);
+      setFieldErrors(err.fields || {});
+      setError(Object.keys(err.fields || {}).length ? 'Please fix the highlighted fields' : err.message);
     } finally {
       setLoading(false);
     }
@@ -60,23 +45,27 @@ export default function LoginPage() {
   return (
     <AuthShell title="Welcome back" subtitle="Log in to your RecruitIQ account">
       <form onSubmit={handleSubmit} noValidate>
-        <FormField label="Email" error={emailError}>
+        <FormField label="Email" error={fieldErrors.email}>
           <input
             type="email"
+            inputMode="email"
             required
-            className={inputClass}
+            className={`${inputClass} min-h-[44px]`}
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
-            onBlur={() => setTouched((prev) => ({ ...prev, email: true }))}
+            autoComplete="email"
+            maxLength={254}
             placeholder="you@example.com"
           />
         </FormField>
-        <FormField label="Password">
+        <FormField label="Password" error={fieldErrors.password}>
           <PasswordInput
             required
+            className="min-h-[44px]"
+            autoComplete="current-password"
+            maxLength={200}
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
-            onBlur={() => setTouched((prev) => ({ ...prev, password: true }))}
             placeholder="Enter your password"
           />
         </FormField>

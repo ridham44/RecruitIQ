@@ -9,6 +9,8 @@ import PasswordInput from '../../components/ui/PasswordInput.jsx';
 import Button from '../../components/ui/Button.jsx';
 import LoadingState from '../../components/ui/LoadingState.jsx';
 import { homePathForRole } from '../../utils/homePath.js';
+import { setPasswordSchema } from '../../../shared/schemas/auth.schema.js';
+import { checkForm } from '../../../shared/schemas/common.js';
 
 function Rule({ ok, children }) {
   return (
@@ -31,6 +33,7 @@ export default function SetPasswordPage() {
   const [linkError, setLinkError] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -53,15 +56,19 @@ export default function SetPasswordPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!hasMinLength || !hasLetter || !hasNumber) return setError('Please meet all the password requirements');
-    if (!matches) return setError("Passwords don't match");
+    const { data, errors } = checkForm(setPasswordSchema, { token, password });
+    if (!confirm) errors.confirm = 'Please confirm your password';
+    else if (password !== confirm) errors.confirm = "Passwords don't match";
+    setFieldErrors(errors);
+    if (!data || errors.confirm) return setError('Please fix the highlighted fields');
 
     setSaving(true);
     try {
-      const user = await setPasswordWithToken(token, password);
+      const user = await setPasswordWithToken(data.token, data.password);
       navigate(homePathForRole(user.role), { replace: true });
     } catch (err) {
-      setError(err.message);
+      setFieldErrors(err.fields || {});
+      setError(Object.keys(err.fields || {}).length ? 'Please fix the highlighted fields' : err.message);
     } finally {
       setSaving(false);
     }
@@ -114,19 +121,23 @@ export default function SetPasswordPage() {
         <FormField label="Email">
           <p className="break-all rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{info.email}</p>
         </FormField>
-        <FormField label="New password">
+        <FormField label="New password" error={fieldErrors.password || fieldErrors.token}>
           <PasswordInput
             required
             minLength={8}
+            maxLength={72}
             autoComplete="new-password"
+            className="min-h-[44px]"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="At least 8 characters"
           />
         </FormField>
-        <FormField label="Confirm password" error={confirm && !matches ? "Passwords don't match" : ''}>
+        <FormField label="Confirm password" error={fieldErrors.confirm || (confirm && !matches ? "Passwords don't match" : '')}>
           <PasswordInput
             required
+            maxLength={72}
+            className="min-h-[44px]"
             autoComplete="new-password"
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}

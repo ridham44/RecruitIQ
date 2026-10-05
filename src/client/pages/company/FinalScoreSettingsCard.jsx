@@ -5,6 +5,8 @@ import { submissionsApi } from '../../services/submissions.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import { inputClass } from '../../components/ui/FormField.jsx';
+import { updateJobSchema } from '../../../shared/schemas/job.schema.js';
+import { checkForm } from '../../../shared/schemas/common.js';
 
 // Build plan P7 (§12) — per-job final score: CV match × weight + interview ×
 // weight, and an optional final threshold that marks candidates Qualified /
@@ -19,24 +21,31 @@ export default function FinalScoreSettingsCard({ job, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const save = async () => {
-    setSaving(true);
     setMessage('');
     setError('');
+    const cv = Number(form.cvPercent) / 100;
+    const { data, errors } = checkForm(updateJobSchema, {
+      finalThreshold: form.enabled ? (form.finalThreshold === '' ? NaN : Number(form.finalThreshold)) : null,
+      cvWeight: Math.round(cv * 100) / 100,
+      interviewWeight: Math.round((1 - cv) * 100) / 100,
+      autoSubmitToClient: form.enabled && form.autoSubmitToClient,
+    });
+    if (errors.finalThreshold && form.finalThreshold === '') errors.finalThreshold = 'Enter a threshold between 0 and 100';
+    setFieldErrors(errors);
+    if (!data) return setError('Please fix the highlighted fields');
+    setSaving(true);
     try {
-      const cv = Number(form.cvPercent) / 100;
-      const { job: updated } = await jobsApi.update(job.id, {
-        finalThreshold: form.enabled ? Number(form.finalThreshold) : null,
-        cvWeight: Math.round(cv * 100) / 100,
-        interviewWeight: Math.round((1 - cv) * 100) / 100,
-        autoSubmitToClient: form.enabled && form.autoSubmitToClient,
-      });
+      const { job: updated } = await jobsApi.update(job.id, data);
       const { rescored } = await submissionsApi.recomputeJob(job.id);
       setMessage(`Saved. Re-scored ${rescored} interviewed candidate${rescored === 1 ? '' : 's'}.`);
       onSaved?.(updated);
     } catch (err) {
-      setError(err.message);
+      const fields = err.fields || {};
+      setFieldErrors(fields);
+      setError(Object.keys(fields).length ? 'Please fix the highlighted fields' : err.message);
     } finally {
       setSaving(false);
     }
@@ -61,7 +70,11 @@ export default function FinalScoreSettingsCard({ job, onSaved }) {
         value={form.cvPercent}
         onChange={(e) => setForm({ ...form, cvPercent: Number(e.target.value) })}
         className="h-11 w-full accent-brand-600 sm:max-w-md"
+        aria-invalid={fieldErrors.cvWeight || fieldErrors.interviewWeight ? true : undefined}
       />
+      {(fieldErrors.cvWeight || fieldErrors.interviewWeight) && (
+        <p role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.cvWeight || fieldErrors.interviewWeight}</p>
+      )}
 
       <label className="mt-3 flex min-h-[44px] items-center gap-2 text-sm text-slate-700">
         <input type="checkbox" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} />
@@ -75,12 +88,17 @@ export default function FinalScoreSettingsCard({ job, onSaved }) {
               type="number"
               min={0}
               max={100}
+              aria-label="Final threshold"
+              aria-invalid={fieldErrors.finalThreshold ? true : undefined}
               className={`${inputClass} min-h-[44px] w-24`}
               value={form.finalThreshold}
               onChange={(e) => setForm({ ...form, finalThreshold: e.target.value })}
             />
             <span className="text-sm text-slate-500">/ 100</span>
           </div>
+          {fieldErrors.finalThreshold && (
+            <p role="alert" className="text-xs text-red-600 sm:order-last">{fieldErrors.finalThreshold}</p>
+          )}
           <label className="flex min-h-[44px] items-center gap-2 text-sm text-slate-700">
             <input
               type="checkbox"

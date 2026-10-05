@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { z } from 'zod';
 import { authenticate, authorize } from '../../middleware/auth.js';
 import { validate } from '../../middleware/validate.js';
 import { requirePermission } from '../../middleware/permission.js';
@@ -8,21 +7,13 @@ import { ok, created } from '../../utils/apiResponse.js';
 import { COMPANY_SIDE_ROLES } from '../../../shared/constants/roles.js';
 import { PERMISSIONS } from '../../../shared/constants/permissions.js';
 import * as service from './submissions.service.js';
+import { contentDisposition } from '../../utils/contentDisposition.js';
+import { submitCandidateSchema } from '../../../shared/schemas/submission.schema.js';
 
 // Build plan P7 — company side. Viewing needs REVIEW_CANDIDATES; sending
 // needs SUBMIT_CANDIDATES (owners always pass). Job access is checked per
 // application by getOwnedJob.
 const router = Router();
-
-const submitSchema = z
-  .object({
-    applicationId: z.string().trim().min(1),
-    hiringPersonId: z.string().trim().min(1).optional(),
-    recipientEmail: z.string().trim().email('Enter a valid email').optional(),
-    recipientName: z.string().trim().max(120).optional(),
-    note: z.string().trim().max(1000).optional(),
-  })
-  .refine((d) => !(d.hiringPersonId && d.recipientEmail), { message: 'Choose a Company HR or enter an email, not both' });
 
 router.use(authenticate, authorize(...COMPANY_SIDE_ROLES));
 
@@ -35,7 +26,7 @@ router.get(
 router.post(
   '/',
   requirePermission(PERMISSIONS.SUBMIT_CANDIDATES),
-  validate(submitSchema),
+  validate(submitCandidateSchema),
   asyncHandler(async (req, res) => created(res, await service.submitCandidate(req.user.id, req.body)))
 );
 
@@ -66,7 +57,7 @@ publicSubmissionRoutes.get(
   asyncHandler(async (req, res) => {
     const { buffer, fileName, fileType } = await service.cvByToken(req.params.token);
     res.setHeader('Content-Type', fileType || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `${req.query.download ? 'attachment' : 'inline'}; filename="${String(fileName).replace(/"/g, '')}"`);
+    res.setHeader('Content-Disposition', contentDisposition(fileName, req.query.download));
     res.setHeader('Cache-Control', 'private, no-store');
     res.send(buffer);
   })

@@ -9,6 +9,15 @@ import TagInput from '../../components/ui/TagInput.jsx';
 import LoadingState from '../../components/ui/LoadingState.jsx';
 import ErrorState from '../../components/ui/ErrorState.jsx';
 import ProfileSuggestionsPanel from '../../components/ui/ProfileSuggestionsPanel.jsx';
+import { updateCandidateSchema } from '../../../shared/schemas/candidate.schema.js';
+import { educationSchema, updateEducationSchema } from '../../../shared/schemas/education.schema.js';
+import { checkForm, CURRENT_YEAR } from '../../../shared/schemas/common.js';
+
+// Tag-list errors come back as "skills.3" — show the first one under the field.
+const listError = (errors, key) => errors[key] || Object.entries(errors).find(([k]) => k.startsWith(`${key}.`))?.[1];
+
+// Number inputs give strings; the API takes whole years or null.
+const toYear = (v) => (v === '' || v == null ? null : Number(v));
 
 const GENDER_OPTIONS = [
   { value: '', label: 'Prefer not to say' },
@@ -47,6 +56,7 @@ function emptyEducation() {
     saving: false,
     saved: false,
     error: '',
+    errors: {},        // { field: message } for this entry only
     collapsed: false,
   };
 }
@@ -65,6 +75,7 @@ function fromDbEducation(edu) {
     saving: false,
     saved: false,
     error: '',
+    errors: {},
     collapsed: false,
   };
 }
@@ -72,6 +83,8 @@ function fromDbEducation(edu) {
 /** Single education entry card */
 function EducationCard({ entry, onChange, onSave, onDelete }) {
   const isNew = !entry.id;
+  const errors = entry.errors || {};
+  const cls = `${inputClass} min-h-[44px]`;
 
   const set = (field, value) => onChange({ ...entry, [field]: value });
 
@@ -107,65 +120,74 @@ function EducationCard({ entry, onChange, onSave, onDelete }) {
       {!entry.collapsed && (
         <div className="border-t border-slate-100 px-5 pb-5 pt-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="Degree / Qualification">
+            {/* Single child so FormField can mark it invalid; the datalist sits beside it. */}
+            <FormField label="Degree / Qualification *" error={errors.degree}>
               <input
-                className={inputClass}
+                className={cls}
                 list={`degree-list-${entry._localId}`}
                 placeholder="e.g. B.Tech, MBA, Diploma"
+                maxLength={200}
                 value={entry.degree}
                 onChange={(e) => set('degree', e.target.value)}
               />
-              <datalist id={`degree-list-${entry._localId}`}>
-                {DEGREE_PRESETS.map((d) => <option key={d} value={d} />)}
-              </datalist>
             </FormField>
-            <FormField label="Field of Study / Specialization">
+            <datalist id={`degree-list-${entry._localId}`}>
+              {DEGREE_PRESETS.map((d) => <option key={d} value={d} />)}
+            </datalist>
+            <FormField label="Field of Study / Specialization" error={errors.fieldOfStudy}>
               <input
-                className={inputClass}
+                className={cls}
                 placeholder="e.g. Computer Science"
+                maxLength={200}
                 value={entry.fieldOfStudy}
                 onChange={(e) => set('fieldOfStudy', e.target.value)}
               />
             </FormField>
           </div>
 
-          <FormField label="University / Institution">
+          <FormField label="University / Institution" error={errors.institution}>
             <input
-              className={inputClass}
+              className={cls}
               placeholder="e.g. LJ University"
+              maxLength={300}
               value={entry.institution}
               onChange={(e) => set('institution', e.target.value)}
             />
           </FormField>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <FormField label="Start Year">
+            <FormField label="Start Year" error={errors.startYear}>
               <input
                 type="number"
-                min={1900}
-                max={2100}
-                className={inputClass}
+                inputMode="numeric"
+                min={1950}
+                max={CURRENT_YEAR}
+                step={1}
+                className={cls}
                 placeholder="e.g. 2020"
                 value={entry.startYear}
                 onChange={(e) => set('startYear', e.target.value)}
               />
             </FormField>
-            <FormField label="End Year">
+            <FormField label="End Year" error={errors.endYear}>
               <input
                 type="number"
-                min={1900}
-                max={2100}
-                className={`${inputClass} disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400`}
+                inputMode="numeric"
+                min={1950}
+                max={CURRENT_YEAR + 10}
+                step={1}
+                className={`${cls} disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400`}
                 placeholder={entry.isCurrentlyStudying ? 'Present' : 'e.g. 2024'}
                 value={entry.endYear}
                 disabled={entry.isCurrentlyStudying}
                 onChange={(e) => set('endYear', e.target.value)}
               />
             </FormField>
-            <FormField label="Grade / CGPA / %">
+            <FormField label="Grade / CGPA / %" error={errors.grade}>
               <input
-                className={inputClass}
+                className={cls}
                 placeholder="e.g. 7.42 CGPA"
+                maxLength={50}
                 value={entry.grade}
                 onChange={(e) => set('grade', e.target.value)}
               />
@@ -214,7 +236,7 @@ function EducationCard({ entry, onChange, onSave, onDelete }) {
               <button
                 type="button"
                 onClick={() => onDelete(entry)}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-red-500 hover:bg-red-50"
+                className="flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-red-500 hover:bg-red-50"
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 Delete
@@ -244,6 +266,7 @@ export default function ProfilePage() {
   const [form, setForm] = useState(null);
   const [educations, setEducations] = useState([]);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -266,20 +289,20 @@ export default function ProfilePage() {
   // ── Profile save ──────────────────────────────────────────────
   const handleSave = async (e) => {
     e.preventDefault();
-    setSaving(true);
     setSaved(false);
     setError('');
+    const { data, errors } = checkForm(updateCandidateSchema, { ...form, gender: form.gender || null });
+    setFieldErrors(errors);
+    if (!data) return setError('Please fix the highlighted fields');
+    setSaving(true);
     try {
-      const payload = {
-        ...form,
-        gender: form.gender || null,
-      };
-      const { candidate } = await candidateProfileApi.update(payload);
+      const { candidate } = await candidateProfileApi.update(data);
       setCandidate(candidate);
       setForm(emptyForm(candidate));
       setSaved(true);
     } catch (err) {
-      setError(err.message);
+      setFieldErrors(err.fields || {});
+      setError(Object.keys(err.fields || {}).length ? 'Please fix the highlighted fields' : err.message);
     } finally {
       setSaving(false);
     }
@@ -321,18 +344,23 @@ export default function ProfilePage() {
   };
 
   const handleSaveEducation = async (entry) => {
-    updateEntry({ ...entry, saving: true, saved: false, error: '' });
+    // Same shape the server sees: years as numbers or null, blanks as null.
+    const values = {
+      degree: entry.degree,
+      fieldOfStudy: entry.fieldOfStudy || null,
+      institution: entry.institution || null,
+      startYear: toYear(entry.startYear),
+      endYear: entry.isCurrentlyStudying ? null : toYear(entry.endYear),
+      isCurrentlyStudying: entry.isCurrentlyStudying,
+      grade: entry.grade || null,
+    };
+    const { data: payload, errors } = checkForm(entry.id ? updateEducationSchema : educationSchema, values);
+    if (!payload) {
+      updateEntry({ ...entry, saved: false, errors, error: errors._form || 'Please fix the highlighted fields' });
+      return;
+    }
+    updateEntry({ ...entry, saving: true, saved: false, error: '', errors: {} });
     try {
-      const payload = {
-        degree: entry.degree || undefined,
-        fieldOfStudy: entry.fieldOfStudy || null,
-        institution: entry.institution || null,
-        startYear: entry.startYear !== '' ? Number(entry.startYear) : null,
-        endYear: entry.isCurrentlyStudying || entry.endYear === '' ? null : Number(entry.endYear),
-        isCurrentlyStudying: entry.isCurrentlyStudying,
-        grade: entry.grade || null,
-      };
-
       if (!entry.id) {
         // Create new
         const { education } = await educationApi.add(payload);
@@ -355,7 +383,13 @@ export default function ProfilePage() {
         );
       }
     } catch (err) {
-      updateEntry({ ...entry, saving: false, error: err.message });
+      const fields = err.fields || {};
+      updateEntry({
+        ...entry,
+        saving: false,
+        errors: fields,
+        error: Object.keys(fields).length ? 'Please fix the highlighted fields' : err.message,
+      });
     }
   };
 
@@ -392,34 +426,56 @@ export default function ProfilePage() {
           <ProfileSuggestionsPanel suggestions={suggestions} onApply={applySuggestions} onDismiss={() => setSuggestions(null)} />
         )}
 
-        <form onSubmit={handleSave}>
-          <FormField label="Full name">
-            <input required className={inputClass} value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
-          </FormField>
-          <FormField label="Headline">
+        <form onSubmit={handleSave} noValidate>
+          <FormField label="Full name *" error={fieldErrors.fullName}>
             <input
-              className={inputClass}
+              required
+              className={`${inputClass} min-h-[44px]`}
+              autoComplete="name"
+              maxLength={120}
+              value={form.fullName}
+              onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+            />
+          </FormField>
+          <FormField label="Headline" error={fieldErrors.headline}>
+            <input
+              className={`${inputClass} min-h-[44px]`}
               placeholder="e.g. Frontend Developer"
+              maxLength={200}
               value={form.headline}
               onChange={(e) => setForm({ ...form, headline: e.target.value })}
             />
           </FormField>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="Phone">
-              <input className={inputClass} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+            <FormField label="Phone" error={fieldErrors.phone} hint="Include the country code, e.g. +91 98765 43210">
+              <input
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                maxLength={24}
+                placeholder="+91 98765 43210"
+                className={`${inputClass} min-h-[44px]`}
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              />
             </FormField>
-            <FormField label="Location">
-              <input className={inputClass} value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+            <FormField label="Location" error={fieldErrors.location}>
+              <input
+                className={`${inputClass} min-h-[44px]`}
+                maxLength={200}
+                value={form.location}
+                onChange={(e) => setForm({ ...form, location: e.target.value })}
+              />
             </FormField>
           </div>
-          <FormField label="Gender">
-            <select className={inputClass} value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
+          <FormField label="Gender" error={fieldErrors.gender}>
+            <select className={`${inputClass} min-h-[44px]`} value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
               {GENDER_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
           </FormField>
-          <FormField label="Skills">
+          <FormField label="Skills" error={listError(fieldErrors, 'skills')}>
             <TagInput value={form.skills} onChange={(v) => setForm({ ...form, skills: v })} placeholder="Type a skill and press Enter" />
           </FormField>
 

@@ -11,7 +11,7 @@ import ErrorState from '../../components/ui/ErrorState.jsx';
 import EmptyState from '../../components/ui/EmptyState.jsx';
 import StatusBadge from '../../components/ui/StatusBadge.jsx';
 import { inputClass } from '../../components/ui/FormField.jsx';
-import ClientForm, { EMPTY_CLIENT, validateClientForm, trimClientForm } from './ClientForm.jsx';
+import ClientForm, { EMPTY_CLIENT, validateClientForm } from './ClientForm.jsx';
 
 // Build plan P3 (§4) — the recruitment company's clients.
 export default function ClientsPage() {
@@ -25,6 +25,7 @@ export default function ClientsPage() {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState(EMPTY_CLIENT);
   const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
   const load = (params = { q, status }) => {
@@ -44,18 +45,22 @@ export default function ClientsPage() {
   const openAdd = () => {
     setForm(EMPTY_CLIENT);
     setFormError('');
+    setFieldErrors({});
     setAdding(true);
   };
 
   const save = async () => {
-    const msg = validateClientForm(form);
-    if (msg) return setFormError(msg);
+    const { data, errors } = validateClientForm(form);
+    setFieldErrors(errors);
+    if (!data) return setFormError('Please fix the highlighted fields');
+    setFormError('');
     setSaving(true);
     try {
-      const { client } = await clientsApi.create(trimClientForm(form));
+      const { client } = await clientsApi.create(data);
       navigate(`/company/clients/${client.id}`);
     } catch (err) {
-      setFormError(err.message);
+      setFieldErrors(err.fields || {});
+      setFormError(err.fields && Object.keys(err.fields).length ? 'Please fix the highlighted fields' : err.message);
     } finally {
       setSaving(false);
     }
@@ -189,7 +194,7 @@ export default function ClientsPage() {
           </div>
         }
       >
-        <ClientForm value={form} onChange={setForm} />
+        <ClientForm value={form} errors={fieldErrors} onChange={setForm} />
         {formError && <p className="text-sm text-red-600">{formError}</p>}
       </Modal>
     </div>

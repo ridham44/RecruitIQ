@@ -4,7 +4,7 @@ import { prisma, TX_OPTIONS } from '../../config/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ROLES } from '../../../shared/constants/roles.js';
 import { ASSIGNABLE_PERMISSIONS } from '../../../shared/constants/permissions.js';
-import { getCompanyContext } from '../companies/companyContext.js';
+import { getCompanyContext, canAccessJob } from '../companies/companyContext.js';
 import { issuePasswordToken, hasPendingInvite } from '../auth/passwordToken.service.js';
 import { sendAccountSetupEmail } from '../notifications/email.service.js';
 
@@ -134,6 +134,7 @@ export async function setRecruiterJobs(userId, memberId, jobIds) {
   const ctx = await getCompanyContext(userId);
   const member = await loadMember(ctx, memberId);
   if (member.role === 'OWNER') throw ApiError.badRequest('The agency owner already sees every job', 'OWNER_NOT_EDITABLE');
+  assertEditable(ctx, member);
   const unique = [...new Set(jobIds)];
   await assertJobsInCompany(ctx.companyId, unique);
   await prisma.$transaction([
@@ -157,15 +158,27 @@ export async function resendRecruiterInvite(userId, memberId) {
 
 // ─── Job-side view: who works this job ───
 
-async function loadCompanyJob(ctx, jobId) {
+async function loadCompanyJob(ctx, userId, jobId) {
   const job = await prisma.job.findUnique({ where: { id: jobId } });
   if (!job || job.companyId !== ctx.companyId) throw ApiError.notFound('Job not found');
+  if (!(await canAccessJob(ctx, userId, job))) {
+    throw ApiError.forbidden('You are not assigned to this job', 'JOB_NOT_ASSIGNED');
+  }
   return job;
+}
+
+// A recruiter managing a list can't add or remove themselves from it — that
+// would let them grant themselves access to jobs or companies.
+export function assertSelfUnchanged(ctx, currentMemberIds, nextMemberIds) {
+  if (ctx.isOwner || !ctx.memberId) return;
+  if (currentMemberIds.includes(ctx.memberId) !== nextMemberIds.includes(ctx.memberId)) {
+    throw ApiError.badRequest("You can't change your own assignment", 'CANNOT_CHANGE_SELF');
+  }
 }
 
 export async function listJobRecruiters(userId, jobId) {
   const ctx = await getCompanyContext(userId);
-  await loadCompanyJob(ctx, jobId);
+  await loadCompanyJob(ctx, userId, jobId);
   const rows = await prisma.jobRecruiter.findMany({
     where: { jobId },
     include: { member: { include: MEMBER_INCLUDE } },
@@ -176,8 +189,10 @@ export async function listJobRecruiters(userId, jobId) {
 
 export async function setJobRecruiters(userId, jobId, memberIds) {
   const ctx = await getCompanyContext(userId);
-  await loadCompanyJob(ctx, jobId);
+  await loadCompanyJob(ctx, userId, jobId);
   const unique = [...new Set(memberIds)];
+  const current = await prisma.jobRecruiter.findMany({ where: { jobId }, select: { memberId: true } });
+  assertSelfUnchanged(ctx, current.map((r) => r.memberId), unique);
   if (unique.length) {
     const count = await prisma.companyMember.count({
       where: { id: { in: unique }, companyId: ctx.companyId, role: 'RECRUITER' },

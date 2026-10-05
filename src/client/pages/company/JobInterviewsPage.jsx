@@ -14,6 +14,9 @@ import StatusBadge from '../../components/ui/StatusBadge.jsx';
 import InterviewFlowCard from './InterviewFlowCard.jsx';
 import TagInput from '../../components/ui/TagInput.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
+import { upsertInterviewConfigSchema } from '../../../shared/schemas/interview.schema.js';
+import { createSlotsSchema, generateSlotsSchema } from '../../../shared/schemas/scheduling.schema.js';
+import { checkForm } from '../../../shared/schemas/common.js';
 
 const GENERATE_DEFAULTS = { date: '', startTime: '', endTime: '', durationMinutes: 15, bufferMinutes: 0 };
 const VOICE_LABELS = { FEMALE: 'Female', MALE: 'Male', NEUTRAL: 'Neutral' };
@@ -26,7 +29,7 @@ const VOICE_LABELS = { FEMALE: 'Female', MALE: 'Male', NEUTRAL: 'Neutral' };
 // for the closing "any questions for us?" turn, so that's the most custom
 // questions that can ever all be asked. Enforced here (not just on save) so
 // the company sees the limit while typing, not after a rejected submit.
-function CustomQuestionList({ questions, onChange, maxQuestions }) {
+function CustomQuestionList({ questions, onChange, maxQuestions, error }) {
   const [draft, setDraft] = useState('');
   const atLimit = questions.length >= maxQuestions;
 
@@ -57,6 +60,9 @@ function CustomQuestionList({ questions, onChange, maxQuestions }) {
       <div className="flex gap-2">
         <input
           className={inputClass}
+          maxLength={500}
+          aria-invalid={error ? true : undefined}
+          aria-label="New custom question"
           placeholder={atLimit ? 'Maximum custom questions reached' : 'Type a question the AI must ask, then press Add'}
           value={draft}
           disabled={atLimit}
@@ -76,6 +82,11 @@ function CustomQuestionList({ questions, onChange, maxQuestions }) {
         {questions.length}/{maxQuestions} used
         {atLimit ? ' — increase "Number of questions" to add more.' : ''}
       </p>
+      {error && (
+        <p role="alert" className="mt-1 text-xs text-red-600">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -99,6 +110,28 @@ function resolveTimeRange(date, startTime, endTime) {
   return { start, end };
 }
 
+// Today as YYYY-MM-DD in the browser's timezone — the `min` for date pickers.
+function todayLocal() {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+// First error for a field, including nested ones like "customQuestions.2".
+function errorFor(errors, key) {
+  if (errors[key]) return errors[key];
+  const hit = Object.keys(errors).find((p) => p.startsWith(`${key}.`));
+  return hit ? errors[hit] : undefined;
+}
+
+// Date + start/end inputs left empty: say which one, the schema can't tell.
+function missingTimeFields({ date, startTime, endTime }) {
+  const errors = {};
+  if (!date) errors.date = 'Pick a date';
+  if (!startTime) errors.startTime = 'Pick a start time';
+  if (!endTime) errors.endTime = 'Pick an end time';
+  return errors;
+}
+
 export default function JobInterviewsPage() {
   const { id: jobId } = useParams();
   const navigate = useNavigate();
@@ -107,6 +140,7 @@ export default function JobInterviewsPage() {
   const [error, setError] = useState('');
   const [form, setForm] = useState({ date: '', startTime: '', endTime: '' });
   const [creating, setCreating] = useState(false);
+  const [slotErrors, setSlotErrors] = useState({});
   const [confirmCancel, setConfirmCancel] = useState(null);
   const [cancelling, setCancelling] = useState(false);
   const [completingId, setCompletingId] = useState(null);
@@ -116,11 +150,14 @@ export default function JobInterviewsPage() {
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState('');
   const [generateResult, setGenerateResult] = useState(null);
+  const [generateErrors, setGenerateErrors] = useState({});
 
   const [showConfig, setShowConfig] = useState(false);
   const [configForm, setConfigForm] = useState(null);
   const [configSaving, setConfigSaving] = useState(false);
   const [configSaved, setConfigSaved] = useState(false);
+  const [configErrors, setConfigErrors] = useState({});
+  const [configError, setConfigError] = useState('');
 
   const load = () => {
     setError('');
@@ -148,18 +185,23 @@ export default function JobInterviewsPage() {
 
   const handleSaveConfig = async (e) => {
     e.preventDefault();
-    setConfigSaving(true);
     setConfigSaved(false);
-    setError('');
+    setConfigError('');
+    const { data, errors } = checkForm(upsertInterviewConfigSchema, {
+      ...configForm,
+      questionCount: Number(configForm.questionCount),
+      answerTimeSeconds: Number(configForm.answerTimeSeconds),
+    });
+    setConfigErrors(errors);
+    if (!data) return setConfigError('Please fix the highlighted fields');
+    setConfigSaving(true);
     try {
-      await interviewsApi.upsertConfig(jobId, {
-        ...configForm,
-        questionCount: Number(configForm.questionCount),
-        answerTimeSeconds: Number(configForm.answerTimeSeconds),
-      });
+      await interviewsApi.upsertConfig(jobId, data);
       setConfigSaved(true);
     } catch (err) {
-      setError(err.message);
+      const fields = err.fields || {};
+      setConfigErrors(fields);
+      setConfigError(Object.keys(fields).length ? 'Please fix the highlighted fields' : err.message);
     } finally {
       setConfigSaving(false);
     }
@@ -167,16 +209,22 @@ export default function JobInterviewsPage() {
 
   const handleCreateSlot = async (e) => {
     e.preventDefault();
-    if (!form.date || !form.startTime || !form.endTime) return;
-    setCreating(true);
     setError('');
+    const missing = missingTimeFields(form);
+    if (Object.keys(missing).length) return setSlotErrors(missing);
+    const { start, end } = resolveTimeRange(form.date, form.startTime, form.endTime);
+    const { data, errors } = checkForm(createSlotsSchema, { slots: [{ startTime: start.toISOString(), endTime: end.toISOString() }] });
+    setSlotErrors(errors);
+    if (!data) return;
+    setCreating(true);
     try {
-      const { start, end } = resolveTimeRange(form.date, form.startTime, form.endTime);
-      await schedulingApi.createSlots(jobId, [{ startTime: start.toISOString(), endTime: end.toISOString() }]);
+      await schedulingApi.createSlots(jobId, data.slots);
       setForm({ date: '', startTime: '', endTime: '' });
       load();
     } catch (err) {
-      setError(err.message);
+      const fields = err.fields || {};
+      setSlotErrors(fields);
+      if (!Object.keys(fields).length) setError(err.message);
     } finally {
       setCreating(false);
     }
@@ -185,23 +233,30 @@ export default function JobInterviewsPage() {
   const handleGenerateSlots = async (e) => {
     e.preventDefault();
     const { date, startTime, endTime, durationMinutes, bufferMinutes } = generateForm;
-    if (!date || !startTime || !endTime) return;
-    setGenerating(true);
     setGenerateError('');
     setGenerateResult(null);
+    const missing = missingTimeFields(generateForm);
+    if (Object.keys(missing).length) return setGenerateErrors(missing);
+    const { start, end } = resolveTimeRange(date, startTime, endTime);
+    const { data, errors } = checkForm(generateSlotsSchema, {
+      rangeStart: start.toISOString(),
+      rangeEnd: end.toISOString(),
+      durationMinutes: durationMinutes === '' ? NaN : Number(durationMinutes),
+      bufferMinutes: Number(bufferMinutes) || 0,
+    });
+    if (errors.durationMinutes && durationMinutes === '') errors.durationMinutes = 'Enter the interview length in minutes';
+    setGenerateErrors(errors);
+    if (!data) return setGenerateError('Please fix the highlighted fields');
+    setGenerating(true);
     try {
-      const { start, end } = resolveTimeRange(date, startTime, endTime);
-      const result = await schedulingApi.generateSlots(jobId, {
-        rangeStart: start.toISOString(),
-        rangeEnd: end.toISOString(),
-        durationMinutes: Number(durationMinutes),
-        bufferMinutes: Number(bufferMinutes) || 0,
-      });
+      const result = await schedulingApi.generateSlots(jobId, data);
       setGenerateResult(result);
       setGenerateForm(GENERATE_DEFAULTS);
       load();
     } catch (err) {
-      setGenerateError(err.message);
+      const fields = err.fields || {};
+      setGenerateErrors(fields);
+      setGenerateError(Object.keys(fields).length ? 'Please fix the highlighted fields' : err.message);
     } finally {
       setGenerating(false);
     }
@@ -267,7 +322,11 @@ export default function JobInterviewsPage() {
               {VOICE_LABELS[configForm.voiceGender] || 'Default'} voice
             </p>
           </div>
-          <Button variant={showConfig ? 'secondary' : 'primary'} onClick={() => setShowConfig((v) => !v)} className="w-full sm:w-auto">
+          <Button variant={showConfig ? 'secondary' : 'primary'} onClick={() => {
+              setConfigErrors({});
+              setConfigError('');
+              setShowConfig((v) => !v);
+            }} className="w-full sm:w-auto">
             {showConfig ? (
               <>
                 <X className="h-4 w-4" /> Close
@@ -283,40 +342,44 @@ export default function JobInterviewsPage() {
         {showConfig && (
           <form onSubmit={handleSaveConfig} className="mt-5 border-t border-slate-100 pt-5">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormField label="AI interviewer name">
+              <FormField label="AI interviewer name" error={configErrors.aiName}>
                 <input
                   required
+                  maxLength={60}
                   className={inputClass}
                   value={configForm.aiName}
                   onChange={(e) => setConfigForm({ ...configForm, aiName: e.target.value })}
                   placeholder="e.g. Priya"
                 />
               </FormField>
-              <FormField label="AI role / title">
+              <FormField label="AI role / title" error={configErrors.aiTitle}>
                 <input
                   required
+                  maxLength={80}
                   className={inputClass}
                   value={configForm.aiTitle}
                   onChange={(e) => setConfigForm({ ...configForm, aiTitle: e.target.value })}
                   placeholder="e.g. Virtual HR"
                 />
               </FormField>
-              <FormField label="Number of questions">
+              <FormField label="Number of questions" error={configErrors.questionCount} hint="3–30">
                 <input
                   type="number"
                   min={3}
                   max={30}
+                  step={1}
                   required
                   className={inputClass}
                   value={configForm.questionCount}
                   onChange={(e) => setConfigForm({ ...configForm, questionCount: e.target.value })}
                 />
               </FormField>
-              <FormField label="Answer time per question (seconds)">
+              <FormField label="Answer time per question (seconds)" error={configErrors.answerTimeSeconds} hint="10–300 seconds">
                 <input
                   type="number"
                   min={10}
                   max={300}
+                  step={1}
                   required
                   className={inputClass}
                   value={configForm.answerTimeSeconds}
@@ -361,6 +424,7 @@ export default function JobInterviewsPage() {
                 questions={configForm.customQuestions}
                 onChange={(customQuestions) => setConfigForm({ ...configForm, customQuestions })}
                 maxQuestions={Math.max(0, Number(configForm.questionCount) - 1)}
+                error={errorFor(configErrors, 'customQuestions')}
               />
               <p className="mt-1 text-xs text-slate-400">
                 The AI also generates its own questions from the job requirements, the candidate's resume, and their
@@ -383,11 +447,15 @@ export default function JobInterviewsPage() {
                 id="interviewInstructions"
                 rows={3}
                 maxLength={2000}
+                aria-invalid={configErrors.interviewInstructions ? true : undefined}
                 className={inputClass}
                 value={configForm.interviewInstructions}
                 onChange={(e) => setConfigForm({ ...configForm, interviewInstructions: e.target.value })}
                 placeholder="e.g. Check hands-on experience with Kubernetes; ask about a production incident they handled."
               />
+              {configErrors.interviewInstructions && (
+                <p role="alert" className="mt-1 text-xs text-red-600">{configErrors.interviewInstructions}</p>
+              )}
               <p className="mt-1 text-right text-xs text-slate-400">{configForm.interviewInstructions.length}/2000</p>
 
               <label className="mb-1 mt-2 block text-sm font-medium text-slate-700">Must-cover skills</label>
@@ -396,6 +464,9 @@ export default function JobInterviewsPage() {
                 onChange={(focusSkills) => setConfigForm({ ...configForm, focusSkills: focusSkills.slice(0, 20) })}
                 placeholder="Type a skill and press Enter (e.g. Kubernetes, SQL)"
               />
+              {errorFor(configErrors, 'focusSkills') && (
+                <p role="alert" className="mt-1 text-xs text-red-600">{errorFor(configErrors, 'focusSkills')}</p>
+              )}
 
               <label className="mb-1 mt-4 block text-sm font-medium text-slate-700" htmlFor="evaluationInstructions">
                 How should the AI score the interview?
@@ -404,18 +475,23 @@ export default function JobInterviewsPage() {
                 id="evaluationInstructions"
                 rows={3}
                 maxLength={2000}
+                aria-invalid={configErrors.evaluationInstructions ? true : undefined}
                 className={inputClass}
                 value={configForm.evaluationInstructions}
                 onChange={(e) => setConfigForm({ ...configForm, evaluationInstructions: e.target.value })}
                 placeholder="e.g. System design counts double; communication must be at least 6/10."
               />
+              {configErrors.evaluationInstructions && (
+                <p role="alert" className="mt-1 text-xs text-red-600">{configErrors.evaluationInstructions}</p>
+              )}
               <p className="mt-1 text-right text-xs text-slate-400">{configForm.evaluationInstructions.length}/2000</p>
               <p className="text-xs text-slate-400">
                 When set, each report also lists these criteria as Met / Partly / Not met, with evidence from the answers.
               </p>
             </div>
 
-            {configSaved &&<p className="mt-3 text-sm text-emerald-600">AI interviewer settings saved.</p>}
+            {configError && <p className="mt-3 text-sm text-red-600">{configError}</p>}
+            {configSaved && <p className="mt-3 text-sm text-emerald-600">AI interviewer settings saved.</p>}
             <Button type="submit" loading={configSaving} className="mt-4 w-full sm:w-auto">
               <Save className="h-4 w-4" /> Save AI interviewer settings
             </Button>
@@ -431,7 +507,11 @@ export default function JobInterviewsPage() {
           </div>
           <Button
             variant={showGenerate ? 'secondary' : 'primary'}
-            onClick={() => setShowGenerate((v) => !v)}
+            onClick={() => {
+              setGenerateErrors({});
+              setGenerateError('');
+              setShowGenerate((v) => !v);
+            }}
             className="w-full sm:w-auto"
           >
             {showGenerate ? (
@@ -449,16 +529,17 @@ export default function JobInterviewsPage() {
         {showGenerate && (
           <form onSubmit={handleGenerateSlots} className="mt-5 border-t border-slate-100 pt-5">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5 lg:items-end">
-              <FormField label="Date">
+              <FormField label="Date" error={generateErrors.date}>
                 <input
                   type="date"
                   required
+                  min={todayLocal()}
                   className={inputClass}
                   value={generateForm.date}
                   onChange={(e) => setGenerateForm({ ...generateForm, date: e.target.value })}
                 />
               </FormField>
-              <FormField label="Start time">
+              <FormField label="Start time" error={generateErrors.startTime || generateErrors.rangeStart}>
                 <input
                   type="time"
                   required
@@ -467,7 +548,7 @@ export default function JobInterviewsPage() {
                   onChange={(e) => setGenerateForm({ ...generateForm, startTime: e.target.value })}
                 />
               </FormField>
-              <FormField label="End time">
+              <FormField label="End time" error={generateErrors.endTime || generateErrors.rangeEnd}>
                 <input
                   type="time"
                   required
@@ -476,22 +557,24 @@ export default function JobInterviewsPage() {
                   onChange={(e) => setGenerateForm({ ...generateForm, endTime: e.target.value })}
                 />
               </FormField>
-              <FormField label="Duration (minutes)">
+              <FormField label="Duration (minutes)" error={generateErrors.durationMinutes}>
                 <input
                   type="number"
                   min={5}
                   max={240}
+                  step={1}
                   required
                   className={inputClass}
                   value={generateForm.durationMinutes}
                   onChange={(e) => setGenerateForm({ ...generateForm, durationMinutes: e.target.value })}
                 />
               </FormField>
-              <FormField label="Buffer (minutes, optional)">
+              <FormField label="Buffer (minutes, optional)" error={generateErrors.bufferMinutes}>
                 <input
                   type="number"
                   min={0}
                   max={120}
+                  step={1}
                   className={inputClass}
                   value={generateForm.bufferMinutes}
                   onChange={(e) => setGenerateForm({ ...generateForm, bufferMinutes: e.target.value })}
@@ -499,7 +582,7 @@ export default function JobInterviewsPage() {
               </FormField>
             </div>
             <p className="mt-1 text-xs text-slate-400">
-              An end time at or before the start time (e.g. midnight, 00:00) is treated as the next day.
+              An end time at or before the start time (e.g. midnight, 00:00) is treated as the next day. Up to 24 hours at a time.
             </p>
 
             {generateError && <p className="mt-3 text-sm text-red-600">{generateError}</p>}
@@ -523,16 +606,17 @@ export default function JobInterviewsPage() {
       <Card className="mb-6 p-5">
         <h3 className="mb-3 font-semibold text-slate-900">Add a single slot</h3>
         <form onSubmit={handleCreateSlot} className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:items-end">
-          <FormField label="Date">
+          <FormField label="Date" error={slotErrors.date}>
             <input
               type="date"
               required
+              min={todayLocal()}
               className={inputClass}
               value={form.date}
               onChange={(e) => setForm({ ...form, date: e.target.value })}
             />
           </FormField>
-          <FormField label="Start time">
+          <FormField label="Start time" error={slotErrors.startTime || slotErrors['slots.0.startTime'] || slotErrors.slots}>
             <input
               type="time"
               required
@@ -541,7 +625,7 @@ export default function JobInterviewsPage() {
               onChange={(e) => setForm({ ...form, startTime: e.target.value })}
             />
           </FormField>
-          <FormField label="End time">
+          <FormField label="End time" error={slotErrors.endTime || slotErrors['slots.0.endTime']} hint="Up to 8 hours after the start">
             <input
               type="time"
               required

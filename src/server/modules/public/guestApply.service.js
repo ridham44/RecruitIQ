@@ -119,6 +119,16 @@ export async function submitGuestApplication({ slug, uploadId, jobId, fullName, 
   if (existingUser && !existingUser.isActive) {
     throw ApiError.forbidden('This account is inactive. Please contact support.', 'ACCOUNT_INACTIVE');
   }
+  // The email itself isn't verified here, only the phone. So an existing
+  // account may only be used when the OTP-verified phone is the one already
+  // saved on it — otherwise anyone could apply (and later interview) in
+  // someone else's name just by knowing their email.
+  if (existingUser && (!existingUser.candidate?.phone || normalizePhone(existingUser.candidate.phone) !== phone)) {
+    throw ApiError.conflict(
+      'An account with this email already exists. Please log in to apply, or use a different email.',
+      'EMAIL_HAS_ACCOUNT',
+    );
+  }
   if (job && existingUser?.candidate) {
     const dup = await prisma.application.findUnique({
       where: { candidateId_jobId: { candidateId: existingUser.candidate.id, jobId: job.id } },
@@ -150,15 +160,11 @@ export async function submitGuestApplication({ slug, uploadId, jobId, fullName, 
         include: { candidate: true },
       });
       candidate = user.candidate;
-    } else if (!candidate) {
-      candidate = await tx.candidate.create({
-        data: { userId: user.id, fullName: fullName.trim(), phone, phoneVerifiedAt: new Date() },
-      });
-    } else if (!candidate.phone || normalizePhone(candidate.phone) === phone) {
-      // Record the verification; never overwrite a different saved number.
+    } else {
+      // Phone matches the saved one (checked above) — record the verification.
       candidate = await tx.candidate.update({
         where: { id: candidate.id },
-        data: { phone: candidate.phone || phone, phoneVerifiedAt: new Date() },
+        data: { phoneVerifiedAt: new Date() },
       });
     }
 

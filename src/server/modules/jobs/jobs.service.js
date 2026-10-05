@@ -88,6 +88,21 @@ export async function createJob(userId, jobData) {
 
 export async function updateJob(userId, jobId, jobData) {
   const job = await getOwnedJob(userId, jobId);
+  // The schema can only compare fields sent together; check the result here.
+  const minimumExperience = jobData.minimumExperience ?? job.minimumExperience;
+  const maximumExperience = jobData.maximumExperience !== undefined ? jobData.maximumExperience : job.maximumExperience;
+  if (maximumExperience != null && maximumExperience < minimumExperience) {
+    throw ApiError.badRequest("Maximum experience can't be less than minimum experience", 'VALIDATION_ERROR', {
+      maximumExperience: "Maximum experience can't be less than minimum experience",
+    });
+  }
+  const cvWeight = jobData.cvWeight ?? job.cvWeight;
+  const interviewWeight = jobData.interviewWeight ?? job.interviewWeight;
+  if (Math.abs(cvWeight + interviewWeight - 1) > 0.001) {
+    throw ApiError.badRequest('CV weight and interview weight must add up to 100%', 'VALIDATION_ERROR', {
+      interviewWeight: 'CV weight and interview weight must add up to 100%',
+    });
+  }
   // Build plan P3: {} when the request doesn't touch the client link.
   const clientLink = await resolveJobClientLink(job.companyId, jobData, job);
   return prisma.job.update({
@@ -95,8 +110,8 @@ export async function updateJob(userId, jobId, jobData) {
     data: {
       title: jobData.title ?? job.title,
       description: jobData.description ?? job.description,
-      minimumExperience: jobData.minimumExperience ?? job.minimumExperience,
-      maximumExperience: jobData.maximumExperience ?? job.maximumExperience,
+      minimumExperience,
+      maximumExperience,
       requiredSkills: jobData.requiredSkills ?? job.requiredSkills,
       preferredSkills: jobData.preferredSkills ?? job.preferredSkills,
       educationRequirements: jobData.educationRequirements ?? job.educationRequirements,
@@ -166,17 +181,55 @@ async function getOwnedJob(userId, jobId) {
   return job;
 }
 
+// What candidates and the public may see of a job — never scoring settings,
+// thresholds, client links or who created it.
+const PUBLIC_JOB_SELECT = {
+  id: true,
+  title: true,
+  description: true,
+  minimumExperience: true,
+  maximumExperience: true,
+  requiredSkills: true,
+  preferredSkills: true,
+  educationRequirements: true,
+  location: true,
+  employmentType: true,
+  workMode: true,
+  openings: true,
+  jobLevel: true,
+  noticePeriod: true,
+  languagesRequired: true,
+  certifications: true,
+  salaryRange: true,
+  status: true,
+  interviewFlow: true,
+  createdAt: true,
+  companyId: true,
+};
+const PUBLIC_JOB_WHERE = { status: JOB_STATUS.OPEN, company: { status: 'ACTIVE' } };
+const PUBLIC_JOBS_LIMIT = 200;
+
 export async function listOpenJobs({ search } = {}) {
   return prisma.job.findMany({
     where: {
-      status: JOB_STATUS.OPEN,
+      ...PUBLIC_JOB_WHERE,
       ...(search
         ? { OR: [{ title: { contains: search, mode: 'insensitive' } }, { location: { contains: search, mode: 'insensitive' } }] }
         : {}),
     },
-    include: { company: { select: { name: true, logoUrl: true, location: true } } },
+    select: { ...PUBLIC_JOB_SELECT, company: { select: { name: true, logoUrl: true, location: true } } },
     orderBy: { createdAt: 'desc' },
+    take: PUBLIC_JOBS_LIMIT,
   });
+}
+
+export async function getPublicJobById(jobId) {
+  const job = await prisma.job.findFirst({
+    where: { id: jobId, ...PUBLIC_JOB_WHERE },
+    select: { ...PUBLIC_JOB_SELECT, company: { select: { name: true, logoUrl: true, location: true, website: true } } },
+  });
+  if (!job) throw ApiError.notFound('Job not found');
+  return job;
 }
 
 // export async function listCompanyJobs(userId) {
@@ -197,15 +250,6 @@ export async function listCompanyJobs(userId, { clientId } = {}) {
     },
     orderBy: { createdAt: 'desc' },
   });
-}
-
-export async function getJobById(jobId) {
-  const job = await prisma.job.findUnique({
-    where: { id: jobId },
-    include: { company: { select: { name: true, logoUrl: true, location: true, website: true } } },
-  });
-  if (!job) throw ApiError.notFound('Job not found');
-  return job;
 }
 
 export { getOwnedJob, getCompanyIdForUser };

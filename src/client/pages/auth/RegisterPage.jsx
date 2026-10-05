@@ -9,8 +9,8 @@ import PasswordInput from '../../components/ui/PasswordInput.jsx';
 import Button from '../../components/ui/Button.jsx';
 import { configApi } from '../../services/config.js';
 import { homePathForRole } from '../../utils/homePath.js';
-
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import { registerCompanySchema, registerCandidateSchema } from '../../../shared/schemas/auth.schema.js';
+import { checkForm } from '../../../shared/schemas/common.js';
 
 export default function RegisterPage() {
   const { registerCompany, registerCandidate } = useAuth();
@@ -18,7 +18,7 @@ export default function RegisterPage() {
   const [searchParams] = useSearchParams();
   const [role, setRole] = useState(searchParams.get('role') === 'company' ? 'COMPANY' : 'CANDIDATE');
   const [form, setForm] = useState({ email: '', password: '', name: '' });
-  const [touched, setTouched] = useState({ email: false, password: false, name: false });
+  const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   // Build plan P1: company self-signup can be switched off
@@ -39,50 +39,37 @@ export default function RegisterPage() {
       .catch(() => {});
   }, []);
 
-  const trimmedEmail = form.email.trim();
+  // Live checklist only — the schema below is the source of truth.
   const hasMinLength = form.password.length >= 8;
   const hasLetter = /[A-Za-z]/.test(form.password);
   const hasNumber = /[0-9]/.test(form.password);
-  const isPasswordValid = hasMinLength && hasLetter && hasNumber;
-  const isEmailValid = EMAIL_REGEX.test(trimmedEmail);
 
-  const emailError = touched.email && trimmedEmail && !isEmailValid ? 'Please enter a valid email address' : '';
-  const passwordError =
-    touched.password && form.password.length > 0 && !isPasswordValid
-      ? !hasMinLength
-        ? 'Password must be at least 8 characters'
-        : 'Password must contain at least one letter and one number'
-      : '';
+  // The name field maps to companyName (agency) or fullName (candidate).
+  const nameKey = role === 'COMPANY' ? 'companyName' : 'fullName';
+
+  // Switching tabs starts with a clean slate of errors.
+  useEffect(() => {
+    setFieldErrors({});
+    setError('');
+  }, [role]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setTouched({ email: true, password: true, name: true });
     setError('');
 
-    if (!isEmailValid) {
-      setError('Please enter a valid email address');
-      return;
-    }
-
-    if (!isPasswordValid) {
-      if (!hasMinLength) {
-        setError('Password must be at least 8 characters');
-      } else {
-        setError('Password must contain at least one letter and one number');
-      }
-      return;
-    }
+    const schema = role === 'COMPANY' ? registerCompanySchema : registerCandidateSchema;
+    const { data, errors } = checkForm(schema, { email: form.email, password: form.password, [nameKey]: form.name });
+    setFieldErrors(errors);
+    if (!data) return setError('Please fix the highlighted fields');
 
     setLoading(true);
     try {
-      const user =
-        role === 'COMPANY'
-          ? await registerCompany({ email: trimmedEmail, password: form.password, companyName: form.name.trim() })
-          : await registerCandidate({ email: trimmedEmail, password: form.password, fullName: form.name.trim() });
+      const user = role === 'COMPANY' ? await registerCompany(data) : await registerCandidate(data);
       // navigate(user.role === 'COMPANY' ? '/company/dashboard' : '/candidate/dashboard');
       navigate(homePathForRole(user.role));
     } catch (err) {
-      setError(err.message);
+      setFieldErrors(err.fields || {});
+      setError(Object.keys(err.fields || {}).length ? 'Please fix the highlighted fields' : err.message);
     } finally {
       setLoading(false);
     }
@@ -111,7 +98,7 @@ export default function RegisterPage() {
             key={option.key}
             type="button"
             onClick={() => setRole(option.key)}
-            className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${
+            className={`min-h-[44px] flex-1 rounded-md py-2 text-sm font-medium transition-colors ${
               role === option.key ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-50'
             }`}
           >
@@ -121,36 +108,41 @@ export default function RegisterPage() {
       </div>
 
       <form onSubmit={handleSubmit} noValidate>
-        <FormField label={role === 'COMPANY' ? 'Agency name' : 'Full name'}>
+        <FormField label={role === 'COMPANY' ? 'Agency name' : 'Full name'} error={fieldErrors[nameKey]}>
           <input
             required
-            className={inputClass}
+            className={`${inputClass} min-h-[44px]`}
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
-            onBlur={() => setTouched((prev) => ({ ...prev, name: true }))}
+            autoComplete={role === 'COMPANY' ? 'organization' : 'name'}
+            maxLength={role === 'COMPANY' ? 200 : 120}
             placeholder={role === 'COMPANY' ? 'e.g. Acme Talent Partners' : 'e.g. John Doe'}
           />
         </FormField>
 
-        <FormField label="Email" error={emailError}>
+        <FormField label="Email" error={fieldErrors.email}>
           <input
             type="email"
+            inputMode="email"
             required
-            className={inputClass}
+            className={`${inputClass} min-h-[44px]`}
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
-            onBlur={() => setTouched((prev) => ({ ...prev, email: true }))}
+            autoComplete="email"
+            maxLength={254}
             placeholder="you@example.com"
           />
         </FormField>
 
-        <FormField label="Password" error={passwordError}>
+        <FormField label="Password" error={fieldErrors.password}>
           <PasswordInput
             required
             minLength={8}
+            maxLength={72}
+            autoComplete="new-password"
+            className="min-h-[44px]"
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
-            onBlur={() => setTouched((prev) => ({ ...prev, password: true }))}
             placeholder="At least 8 characters"
           />
         </FormField>

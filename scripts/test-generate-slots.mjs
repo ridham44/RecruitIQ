@@ -31,7 +31,7 @@ const { token: companyToken } = await req('/auth/register/company', {
 const { job } = await req('/jobs', {
   method: 'POST',
   token: companyToken,
-  body: { title: 'Gen Test Job', description: 'Testing AI slot generation.', status: 'OPEN' },
+  body: { title: 'Gen Test Job', description: 'Testing AI slot generation for interview scheduling.', status: 'OPEN' },
 });
 
 console.log('\n== 10:00-13:00, 15-min interviews, 0 buffer -> expect exactly 12 slots ==');

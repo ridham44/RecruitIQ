@@ -197,7 +197,7 @@ async function main() {
   step('10. Candidates are unaffected');
   const cand = await req('/auth/register/candidate', {
     method: 'POST',
-    body: { email: `p1-cand-${ts}@test.com`, password: PASSWORD, fullName: 'P1 Candidate' },
+    body: { email: `p1-cand-${ts}@test.com`, password: PASSWORD, fullName: 'Admin Test Candidate' },
   });
   const candMe = await req('/auth/me', { token: cand.token });
   assert(candMe.user.role === 'CANDIDATE', 'candidate registers and /auth/me works');
