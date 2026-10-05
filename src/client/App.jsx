@@ -3,7 +3,6 @@ import ProtectedRoute from './components/ProtectedRoute.jsx';
 
 import LandingPage from './pages/LandingPage.jsx';
 import LoginPage from './pages/auth/LoginPage.jsx';
-import RegisterPage from './pages/auth/RegisterPage.jsx';
 
 import CompanyLayout from './layouts/CompanyLayout.jsx';
 import CompanyDashboardPage from './pages/company/DashboardPage.jsx';
@@ -72,7 +71,8 @@ export default function App() {
       {/* <Route path="/start" element={<StartHerePage />} /> */}
       <Route path="/live-demo" element={<StartHerePage />} />
       <Route path="/start" element={<Navigate to="/live-demo" replace />} />
-      <Route path="/auth/register" element={<RegisterPage />} />
+      {/* No sign-up: agencies are added by the Portal Admin, candidates use /recq links. */}
+      <Route path="/auth/register" element={<Navigate to="/auth/login" replace />} />
       <Route path="/auth/set-password" element={<SetPasswordPage />} />
       <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
 

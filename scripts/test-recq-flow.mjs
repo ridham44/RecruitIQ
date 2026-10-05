@@ -103,12 +103,13 @@ const weakChef = (name, email) => [
 const noEmailCv = (name) => [name, 'Pune, India', '', 'SKILLS', 'React, JavaScript, HTML, CSS', '', 'EXPERIENCE', 'Frontend Developer — 3 years'];
 
 // ─── Setup helpers ───
+// Agencies are onboarded by the Portal Admin (no sign-up): invite link →
+// the owner sets a password from it.
+let adminToken = null;
 async function registerAgency(label) {
   const email = `recq-${label}-${ts}@test.com`;
-  const { token, user } = await req('/auth/register/company', {
-    method: 'POST',
-    body: { email, password: PASSWORD, companyName: `RecQ Test ${label} ${ts}` },
-  });
+  const { setupLink } = await req('/admin/companies', { method: 'POST', token: adminToken, body: { companyName: `RecQ Test ${label} ${ts}`, ownerEmail: email } });
+  const { token, user } = await req('/auth/set-password', { method: 'POST', body: { token: new URL(setupLink).searchParams.get('token'), password: PASSWORD } });
   const link = await req('/companies/careers-link', { token });
   return { token, user, email, slug: link.slug };
 }
@@ -149,7 +150,13 @@ async function main() {
   const health = await call('/config/public');
   if (!health.data?.recq) throw new Error('FEATURE_RECQ is off on this server');
 
-  step('Setup: two agencies, jobs (open + closed), admin');
+  step('Setup: admin, two agencies (onboarded by the admin), jobs (open + closed)');
+  const adminEmail = `recq-admin-${ts}@test.com`;
+  await prisma.user.create({ data: { email: adminEmail, passwordHash: await bcrypt.hash(PASSWORD, 10), role: 'ADMIN' } });
+  const admin = await req('/auth/login', { method: 'POST', body: { email: adminEmail, password: PASSWORD } });
+  adminToken = admin.token;
+  const selfReg = await call('/auth/register/company', { method: 'POST', body: { email: `self-${ts}@test.com`, password: PASSWORD, companyName: 'Self Signup' } });
+  if (health.data.allowCompanySelfRegister === false) check(selfReg.status === 403, 'agency self sign-up is refused — only the admin adds agencies', selfReg.status);
   const A = await registerAgency('A');
   const B = await registerAgency('B');
   const reactJob = await createJob(A.token, {
@@ -184,9 +191,6 @@ async function main() {
   const bJob = await createJob(B.token, { title: 'Data Scientist Bravo', requiredSkills: ['Python', 'Pandas'] });
   check(Boolean(reactJob.slug && mernJob.slug && closedJob.slug && bJob.slug), 'every created job gets a public slug');
 
-  const adminEmail = `recq-admin-${ts}@test.com`;
-  await prisma.user.create({ data: { email: adminEmail, passwordHash: await bcrypt.hash(PASSWORD, 10), role: 'ADMIN' } });
-  const admin = await req('/auth/login', { method: 'POST', body: { email: adminEmail, password: PASSWORD } });
 
   step('Agency page isolation');
   const pageA = await req(`/recq/${A.slug}`);

@@ -72,14 +72,12 @@ export default function LandingPage() {
             <PlayCircle className="h-4 w-4" />
             Live Demo
           </Link>
-          <Link to="/auth/login" className="inline-flex min-h-[44px] items-center px-2 text-sm font-medium text-slate-600 hover:text-slate-900">
-            Log in
-          </Link>
+          {/* No sign-up: agencies are added by the Portal Admin. */}
           <Link
-            to="/auth/register"
-            className="hidden min-h-[44px] items-center rounded-lg bg-brand-600 px-3 text-sm font-medium text-white hover:bg-brand-700 min-[360px]:inline-flex sm:px-4"
+            to="/auth/login"
+            className="inline-flex min-h-[44px] items-center rounded-lg bg-brand-600 px-3 text-sm font-medium text-white hover:bg-brand-700 sm:px-4"
           >
-            Get started
+            Log in
           </Link>
         </div>
       </header>
@@ -97,20 +95,21 @@ export default function LandingPage() {
         </p>
         <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
           <Link
-            to="/auth/register?role=company"
-            className="inline-flex min-h-[48px] items-center justify-center rounded-lg bg-brand-600 px-6 text-sm font-semibold text-white hover:bg-brand-700"
-          >
-            I'm hiring
-          </Link>
-          <Link
             to="/live-demo"
-            className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg border border-slate-300 px-6 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg bg-brand-600 px-6 text-sm font-semibold text-white hover:bg-brand-700"
           >
             <PlayCircle className="h-4 w-4" /> See the live demo
           </Link>
+          <Link
+            to="/auth/login"
+            className="inline-flex min-h-[48px] items-center justify-center rounded-lg border border-slate-300 px-6 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Log in
+          </Link>
         </div>
         <p className="mx-auto mt-5 max-w-xl text-sm text-slate-500">
-          Looking for a job? Use the link your recruitment agency sent you — RecruitIQ has no public job board.
+          Agency accounts are set up by the RecruitIQ team. Looking for a job? Use the link your recruitment agency sent you —
+          RecruitIQ has no public job board.
         </p>
       </section>
 

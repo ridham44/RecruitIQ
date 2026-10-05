@@ -114,8 +114,10 @@ export const env = {
   // explicitly turned on per environment.
   features: {
     // P1 — when false, POST /auth/register/company returns 403 and only a
-    // Platform Admin can onboard companies. Turn off only after an admin exists.
-    allowCompanySelfRegister: flag('ALLOW_COMPANY_SELF_REGISTER', true),
+    // Platform Admin can onboard companies. Off by default: agencies are added
+    // by the Portal Admin (there is no sign-up page). Create the first admin
+    // with scripts/create-admin.mjs.
+    allowCompanySelfRegister: flag('ALLOW_COMPANY_SELF_REGISTER', false),
     // P4 — public careers portal, guest apply with phone OTP, CV-only submit.
     guestApply: flag('FEATURE_GUEST_APPLY', false),
     // P5 — instant interview link (attend now or later) instead of slot booking.

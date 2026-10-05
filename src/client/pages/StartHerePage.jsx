@@ -190,7 +190,6 @@ export default function StartHerePage() {
             title="Wrong agency + job"
             description={`A ${demo.agencyName} job through ${demo.agencyB.name}'s link — rejected`}
           />
-          <LinkRow to="/auth/register" title="Create a new agency" description="Register your own recruitment agency" />
         </div>
 
         {demo.sampleResumes?.length > 0 && (

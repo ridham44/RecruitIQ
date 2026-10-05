@@ -226,9 +226,16 @@ async function recqApply(agencySlug, candidate, jobsByKey) {
 async function seed() {
   step('Portal Admin');
   await prisma.user.create({ data: { email: ACCOUNTS.admin.email, passwordHash: await bcrypt.hash(PASSWORD, 10), role: 'ADMIN' } });
+  const tAdmin = (await call('/auth/login', { method: 'POST', body: { email: ACCOUNTS.admin.email, password: PASSWORD } })).token;
+  // Agencies are onboarded by the Portal Admin (there is no sign-up): the
+  // owner gets an invite link and sets a password from it.
+  const onboardAgency = async (name, ownerEmail, extra = {}) => {
+    const { setupLink } = await call('/admin/companies', { method: 'POST', token: tAdmin, body: { companyName: name, ownerEmail, ...extra } });
+    return { token: await setPassword(setupLink) };
+  };
 
   step(`Agency "${AGENCY.name}" (/recq/${AGENCY.slug})`);
-  const owner = await call('/auth/register/company', { method: 'POST', body: { email: ACCOUNTS.owner.email, password: PASSWORD, companyName: AGENCY.name } });
+  const owner = await onboardAgency(AGENCY.name, ACCOUNTS.owner.email);
   const tOwner = owner.token;
   await call('/companies/careers-link', { method: 'PATCH', token: tOwner, body: { slug: AGENCY.slug } });
   await call('/companies/me', { method: 'PATCH', token: tOwner, body: AGENCY.profile });
@@ -322,7 +329,7 @@ async function seed() {
   await call(`/clients/${client.id}/recruiters`, { method: 'PUT', token: tOwner, body: { memberIds: [inv.recruiter.id] } });
 
   step(`Second agency "${AGENCY_B.name}" (/recq/${AGENCY_B.slug})`);
-  const ownerB = await call('/auth/register/company', { method: 'POST', body: { email: ACCOUNTS.agencyB.email, password: PASSWORD, companyName: AGENCY_B.name } });
+  const ownerB = await onboardAgency(AGENCY_B.name, ACCOUNTS.agencyB.email);
   await call('/companies/careers-link', { method: 'PATCH', token: ownerB.token, body: { slug: AGENCY_B.slug } });
   const jobsB = {};
   for (const j of AGENCY_B_JOBS) {

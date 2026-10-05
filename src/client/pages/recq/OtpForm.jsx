@@ -32,8 +32,13 @@ export default function OtpForm({ agencySlug, uploadId, jobSlug, emailMasked, on
     }
   }, [agencySlug, uploadId, jobSlug]);
 
-  // Auto-send once when the step opens.
+  // Auto-send once when the step opens. The ref guard matters: React
+  // StrictMode (dev) runs mount effects twice, and a second send would hit
+  // the 30-second resend limit and show a "please wait" error.
+  const autoSent = useRef(false);
   useEffect(() => {
+    if (autoSent.current) return;
+    autoSent.current = true;
     send();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
