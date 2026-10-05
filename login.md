@@ -8,9 +8,11 @@ non-routable `.demo` domain — no real inbox receives anything.
   The set includes a real **Portal Admin**: if you seed it on a shared or live database, use a
   different, strong `DEMO_PASSWORD` and update this file.
 - **Sign in:** `/auth/login`. There is **no sign-up** — agencies are added by the Portal Admin.
-- **Where these logins work:** the **local demo environment** (`http://localhost:5173`, demo database
-  seeded by the script below). They do **not** exist on the live site
-  (`https://recruitiq-eta.vercel.app`) until the demo set is seeded there.
+- **Where these logins work:** the **live site** `https://recruitiq-eta.vercel.app` and the local demo
+  environment (`http://localhost:5173`). Both were seeded with this set.
+- **Exception — Portal Admin on the live site:** `admin@platform.demo` has its own strong password there
+  (not `Demo@123`, because the admin sees every real agency). It was shared directly — it is not stored in
+  this repository. Locally the admin uses `Demo@123`.
 - Overview of every role and link: **`/live-demo`** (shows the password only when `DEMO_PAGE=true`).
 
 ---
@@ -19,7 +21,7 @@ non-routable `.demo` domain — no real inbox receives anything.
 
 | Role | Email | Password | Lands on | Notes |
 | --- | --- | --- | --- | --- |
-| Portal Admin | `admin@platform.demo` | `Demo@123` | `/admin/companies` | Adds / suspends agencies, sees all users |
+| Portal Admin | `admin@platform.demo` | `Demo@123` (local) · live: separate password | `/admin/companies` | Adds / suspends agencies, sees all users |
 | Agency owner — **Nexora Talent Partners** | `owner@nexora.demo` | `Demo@123` | `/company/dashboard` | All jobs, companies, recruiters |
 | Agency recruiter — Ritika Bansal | `recruiter@nexora.demo` | `Demo@123` | `/company/dashboard` | Assigned to MERN, Backend, React + client Finlytics (so also sees AI/ML); not the Data Analyst job |
 | Company HR — Kunal Shah, **Finlytics Software Pvt Ltd** | `hr@finlytics.demo` | `Demo@123` | `/client/candidates` | Sees only candidates submitted to them |
@@ -96,7 +98,22 @@ interviews were run through the real AI interview engine; their dates are spread
 | Neha Gupta | `neha.gupta@mail.demo` | Brightline · Java Spring Boot Developer | 84 | Pending | — | Interview scheduled |
 | Siddharth Menon | `siddharth.menon@mail.demo` | Brightline · DevOps Engineer | 92 | Pending | — | Interview scheduled |
 
-Match scores come from the AI each time the seed runs, so a re-seed can differ by a few points.
+**More applicants** (interview pending — they give every job a fuller list):
+
+| Candidate | Email | Applied to |
+| --- | --- | --- |
+| Nikhil Bhosale | `nikhil.bhosale@mail.demo` | MERN Stack Developer |
+| Pooja Iyengar | `pooja.iyengar@mail.demo` | MERN Stack Developer |
+| Amit Chauhan | `amit.chauhan@mail.demo` | Backend Node.js Developer |
+| Divya Menon | `divya.menon@mail.demo` | Backend Node.js Developer |
+| Sanya Kapoor | `sanya.kapoor@mail.demo` | React Developer |
+| Harsh Vardhan | `harsh.vardhan@mail.demo` | AI/ML Engineer |
+| Riya Jain | `riya.jain@mail.demo` | AI/ML Engineer |
+| Aakash Pandey | `aakash.pandey@mail.demo` | Data Analyst Intern (window opens in 3 days) |
+| Kritika Sharma | `kritika.sharma@mail.demo` | Data Analyst Intern (window opens in 3 days) |
+
+Match scores come from the AI each time the seed runs, so the live site and the local demo can differ
+by a few points (the tables above are from the local seed).
 
 **Live-demo candidate (not seeded):** Kavya Reddy, `kavya.reddy@mail.demo` — upload
 `Kavya_Reddy_FullStack_Resume.docx` on `/recq/nexora` → "Find my matches" → MERN, Backend and
@@ -107,7 +124,9 @@ React are eligible → one interview link per role.
 ## Recreate the data
 
 ```bash
-node scripts/seed-recq-demo.mjs --reset   # removes only the .demo demo set, then recreates it (~7 min)
+node scripts/seed-recq-demo.mjs --reset   # removes only the .demo demo set, then recreates it (~10 min)
+node scripts/seed-recq-demo.mjs --extra   # only adds the "more applicants" to an existing demo set
+# separate Portal Admin password (e.g. live): RECQ_ADMIN_PASSWORD=... node scripts/seed-recq-demo.mjs --yes
 ```
 
 The seed refuses a non-local `DATABASE_URL` unless `--yes` is given — use that only for a dedicated
