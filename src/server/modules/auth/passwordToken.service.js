@@ -14,7 +14,7 @@ function hashToken(token) {
 }
 
 export function setPasswordLink(token) {
-  return `${env.clientUrl.split(',')[0].trim()}/auth/set-password?token=${token}`;
+  return `${env.publicAppUrl}/auth/set-password?token=${token}`;
 }
 
 // Issues a new token and expires any earlier unused ones for the same

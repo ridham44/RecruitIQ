@@ -7,6 +7,7 @@ import { computeSkillOverlap, computeExperienceScore, computeEducationScore } fr
 import { getOwnedJob } from '../jobs/jobs.service.js';
 import { sendApplicationStatusEmail } from '../notifications/email.service.js';
 import { inviteApplication } from '../interviews/instantInterview.service.js';
+import { computeFinalScore } from '../submissions/finalScore.service.js';
 
 function blend(deterministicScore, aiScore, deterministicWeight = 0.6) {
   return Math.round(deterministicScore * deterministicWeight + aiScore * (1 - deterministicWeight));
@@ -218,6 +219,52 @@ async function screenApplication(application, precomputed = null) {
   return result;
 }
 
+// Build plan P9 (/recq): persist a precomputed match as the application's
+// ScreeningResult WITHOUT the auto-advance / auto-reject / status / email
+// side effects of screenApplication — a /recq candidate's status is driven by
+// the match+OTP+interview flow, not by screening. Idempotent.
+export async function persistPrecomputedScreening(applicationId, match) {
+  const {
+    ai,
+    skillOverlap,
+    requiredOverlap,
+    experienceCheck,
+    educationCheck,
+    skillMatchScore,
+    experienceMatchScore,
+    educationMatchScore,
+    overallScore,
+    matchedSkills,
+    missingSkills,
+  } = match;
+  const data = {
+    status: SCREENING_STATUS.COMPLETED,
+    overallScore,
+    skillMatchScore,
+    experienceMatchScore,
+    educationMatchScore,
+    matchedSkills,
+    missingSkills,
+    strengths: ai.strengths,
+    concerns: ai.concerns,
+    reasoning: ai.reasoning,
+    deterministicChecks: {
+      skillOverlap: { score: skillOverlap.score, matched: skillOverlap.matched, missing: skillOverlap.missing },
+      requiredSkillsOnly: { score: requiredOverlap.score, missing: requiredOverlap.missing },
+      experience: experienceCheck,
+      education: educationCheck,
+    },
+    aiModel: env.openRouterModel,
+    errorMessage: null,
+    screenedAt: new Date(),
+  };
+  return prisma.screeningResult.upsert({
+    where: { applicationId },
+    create: { applicationId, ...data },
+    update: data,
+  });
+}
+
 // Build plan P4: screen one application without a company user (auto
 // screening on apply, guest apply, best-job placement). Idempotent: an
 // application that already has a COMPLETED result, or was decided
@@ -295,7 +342,17 @@ export async function runScreeningForJob(userId, jobId, { force = false } = {}) 
       jobId,
       // status: { not: APPLICATION_STATUS.SHORTLISTED },
       // Build plan P7: also never re-screen post-interview decisions.
-      status: { notIn: [APPLICATION_STATUS.SHORTLISTED, ...POST_INTERVIEW_STATUSES] },
+      // Build plan P9: applicant screening (§22 mode 1) never disturbs a
+      // candidate who already holds interview access (/recq flow) — those are
+      // re-evaluated by runFinalScoreForJob (mode 2) instead.
+      status: {
+        notIn: [
+          APPLICATION_STATUS.SHORTLISTED,
+          APPLICATION_STATUS.INTERVIEW_SCHEDULED,
+          APPLICATION_STATUS.INTERVIEW_COMPLETED,
+          ...POST_INTERVIEW_STATUSES,
+        ],
+      },
       ...(force ? {} : { OR: [{ screeningResult: null }, { screeningResult: { status: { not: SCREENING_STATUS.COMPLETED } } }] }),
     },
     include: { job: { include: { company: true } }, resume: true, candidate: { include: { user: true } } },
@@ -311,6 +368,34 @@ export async function runScreeningForJob(userId, jobId, { force = false } = {}) 
   }
 
   return { screenedCount: results.length };
+}
+
+// Build plan P9 (§22 mode 2): "Run AI Screening — Interviewed Candidates".
+// Re-evaluates everyone on the job who has completed an interview by
+// recomputing the final score (CV match × weight + interview × weight). Moves
+// them to QUALIFIED / NOT_QUALIFIED when the job has a finalThreshold; never
+// touches SUBMITTED_TO_CLIENT or REJECTED (computeFinalScore guards that).
+export async function runFinalScoreForJob(userId, jobId) {
+  await getOwnedJob(userId, jobId);
+
+  const applications = await prisma.application.findMany({
+    where: {
+      jobId,
+      status: { notIn: [APPLICATION_STATUS.REJECTED, APPLICATION_STATUS.SUBMITTED_TO_CLIENT] },
+      interviews: { some: { status: 'COMPLETED', report: { status: 'COMPLETED' } } },
+    },
+    select: { id: true },
+  });
+
+  let evaluated = 0;
+  for (const { id } of applications) {
+    const res = await computeFinalScore(id).catch((err) => {
+      console.error('[screening] final-score re-eval failed for', id, err.message);
+      return null;
+    });
+    if (res && !res.skipped) evaluated++;
+  }
+  return { evaluatedCount: evaluated, candidateCount: applications.length };
 }
 
 export async function getRankedCandidates(userId, jobId, { limit } = {}) {

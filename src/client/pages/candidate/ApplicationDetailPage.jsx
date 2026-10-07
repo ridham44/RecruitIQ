@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CalendarCheck, Clock, Video, Info, Bot } from 'lucide-react';
 import { applicationsApi } from '../../services/applications.js';
 import { schedulingApi } from '../../services/scheduling.js';
@@ -183,9 +183,7 @@ export default function ApplicationDetailPage() {
       <div className="mb-6">
         <h2 className="text-xl font-semibold text-slate-900">{job.title}</h2>
         <p className="text-sm text-slate-500">
-          <Link to={`/candidate/jobs/${job.id}`} className="hover:text-brand-600">
-            {job.company.name}
-          </Link>
+          {job.company.name}
         </p>
       </div>
 

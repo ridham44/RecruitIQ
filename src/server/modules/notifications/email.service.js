@@ -30,7 +30,7 @@ function layout(bodyHtml) {
 }
 
 function viewApplicationButton(applicationId) {
-  const url = `${env.clientUrl}/candidate/applications/${applicationId}`;
+  const url = `${env.publicAppUrl}/candidate/applications/${applicationId}`;
   return `<p style="margin:24px 0;">
     <a href="${url}" style="background:#2a4bd6;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:bold;display:inline-block;">
       View Application
@@ -199,7 +199,7 @@ export async function sendInterviewInviteEmail({ to, candidateName, jobTitle, co
 // interview link has already gone to the candidate.
 export async function sendSecondRoundRequestedEmail({ to, hrName, companyName, candidateName, jobTitle, reason, notes, jobId, candidateId, applicationId }) {
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-  const url = `${env.clientUrl.split(',')[0].trim()}/company/jobs/${jobId}/candidates/${candidateId}`;
+  const url = `${env.publicAppUrl}/company/jobs/${jobId}/candidates/${candidateId}`;
   const subject = `2nd round requested: ${candidateName} — ${jobTitle}`;
   const html = layout(`
     <p>Hello,</p>
@@ -266,7 +266,7 @@ export async function sendCandidateApplicationReceivedEmail({ to, fullName, comp
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const what = jobTitle ? `your application for <strong>${esc(jobTitle)}</strong>` : 'your CV';
   const subject = jobTitle ? `We received your application for ${jobTitle}` : `We received your CV — ${companyName}`;
-  const loginUrl = `${env.clientUrl.split(',')[0].trim()}/auth/login`;
+  const loginUrl = `${env.publicAppUrl}/auth/login`;
   const action = link
     ? `<p>Set a password to track your application and attend interviews from your RecruitIQ account.</p>
        <p style="margin:24px 0;">
@@ -329,4 +329,62 @@ export async function sendInterviewConfirmationEmail({ application, slot, joinLi
     <p>— The RecruitIQ team</p>
   `);
   return sendAndLog({ to, subject, html, type: 'INTERVIEW_CONFIRMATION', applicationId: application.id });
+}
+
+// ─────────────────────────────────────────────────────────────
+// Build plan P9 (/recq flow)
+// ─────────────────────────────────────────────────────────────
+
+// §12/§17: the email verification code. Sent ONLY to the address extracted
+// from the uploaded resume (emailOtp.service.js). The code is never logged in
+// production and never returned in an API response.
+export async function sendRecqOtpEmail({ to, code, agencyName, jobTitle }) {
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const context = jobTitle
+    ? `your application for <strong>${esc(jobTitle)}</strong>${agencyName ? ` at <strong>${esc(agencyName)}</strong>` : ''}`
+    : agencyName
+      ? `your application at <strong>${esc(agencyName)}</strong>`
+      : 'your application';
+  const subject = `Your RecruitIQ verification code is ${code}`;
+  const html = layout(`
+    <p>Hi,</p>
+    <p>Use this code to verify your email and continue ${context}:</p>
+    <p style="text-align:center;margin:24px 0;">
+      <span style="display:inline-block;font-size:30px;letter-spacing:8px;font-weight:bold;color:#0f172a;background:#f1f5f9;border-radius:10px;padding:14px 22px;">${esc(code)}</span>
+    </p>
+    <p style="color:#64748b;font-size:12px;">This code expires in 5 minutes. If you didn't request it, you can ignore this email.</p>
+    <p>— The RecruitIQ team</p>
+  `);
+  return sendAndLog({ to, subject, html, type: 'OTP_VERIFICATION', applicationId: null });
+}
+
+// §6/§18: interview access after email verification. Reuses the INTERVIEW_INVITE
+// email type/log. `windowStart`/`windowEnd` (optional) describe the agency's
+// configured interview window; otherwise it reads like the instant invite.
+export async function sendRecqInterviewAccessEmail({ to, candidateName, jobTitle, companyName, link, windowStart, windowEnd, applicationId }) {
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const fmt = (d) =>
+    new Date(d).toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const subject = `Your interview for ${jobTitle} at ${companyName}`;
+  const windowBlock = windowStart || windowEnd
+    ? `<p style="background:#f1f5f9;border-radius:8px;padding:12px 16px;margin:16px 0;">
+         <strong>Interview window</strong><br />
+         ${windowStart ? `Opens: ${fmt(windowStart)}<br />` : ''}
+         ${windowEnd ? `Closes: ${fmt(windowEnd)}` : ''}
+       </p>`
+    : '';
+  const html = layout(`
+    <p>Hi ${esc(candidateName)},</p>
+    <p>You're verified and eligible to interview for <strong>${esc(jobTitle)}</strong> at <strong>${esc(companyName)}</strong>.</p>
+    ${windowBlock}
+    <p style="margin:24px 0;">
+      <a href="${link}" style="background:#2a4bd6;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:bold;display:inline-block;">
+        Start your interview
+      </a>
+    </p>
+    <p>Before you start: a quiet room, a working camera and microphone, about 15–20 minutes. If you get disconnected, open the same link again to continue.</p>
+    <p style="color:#64748b;font-size:12px;">Keep this link private — it opens your interview. If the button doesn't work, copy this link: ${link}</p>
+    <p>— The RecruitIQ team</p>
+  `);
+  return sendAndLog({ to, subject, html, type: 'INTERVIEW_INVITE', applicationId: applicationId ?? null });
 }

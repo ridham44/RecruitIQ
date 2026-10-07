@@ -11,6 +11,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // Generated demo files (seed resumes, recorded videos) aren't app source;
+    // watching a large video while it's being written crashes Vite on Windows.
+    watch: { ignored: ['**/demo-output/**', '**/demo-resumes/**', '**/backups/**', '**/uploads/**'] },
     proxy: {
       '/api': {
         target: 'http://localhost:3001',

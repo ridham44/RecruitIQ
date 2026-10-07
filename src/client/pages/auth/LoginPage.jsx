@@ -84,10 +84,8 @@ export default function LoginPage() {
         </Button>
       </form>
       <p className="mt-4 text-center text-sm text-slate-500">
-        Don't have an account?{' '}
-        <Link to="/auth/register" className="font-medium text-brand-600 hover:text-brand-700">
-          Register
-        </Link>
+        {/* No sign-up: agencies are added by the Portal Admin. */}
+        Agency accounts are set up by the RecruitIQ team. Candidates: use the link your recruitment agency sent you.
       </p>
     </AuthShell>
   );

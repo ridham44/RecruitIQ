@@ -6,6 +6,7 @@ import { analysisToJobFields } from '../../../shared/schemas/job-analysis.schema
 import { inviteAllShortlisted } from '../interviews/instantInterview.service.js';
 import { getCompanyContext, jobScopeWhere, canAccessJob } from '../companies/companyContext.js';
 import { resolveJobClientLink } from '../clients/clients.service.js';
+import { ensureJobSlug } from '../recq/recq.slug.js';
 
 // async function getCompanyIdForUser(userId) {
 //   const company = await prisma.company.findUnique({ where: { userId } });
@@ -88,6 +89,9 @@ export async function createJob(userId, jobData) {
       // Build plan P5
       interviewFlow: jobData.interviewFlow ?? 'SLOT',
       inviteValidDays: jobData.inviteValidDays ?? 7,
+      // Build plan P9 — /recq interview window
+      interviewAvailabilityStart: jobData.interviewAvailabilityStart ?? null,
+      interviewAvailabilityEnd: jobData.interviewAvailabilityEnd ?? null,
       // Build plan P7
       finalThreshold: jobData.finalThreshold ?? null,
       cvWeight: jobData.cvWeight ?? 0.3,
@@ -102,9 +106,10 @@ export async function createJob(userId, jobData) {
     await prisma.jobRecruiter.create({ data: { jobId: job.id, memberId: ctx.memberId } });
   }
 
+  let result = job;
   try {
     const analysis = await analyzeJobDescription({ title: job.title, description: job.description });
-    return await prisma.job.update({
+    result = await prisma.job.update({
       where: { id: job.id },
       data: {
         structuredRequirements: analysis,
@@ -116,8 +121,17 @@ export async function createJob(userId, jobData) {
     });
   } catch (err) {
     console.error('[jobs] AI analysis failed, keeping job as-is:', err.message);
-    return job;
   }
+
+  // Build plan P9: give the job a shareable /recq/:agency/:jobSlug link now,
+  // so recruiters can share it the moment the job exists.
+  try {
+    const slug = await ensureJobSlug(result.id);
+    result = { ...result, slug };
+  } catch (err) {
+    console.error('[jobs] slug generation failed:', err.message);
+  }
+  return result;
 }
 
 export async function updateJob(userId, jobId, jobData) {
@@ -166,6 +180,12 @@ export async function updateJob(userId, jobId, jobData) {
       // Build plan P5
       interviewFlow: jobData.interviewFlow ?? job.interviewFlow,
       inviteValidDays: jobData.inviteValidDays ?? job.inviteValidDays,
+      // Build plan P9 — /recq interview window (undefined leaves unchanged,
+      // null clears it).
+      interviewAvailabilityStart:
+        jobData.interviewAvailabilityStart !== undefined ? jobData.interviewAvailabilityStart : job.interviewAvailabilityStart,
+      interviewAvailabilityEnd:
+        jobData.interviewAvailabilityEnd !== undefined ? jobData.interviewAvailabilityEnd : job.interviewAvailabilityEnd,
       // Build plan P7 (null clears the threshold)
       finalThreshold: jobData.finalThreshold !== undefined ? jobData.finalThreshold : job.finalThreshold,
       cvWeight: jobData.cvWeight ?? job.cvWeight,
@@ -174,6 +194,19 @@ export async function updateJob(userId, jobId, jobData) {
       ...clientLink,
     },
   });
+
+  // Build plan P9: the interview window changed → links already issued to
+  // /recq candidates on this job follow the new window (their expiry is the
+  // window end, or the normal link validity when the window was cleared).
+  const sameTime = (a, b) => (a ? new Date(a).getTime() : null) === (b ? new Date(b).getTime() : null);
+  if (!sameTime(job.interviewAvailabilityStart, updated.interviewAvailabilityStart) || !sameTime(job.interviewAvailabilityEnd, updated.interviewAvailabilityEnd)) {
+    await prisma.interview.updateMany({
+      where: { status: 'SCHEDULED', slotId: null, application: { jobId: updated.id, source: 'RECQ' } },
+      data: {
+        inviteExpiresAt: updated.interviewAvailabilityEnd ?? new Date(Date.now() + (updated.inviteValidDays || 7) * 24 * 3600 * 1000),
+      },
+    });
+  }
 
   // Switched to instant links: everyone already shortlisted gets theirs now.
   if (job.interviewFlow !== 'INSTANT' && updated.interviewFlow === 'INSTANT') {

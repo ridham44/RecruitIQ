@@ -1,174 +1,134 @@
-# RecruitIQ Demo Login Credentials
+# RecruitIQ — Demo logins and data
 
-All demo accounts use the same password: **`Demo@1234`** (except `ceo@nfs.com` — see below)
+Demo dataset for the **RecQ agency-link flow**, created by `node scripts/seed-recq-demo.mjs`
+(also `node scripts/seed-demo.mjs`). Everything is fictional and every account is on a
+non-routable `.demo` domain — no real inbox receives anything.
 
----
-
-## Company Accounts
-
-| Field    | Value                          |
-|----------|-------------------------------|
-| Email    | `company@ravantratech.demo`   |
-| Password | `Demo@1234`                   |
-| Company  | Ravantra Tech                 |
-| Role     | COMPANY                        |
-
-| Field    | Value                          |
-|----------|-------------------------------|
-| Email    | `company@redflextech.demo`    |
-| Password | `Demo@1234`                   |
-| Company  | Redflex Tech                  |
-| Role     | COMPANY                        |
-| Job      | Node.js Developer Intern      |
-
-**Login redirects to → `/company/dashboard`**
+- **Password for every account:** `Demo@123` (the `DEMO_PASSWORD` value used when seeding — the default).
+  The set includes a real **Portal Admin**: if you seed it on a shared or live database, use a
+  different, strong `DEMO_PASSWORD` and update this file.
+- **Sign in:** `/auth/login`. There is **no sign-up** — agencies are added by the Portal Admin.
+- **Where these logins work:** the **live site** `https://recruitiq-eta.vercel.app` and the local demo
+  environment (`http://localhost:5173`). Both were seeded with this set.
+- **Exception — Portal Admin on the live site:** `admin@platform.demo` has its own strong password there
+  (not `Demo@123`, because the admin sees every real agency). It was shared directly — it is not stored in
+  this repository. Locally the admin uses `Demo@123`.
+- Overview of every role and link: **`/live-demo`** (shows the password only when `DEMO_PAGE=true`).
 
 ---
 
-## Redflex Tech — Node.js Developer Intern
+## Accounts
 
-All 6 candidates below (existing demo accounts, see Candidate Accounts table for their login emails) applied to this
-job at Redflex Tech, in addition to their existing React.js Developer application at Ravantra Tech. Applications are
-in **APPLIED** status (not yet screened) — screen them from the company dashboard to test that flow.
+| Role | Email | Password | Lands on | Notes |
+| --- | --- | --- | --- | --- |
+| Portal Admin | `admin@platform.demo` | `Demo@123` (local) · live: separate password | `/admin/companies` | Adds / suspends agencies, sees all users |
+| Agency owner — **Nexora Talent Partners** | `owner@nexora.demo` | `Demo@123` | `/company/dashboard` | All jobs, companies, recruiters |
+| Agency recruiter — Ritika Bansal | `recruiter@nexora.demo` | `Demo@123` | `/company/dashboard` | Assigned to MERN, Backend, React + client Finlytics (so also sees AI/ML); not the Data Analyst job |
+| Company HR — Kunal Shah, **Finlytics Software Pvt Ltd** | `hr@finlytics.demo` | `Demo@123` | `/client/candidates` | Sees only candidates submitted to them |
+| Second agency — **Brightline Staffing** | `owner@brightline.demo` | `Demo@123` | `/company/dashboard` | Isolation check: never sees Nexora data |
 
-- Dev Solanki
-- Arjun Shah
-- Kavya Nair
-- Riya Mehta
-- Ridham Patel
-- Priya Sharma
+Recruiter permissions: view candidates, review candidates, configure interviews, manage jobs,
+submit candidates.
 
----
-
-## Nfs Agency — Ferrari & McLaren
-
-| Field    | Value                                   |
-|----------|-----------------------------------------|
-| Email    | `ceo@nfs.com`                           |
-| Password | the password set when the agency was created (not `Demo@1234`) |
-| Agency   | Nfs                                     |
-| Role     | COMPANY (Agency owner)                  |
-
-**Login redirects to → `/company/dashboard`**
-
-Client companies and their Company HR (shown under **Companies** in the agency menu):
-
-| Company | Department       | Company HR | HR email              |
-|---------|------------------|------------|-----------------------|
-| Ferrari | Scuderia Ferrari | Rachel     | `rachel@ferrari.com`  |
-| McLaren | McLaren Racing   | Remsi      | `remsi@mclaren.com`   |
-
-Company HR can only log in after the agency invites them to the portal (company page → Company HR →
-**Invite to portal**) and they set a password from the invite link. With `FEATURE_CLIENT_PORTAL=true`
-they land on `/client/candidates`.
-
-### Jobs and applicants
-
-4 open jobs, 6 applicants each — all in **APPLIED** status (not yet screened). Each job has strong,
-medium and weak fits, so **Run AI Screening** gives a spread of scores. Every applicant has a profile,
-education and a downloadable `.docx` CV.
-
-All 24 fake candidates use password **`Demo@1234`** and log in at `/auth/login`. Their emails are on the
-`@nfsdemo.example` domain (no real inbox).
-
-**Ferrari — Full Stack Developer – Race Telemetry Platform** (3–7 yrs, Maranello, Hybrid)
-
-| Name          | Email                              | Exp     | Background                     | Expected fit |
-|---------------|------------------------------------|---------|--------------------------------|--------------|
-| Luca Bianchi  | `luca.bianchi@nfsdemo.example`     | 5.5 yrs | React/Node/TS, WebSockets, AWS | Strong       |
-| Aarav Shah    | `aarav.shah@nfsdemo.example`       | 4 yrs   | MERN + TypeScript, PostgreSQL  | Strong       |
-| Sofia Romano  | `sofia.romano@nfsdemo.example`     | 3 yrs   | React + TS frontend            | Medium       |
-| Neha Kulkarni | `neha.kulkarni@nfsdemo.example`    | 6 yrs   | Java Spring Boot + Angular     | Medium       |
-| Marco Conti   | `marco.conti@nfsdemo.example`      | 1 yr    | Junior React                   | Weak         |
-| Rohan Gupta   | `rohan.gupta@nfsdemo.example`      | 2.5 yrs | QA automation (Selenium)       | Weak         |
-
-**Ferrari — Data Engineer – Performance Analytics** (2–6 yrs, Maranello, On-site)
-
-| Name           | Email                              | Exp   | Background                      | Expected fit |
-|----------------|------------------------------------|-------|---------------------------------|--------------|
-| Giulia Ferraro | `giulia.ferraro@nfsdemo.example`   | 4 yrs | Spark, Kafka, AWS, Airflow, dbt | Strong       |
-| Vikram Rao     | `vikram.rao@nfsdemo.example`       | 3 yrs | Python, Airflow, BigQuery (GCP) | Strong       |
-| Elena Russo    | `elena.russo@nfsdemo.example`      | 2 yrs | Data analyst, SQL, Tableau      | Medium       |
-| Arjun Menon    | `arjun.menon@nfsdemo.example`      | 5 yrs | Java backend + Kafka            | Medium       |
-| Pooja Reddy    | `pooja.reddy@nfsdemo.example`      | 0 yrs | M.Sc Data Science graduate      | Weak         |
-| Daniel Moretti | `daniel.moretti@nfsdemo.example`   | 3 yrs | Mechanical engineer, MATLAB     | Weak         |
-
-**McLaren — Embedded Software Engineer – Vehicle Control Systems** (3–8 yrs, Woking, On-site)
-
-| Name           | Email                              | Exp   | Background                         | Expected fit |
-|----------------|------------------------------------|-------|------------------------------------|--------------|
-| Oliver Hughes  | `oliver.hughes@nfsdemo.example`    | 6 yrs | Automotive AUTOSAR, CAN, ISO 26262 | Strong       |
-| Siddharth Iyer | `siddharth.iyer@nfsdemo.example`   | 4 yrs | C/C++, FreeRTOS, CAN (EV, drones)  | Strong       |
-| Emily Clarke   | `emily.clarke@nfsdemo.example`     | 3 yrs | IoT firmware, Zephyr RTOS          | Medium       |
-| Thomas Wright  | `thomas.wright@nfsdemo.example`    | 7 yrs | C++/Qt desktop on Linux            | Medium       |
-| Harsh Vora     | `harsh.vora@nfsdemo.example`       | 2 yrs | Simulink controls engineer         | Weak         |
-| Ananya Das     | `ananya.das@nfsdemo.example`       | 0 yrs | ECE graduate, Arduino projects     | Weak         |
-
-**McLaren — Frontend Developer – Fan Engagement App** (2–5 yrs, London, Hybrid)
-
-| Name            | Email                              | Exp   | Background                         | Expected fit |
-|-----------------|------------------------------------|-------|------------------------------------|--------------|
-| Chloe Bennett   | `chloe.bennett@nfsdemo.example`    | 4 yrs | Next.js, TS, Tailwind, GraphQL     | Strong       |
-| Kabir Malhotra  | `kabir.malhotra@nfsdemo.example`   | 3 yrs | React + TS, some Next.js           | Strong       |
-| Isabella Turner | `isabella.turner@nfsdemo.example`  | 2 yrs | Vue.js / Nuxt                      | Medium       |
-| Nikhil Jain     | `nikhil.jain@nfsdemo.example`      | 5 yrs | React Native mobile                | Medium       |
-| Sam Wilson      | `sam.wilson@nfsdemo.example`       | 1 yr  | WordPress / PHP                    | Weak         |
-| Tanvi Shah      | `tanvi.shah@nfsdemo.example`       | 3 yrs | UI/UX designer (Figma)             | Weak         |
-
-"Expected fit" is how the CVs were written, not a stored score — the real score comes from AI screening.
-
-To recreate this data: `node scripts/seed-nfs.mjs` (replaces only these 4 jobs and the
-`@nfsdemo.example` candidates).
+Candidates have **no login** — they use the `/recq` links below.
 
 ---
 
-## Candidate Accounts
+## Candidate links (no login)
 
-All candidates use password: `Demo@1234` and login at `/auth/login`.
+| Link | Shows |
+| --- | --- |
+| `/recq/nexora` | Nexora's 5 open roles + "Not sure which role fits?" resume discovery |
+| `/recq/nexora/mern-stack-developer` | One job: upload resume → match → email code → interview |
+| `/recq/nexora/backend-nodejs-developer` | Backend Node.js Developer |
+| `/recq/nexora/react-developer` | React Developer |
+| `/recq/nexora/ai-ml-engineer` | AI/ML Engineer |
+| `/recq/nexora/data-analyst-intern` | Data Analyst Intern — interview window opens in 3 days |
+| `/recq/nexora/php-laravel-developer` | **Closed** → "no longer accepting applications" |
+| `/recq/nexora/qa-automation-engineer` | **Closed** |
+| `/recq/brightline` | Brightline's 2 jobs only |
+| `/recq/brightline/mern-stack-developer` | Wrong agency + job → rejected |
+| `/careers/nexora` | Old careers link → redirects to `/recq/nexora` |
 
-| Name         | Email                            | Score | Status          | Interview            |
-|--------------|----------------------------------|-------|-----------------|----------------------|
-| Ridham Patel | `ridham.patel@example.com`       | 91    | SHORTLISTED     | COMPLETED (score 84) |
-| Aarav Mehta  | `aarav.mehta@example.com`        | 80    | SHORTLISTED     | Slot available       |
-| Riya Mehta   | `riya.mehta@example.com`         | 78    | SHORTLISTED     | COMPLETED (score 64) |
-| Priya Sharma | `priya.sharma@example.com`       | 72    | SHORTLISTED     | COMPLETED (score 38) |
-| Kavya Nair   | `kavya.nair@example.com`         | 70    | SHORTLISTED     | Slot available       |
-| Arjun Shah   | `arjun.shah@example.com`         | 65    | SHORTLISTED     | Slot available       |
-| Dev Solanki  | `dev.solanki@example.com`        | 57    | SHORTLISTED     | Slot available       |
-| Meera Pillai | `meera.pillai@example.com`       | 22    | REJECTED        | —                    |
-| Sneha Joshi  | `sneha.joshi@example.com`        | 28    | REJECTED        | —                    |
-| Harsh Patel  | `harsh.patel@example.com`        | 18    | REJECTED        | —                    |
-
----
-
-## Screening Summary
-
-- Job: React.js Developer at Ravantra Tech
-- Shortlisted: 7 (score >= 55)
-- Rejected: 3 (score < 45) — Harsh Patel (PHP/jQuery), Sneha Joshi (Python/Django), Meera Pillai (Android/Java)
+Sample resumes to upload: `/sample-resumes/Kavya_Reddy_FullStack_Resume.docx` (strong, matches
+several roles) and `/sample-resumes/Aditya_Rao_Resume.docx` (customer support — stops at the match).
+The verification code goes to the email on the resume; with email in console mode (demo) the
+verification screen shows a dev code outside production, and the server log prints it.
 
 ---
 
-## Completed Interviews
+## Jobs — Nexora Talent Partners
 
-| Candidate    | Overall | Technical | Communication | Verdict     |
-|--------------|---------|-----------|---------------|-------------|
-| Ridham Patel | 84      | 88        | 79            | Best        |
-| Riya Mehta   | 64      | 60        | 68            | Medium      |
-| Priya Sharma | 38      | 20        | 55            | Poor        |
+| Job | Location · type | Experience | Min. resume match | AI interviewer | Questions · answer time | Interview window | Final threshold |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| MERN Stack Developer | Pune · Full-time · Hybrid | 2–5 yrs | 65% | Ananya, Senior Technical Recruiter | 6 · 90 s | opened 8 days ago → +14 days | 70 (client: Finlytics) |
+| Backend Node.js Developer | Bengaluru · Full-time · On-site | 3–6 yrs | 65% | Vikram, Engineering Manager | 6 · 120 s | none (link valid 7 days) | 70 (client: Finlytics) |
+| React Developer | Remote · Contract | 1–3 yrs | 60% | Priya, Virtual HR | 5 · 60 s | opened 8 days ago → +7 days | none (recruiter decides) |
+| AI/ML Engineer | Hyderabad · Full-time · Hybrid | 2–5 yrs | 70% | Kavya, ML Lead | 7 · 120 s | opened 8 days ago → +10 days | 75 (client: Finlytics) |
+| Data Analyst Intern | Ahmedabad · Internship · On-site | 0–1 yr | 55% | Priya, Campus Recruiter | 4 · 60 s | **opens in 3 days** → +10 days | none |
+| PHP Laravel Developer | Pune | — | — | — | — | — | **CLOSED** |
+| QA Automation Engineer | Pune | — | — | — | — | — | **CLOSED** |
 
-View: Company Login → Jobs → React.js Developer → Interviews tab
+Every job has its own custom questions, interview instructions, evaluation criteria and focus
+skills (Interviews tab). Final score = CV match × 30% + interview × 70%.
+
+Brightline Staffing: **Java Spring Boot Developer** (Chennai) and **DevOps Engineer** (Gurugram).
 
 ---
 
-## Future Slots
+## Candidates (seeded through the real flow)
 
-4 AVAILABLE slots across the next 4 days (10:00–10:30) for: Aarav Mehta, Kavya Nair, Arjun Shah, Dev Solanki.
+Each one uploaded a resume → AI match → verified the resume email → applied. The four completed
+interviews were run through the real AI interview engine; their dates are spread over the past week.
+
+| Candidate | Email | Applied to | Resume match | Interview | Final | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Priya Sharma | `priya.sharma@mail.demo` | MERN Stack Developer *(via discovery)* | 91 | Completed · 92 | 91.7 | **Submitted to Company HR** (selected) |
+| | | React Developer *(same upload)* | 63 | Pending | — | Interview scheduled |
+| Arjun Verma | `arjun.verma@mail.demo` | Backend Node.js Developer | 100 | Completed · 90 | 93 | **Qualified** |
+| Sneha Kulkarni | `sneha.kulkarni@mail.demo` | React Developer | 82 | Completed · 68 | 72.2 | Interview completed — needs review |
+| Karan Malhotra | `karan.malhotra@mail.demo` | Backend Node.js Developer | 76 | Completed · 20 (tab-switch flag) | 36.8 | **Rejected** |
+| Fatima Sheikh | `fatima.sheikh@mail.demo` | MERN *(discovery)* + Backend | 90 · 79 | Pending (2 interviews) | — | Interview scheduled |
+| Ananya Iyer | `ananya.iyer@mail.demo` | AI/ML Engineer | 100 | Pending | — | Interview scheduled |
+| Meera Nair | `meera.nair@mail.demo` | React Developer | 90 | Pending | — | Interview scheduled |
+| Rahul Deshmukh | `rahul.deshmukh@mail.demo` | MERN Stack Developer | 84 | Pending | — | Interview scheduled |
+| Ishita Banerjee | `ishita.banerjee@mail.demo` | React Developer | 81 | Pending | — | Interview scheduled |
+| Vikram Joshi | `vikram.joshi@mail.demo` | MERN Stack Developer | 78 | Pending | — | Interview scheduled |
+| Rohit Patil | `rohit.patil@mail.demo` | Data Analyst Intern | 66 | **Not available yet** (window opens in 3 days) | — | Interview scheduled |
+| Neha Gupta | `neha.gupta@mail.demo` | Brightline · Java Spring Boot Developer | 84 | Pending | — | Interview scheduled |
+| Siddharth Menon | `siddharth.menon@mail.demo` | Brightline · DevOps Engineer | 92 | Pending | — | Interview scheduled |
+
+**More applicants** (interview pending — they give every job a fuller list):
+
+| Candidate | Email | Applied to |
+| --- | --- | --- |
+| Nikhil Bhosale | `nikhil.bhosale@mail.demo` | MERN Stack Developer |
+| Pooja Iyengar | `pooja.iyengar@mail.demo` | MERN Stack Developer |
+| Amit Chauhan | `amit.chauhan@mail.demo` | Backend Node.js Developer |
+| Divya Menon | `divya.menon@mail.demo` | Backend Node.js Developer |
+| Sanya Kapoor | `sanya.kapoor@mail.demo` | React Developer |
+| Harsh Vardhan | `harsh.vardhan@mail.demo` | AI/ML Engineer |
+| Riya Jain | `riya.jain@mail.demo` | AI/ML Engineer |
+| Aakash Pandey | `aakash.pandey@mail.demo` | Data Analyst Intern (window opens in 3 days) |
+| Kritika Sharma | `kritika.sharma@mail.demo` | Data Analyst Intern (window opens in 3 days) |
+
+Match scores come from the AI each time the seed runs, so the live site and the local demo can differ
+by a few points (the tables above are from the local seed).
+
+**Live-demo candidate (not seeded):** Kavya Reddy, `kavya.reddy@mail.demo` — upload
+`Kavya_Reddy_FullStack_Resume.docx` on `/recq/nexora` → "Find my matches" → MERN, Backend and
+React are eligible → one interview link per role.
 
 ---
 
-## Auth Fix
+## Recreate the data
 
-- **Problem:** Stale/wrong-role JWTs caused "You do not have permission" on page refreshes.
-- **Fix:** `api.js` now clears the stored token automatically on any 401/403 response.
-- Security checks (authorize middleware) are unchanged.
+```bash
+node scripts/seed-recq-demo.mjs --reset   # removes only the .demo demo set, then recreates it (~10 min)
+node scripts/seed-recq-demo.mjs --extra   # only adds the "more applicants" to an existing demo set
+# separate Portal Admin password (e.g. live): RECQ_ADMIN_PASSWORD=... node scripts/seed-recq-demo.mjs --yes
+```
+
+The seed refuses a non-local `DATABASE_URL` unless `--yes` is given — use that only for a dedicated
+demo database, and back it up first (`node scripts/backup-db.mjs before-demo`). `--reset` also
+removes the earlier demo set on the `@recruitiq.demo` domain.

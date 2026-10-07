@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { env } from '../../config/env.js';
+import { ApiError } from '../../utils/ApiError.js';
 import * as jobsController from './jobs.controller.js';
 import { authenticate, authorize } from '../../middleware/auth.js';
 import { validate } from '../../middleware/validate.js';
@@ -52,7 +54,12 @@ function optionalAuth(req, res, next) {
 }
 
 // GET / is public (browse open jobs) — no auth required for candidates browsing.
+// Build plan P9 (§1): there is no cross-agency job board unless the legacy
+// FEATURE_CANDIDATE_JOB_BOARD is on — candidates use an agency's /recq link.
 function listOrPublic(req, res, next) {
+  if (!env.features.candidateJobBoard) {
+    return next(ApiError.notFound("Jobs are only available through your recruitment agency's link", 'JOB_BOARD_DISABLED'));
+  }
   return jobsController.listOpenJobs(req, res, next);
 }
 

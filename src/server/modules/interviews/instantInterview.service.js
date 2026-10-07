@@ -8,6 +8,7 @@ import { APPLICATION_STATUS, INTERVIEW_STATUS } from '../../../shared/constants/
 import { sendInterviewInviteEmail, sendInterviewConfirmationEmail } from '../notifications/email.service.js';
 import { smsDriver } from '../notifications/sms/index.js';
 import { maskPhone } from '../../utils/phone.js';
+import { interviewAccessBlocker } from './interviewAccess.util.js';
 
 // Build plan P5 (§9) — instant interview link: attend now or later, no slot.
 //
@@ -30,7 +31,7 @@ function tokenFor(interview) {
 
 export function interviewLinkFor(interview) {
   if (!interview?.inviteNonce) return null;
-  return `${env.clientUrl.split(',')[0].trim()}/interview/${tokenFor(interview)}`;
+  return `${env.publicAppUrl}/interview/${tokenFor(interview)}`;
 }
 
 function assertEnabled() {
@@ -44,7 +45,7 @@ const INCLUDE = {
   slot: true,
   application: {
     include: {
-      job: { include: { company: { select: { name: true, logoUrl: true } } } },
+      job: { include: { company: { select: { name: true, logoUrl: true, status: true } } } },
       candidate: { include: { user: { select: { id: true, email: true, isActive: true } } } },
     },
   },
@@ -99,6 +100,53 @@ export async function createOrRefreshInstantInterview(applicationId, { rotate = 
   return { interview, link: interviewLinkFor(interview) };
 }
 
+// Build plan P9 (/recq flow, §6/§24): grant interview access to a /recq
+// application after resume-match + email OTP — WITHOUT the SHORTLISTED gate
+// the shortlist-driven instant flow uses, and regardless of
+// FEATURE_INSTANT_INTERVIEW (/recq has its own gate). Same secure per-interview
+// token scheme, so a token still only ever opens this one interview. The link
+// is usable only inside the job's interviewAvailability window (enforced in
+// blocker()); inviteExpiresAt is pinned to the window end when one is set.
+// Idempotent: re-applying returns the same interview/link.
+export async function createRecqInterviewAccess(applicationId) {
+  const application = await prisma.application.findUnique({
+    where: { id: applicationId },
+    include: { job: true, interviews: { where: { status: { in: ACTIVE } }, orderBy: { createdAt: 'desc' } } },
+  });
+  if (!application) throw ApiError.notFound('Application not found');
+
+  const windowEnd = application.job.interviewAvailabilityEnd;
+  const expiresAt = windowEnd
+    ? new Date(windowEnd)
+    : new Date(Date.now() + (application.job.inviteValidDays || 7) * 24 * 3600 * 1000);
+
+  const active = application.interviews.find((i) => !i.slotId);
+  if (active) {
+    const needsNewExpiry = !active.inviteExpiresAt || active.inviteExpiresAt.getTime() !== expiresAt.getTime();
+    const inviteNonce = active.inviteNonce || crypto.randomBytes(16).toString('hex');
+    if (!needsNewExpiry && active.inviteNonce) return { interview: active, link: interviewLinkFor(active) };
+    const draft = { ...active, inviteNonce };
+    const updated = await prisma.interview.update({
+      where: { id: active.id },
+      data: { inviteNonce, accessTokenHash: sha256(tokenFor(draft)), inviteExpiresAt: expiresAt },
+    });
+    return { interview: updated, link: interviewLinkFor(updated) };
+  }
+
+  const interview = await prisma.$transaction(async (tx) => {
+    const created = await tx.interview.create({
+      data: { applicationId, status: INTERVIEW_STATUS.SCHEDULED, inviteNonce: crypto.randomBytes(16).toString('hex') },
+    });
+    await tx.application.update({ where: { id: applicationId }, data: { status: APPLICATION_STATUS.INTERVIEW_SCHEDULED } });
+    return tx.interview.update({
+      where: { id: created.id },
+      data: { accessTokenHash: sha256(tokenFor(created)), inviteExpiresAt: expiresAt },
+    });
+  }, TX_OPTIONS);
+
+  return { interview, link: interviewLinkFor(interview) };
+}
+
 // Join link for a SLOT interview booked from the candidate's status link (no
 // login). Same token scheme as instant links; it stops working after the
 // slot ends (+1 hour grace, matching a late/dropped join). Returns the link.
@@ -121,12 +169,13 @@ export async function ensureSlotInterviewLink(interviewId) {
 }
 
 // Instant links need FEATURE_INSTANT_INTERVIEW; slot-interview join links
-// (status-link bookings) and second-round links work regardless of that flag.
+// (status-link bookings), second-round links, and /recq (P9) interviews work
+// regardless of that flag — /recq has its own FEATURE_RECQ gate.
 async function findForLink(token) {
   if (env.features.instantInterview) return findByToken(token);
   const interview = await findByToken(token).catch(() => null);
   // if (interview?.slotId) return interview;
-  if (interview?.slotId || interview?.round > 1) return interview;
+  if (interview?.slotId || interview?.round > 1 || interview?.application?.source === 'RECQ') return interview;
   assertEnabled();
   return findByToken(token);
 }
@@ -146,6 +195,11 @@ function blocker(interview) {
   if (interview.status === INTERVIEW_STATUS.CANCELLED) {
     return { code: 'INTERVIEW_CANCELLED', message: 'This interview has been cancelled.' };
   }
+  // Build plan P9 (§7, §26): suspended agency + the /recq interview window,
+  // shared with the interview engine's start so the API can't be used to
+  // bypass them. An in-progress interview is never blocked (rejoin).
+  const access = interviewAccessBlocker(interview);
+  if (access) return access;
   // An interview already in progress can always be rejoined (dropped connection).
   if (interview.status === INTERVIEW_STATUS.SCHEDULED && interview.inviteExpiresAt && interview.inviteExpiresAt <= new Date()) {
     return { code: 'INVITE_EXPIRED', message: 'This interview link has expired. Please contact the recruiter for a new one.' };
@@ -163,8 +217,11 @@ function publicSummary(interview) {
     interviewId: interview.id,
     status: interview.status,
     canJoin: !b,
-    ...(b ? { reason: b.code, message: b.message } : {}),
+    ...(b ? { reason: b.code, message: b.message, ...(b.availableFrom ? { availableFrom: b.availableFrom } : {}) } : {}),
     expiresAt: interview.inviteExpiresAt,
+    // Build plan P9 (§7/§18): the agency-configured interview window, so the
+    // candidate page can show "opens / closes" and the not-yet-open state.
+    window: { start: job.interviewAvailabilityStart || null, end: job.interviewAvailabilityEnd || null },
     candidateName: candidate.fullName,
     // Booked slot (null for instant links).
     slot: interview.slot ? { startTime: interview.slot.startTime, endTime: interview.slot.endTime } : null,

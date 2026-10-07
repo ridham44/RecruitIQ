@@ -115,7 +115,19 @@ export async function listApplicationsForJob(userId, jobId) {
   await getOwnedJob(userId, jobId);
   return prisma.application.findMany({
     where: { jobId },
-    include: { candidate: true, resume: true, screeningResult: true },
+    include: {
+      candidate: true,
+      resume: true,
+      screeningResult: true,
+      // Build plan P9: interview status/score per row (the /recq flow goes
+      // straight from apply to interview, so recruiters need this in the list).
+      interviews: {
+        where: { status: { not: 'CANCELLED' } },
+        orderBy: [{ round: 'desc' }, { createdAt: 'desc' }],
+        take: 1,
+        select: { id: true, status: true, round: true, endedAt: true, report: { select: { status: true, overallScore: true } } },
+      },
+    },
     orderBy: [{ screeningResult: { overallScore: 'desc' } }, { createdAt: 'desc' }],
   });
 }

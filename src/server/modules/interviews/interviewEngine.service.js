@@ -4,6 +4,7 @@ import { PLANNED_QUESTION_STAGES } from '../../../shared/constants/statuses.js';
 import { getOwnedJob } from '../jobs/jobs.service.js';
 import { getEffectiveConfig, resolveTtsVoiceId } from './interviewConfig.service.js';
 import { createInterviewToken } from './livekit.service.js';
+import { interviewAccessBlocker } from './interviewAccess.util.js';
 import { generateInterviewQuestion } from '../../ai/interview-question-generator.service.js';
 import { evaluateAnswer } from '../../ai/interview-answer-evaluator.service.js';
 import { generateInterviewReport, computeResumeAlignment } from '../../ai/interview-report-generator.service.js';
@@ -269,6 +270,12 @@ export async function startInterview(userId, interviewId) {
   if (interview.status === 'COMPLETED' || interview.status === 'CANCELLED') {
     throw ApiError.badRequest('This interview is no longer active', 'INTERVIEW_NOT_ACTIVE');
   }
+
+  // Build plan P9: the same access rules as the interview link (suspended
+  // agency, /recq interview window), so a normally logged-in candidate can't
+  // bypass them by calling start directly. Never blocks an IN_PROGRESS rejoin.
+  const access = interviewAccessBlocker(interview);
+  if (access) throw ApiError.badRequest(access.message, access.code);
 
   // First join only — a candidate already IN_PROGRESS is reconnecting
   // (dropped connection, refresh) and must always be let back in regardless

@@ -43,6 +43,11 @@ const jobFields = z.object({
   // Build plan P5 (§9): SLOT = book a time slot (default), INSTANT = interview link.
   interviewFlow: z.enum(['SLOT', 'INSTANT']).default('SLOT'),
   inviteValidDays: z.coerce.number().int().min(1, 'Link must be valid for at least 1 day').max(60, 'Link can be valid for at most 60 days').default(7),
+  // Build plan P9 (§7): the agency-configured interview window for /recq
+  // candidates. Both null = no fixed window. Coerced from ISO strings; the
+  // end-after-start check is in checkJob. Enforced on the backend.
+  interviewAvailabilityStart: z.coerce.date().nullable().optional(),
+  interviewAvailabilityEnd: z.coerce.date().nullable().optional(),
   // Build plan P7 (§12): null threshold = final-score decisions off for the job.
   finalThreshold: z.coerce.number().min(0, 'Threshold must be 0–100').max(100, 'Threshold must be 0–100').nullable().optional(),
   cvWeight: z.coerce.number().min(0).max(1).optional(),
@@ -61,6 +66,9 @@ function checkJob(data, ctx) {
   }
   if (data.cvWeight != null && data.interviewWeight != null && Math.abs(data.cvWeight + data.interviewWeight - 1) > 0.001) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['interviewWeight'], message: 'CV weight and interview weight must add up to 100%' });
+  }
+  if (data.interviewAvailabilityStart && data.interviewAvailabilityEnd && data.interviewAvailabilityEnd <= data.interviewAvailabilityStart) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['interviewAvailabilityEnd'], message: 'Interview window must end after it starts' });
   }
 }
 

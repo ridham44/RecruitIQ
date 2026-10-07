@@ -48,7 +48,10 @@ export default function DashboardLayout({ navItems }) {
         </div>
       </aside>
 
-      <div className="flex flex-1 flex-col">
+      {/* min-w-0: without it this flex item grows to its widest child (e.g. a
+          min-w table inside overflow-x-auto), so the whole page scrolls
+          sideways on phones instead of just the table. */}
+      <div className="flex min-w-0 flex-1 flex-col">
         {/* Mobile top bar */}
         <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-4 md:hidden">
           <div className="flex items-center gap-2">

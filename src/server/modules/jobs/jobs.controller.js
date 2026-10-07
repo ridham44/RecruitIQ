@@ -1,7 +1,10 @@
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { created, ok } from '../../utils/apiResponse.js';
 import * as jobsService from './jobs.service.js';
-import { isCompanySide } from '../../../shared/constants/roles.js';
+import { isCompanySide, ROLES } from '../../../shared/constants/roles.js';
+import { prisma } from '../../config/prisma.js';
+import { env } from '../../config/env.js';
+import { ApiError } from '../../utils/ApiError.js';
 
 export const createJob = asyncHandler(async (req, res) => {
   const job = await jobsService.createJob(req.user.id, req.body);
@@ -45,6 +48,15 @@ export const getJob = asyncHandler(async (req, res) => {
   if (req.user && isCompanySide(req.user.role)) {
     const job = await jobsService.getOwnedJob(req.user.id, req.params.id).catch(() => null);
     if (job) return ok(res, { job });
+  }
+  // Build plan P9 (§1): no browsing other agencies' jobs by id. Without the
+  // legacy job board, a candidate may only open a job they applied to (the
+  // public job pages are the agency-scoped /recq ones).
+  if (!env.features.candidateJobBoard) {
+    const applied =
+      req.user?.role === ROLES.CANDIDATE &&
+      (await prisma.application.findFirst({ where: { jobId: req.params.id, candidate: { userId: req.user.id } }, select: { id: true } }));
+    if (!applied) throw ApiError.notFound('Job not found');
   }
   const job = await jobsService.getPublicJobById(req.params.id);
   ok(res, { job });

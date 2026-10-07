@@ -191,6 +191,9 @@ enum EmailType {
   CLIENT_SUBMISSION
   // Company HR asked for a second-round interview (email to the agency).
   SECOND_ROUND_REQUESTED
+  // Build plan P9 (/recq flow): one-time email verification code sent to the
+  // email extracted from the candidate's uploaded resume.
+  OTP_VERIFICATION
 }
 
 // Build plan P5: how a job's candidates get to their interview. SLOT (the
@@ -204,10 +207,13 @@ enum InterviewFlow {
 // Build plan P4: how an application was created. DIRECT = logged-in
 // candidate (the only kind before P4), GUEST = careers-portal apply with
 // phone OTP, AUTO_MATCH = CV-only submission placed on its best-matching job.
+// Build plan P9 (/recq flow): RECQ = agency-link apply — resume match + email
+// OTP, interview-eligible without manual screening/shortlisting.
 enum ApplicationSource {
   DIRECT
   GUEST
   AUTO_MATCH
+  RECQ
 }
 
 // Build plan P2: a user's role inside a recruitment company. OWNER implicitly
@@ -559,6 +565,11 @@ model Job {
   certifications         String[]       @default([])
   salaryRange            String?
   status                 JobStatus      @default(OPEN)
+  // Build plan P9 (/recq flow): public per-agency job slug for
+  // /recq/:agencySlug/:jobSlug. Unique within a company (@@unique below).
+  // Generated from the title the first time it's needed; null for jobs that
+  // predate P9 until backfilled / next touched.
+  slug                   String?
   // AI-extracted structured requirements kept alongside the raw description
   // (see Section 12) — stored as JSON so the shape can evolve freely.
   structuredRequirements Json?
@@ -580,6 +591,12 @@ model Job {
   interviewFlow           InterviewFlow @default(SLOT)
   // How long an instant interview link stays valid.
   inviteValidDays         Int           @default(7)
+  // Build plan P9 (/recq flow): the agency-configured window during which a
+  // /recq candidate's interview link is usable. Both null = no fixed window
+  // (the link follows inviteValidDays as before). Enforced on the backend in
+  // instantInterview.service.js blocker(), never only in the UI.
+  interviewAvailabilityStart DateTime?
+  interviewAvailabilityEnd   DateTime?
   // Build plan P7 (§12, §13): final score = CV × cvWeight + interview ×
   // interviewWeight (normalized). finalThreshold null = feature off for the
   // job, so nothing changes status. autoSubmitToClient sends QUALIFIED
@@ -608,6 +625,7 @@ model Job {
   department        Department?        @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   hiringPerson      HiringPerson?      @relation(fields: [hiringPersonId], references: [id], onDelete: SetNull)
 
+  @@unique([companyId, slug])
   @@index([companyId])
   @@index([status])
   @@index([clientCompanyId])
@@ -667,6 +685,27 @@ model PhoneOtp {
   @@map("phone_otps")
 }
 
+// Build plan P9 (/recq flow): one-time email codes. Mirrors PhoneOtp but
+// keyed by email (the identity extracted from the uploaded resume — the code
+// is only ever sent there, never to a hand-typed address). Only a bcrypt hash
+// of the code is stored. Rows also back the rate limits (per email and per
+// IP), so they are kept, not deleted.
+model EmailOtp {
+  id         String    @id @default(cuid())
+  email      String
+  codeHash   String
+  purpose    String    @default("RECQ_APPLY")
+  attempts   Int       @default(0)
+  ip         String?
+  expiresAt  DateTime
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([email, createdAt])
+  @@index([ip, createdAt])
+  @@map("email_otps")
+}
+
 // A CV uploaded on the careers portal before the candidate account exists.
 // The file bytes are stored through the normal resume storage driver; the
 // upload becomes a real Resume when the guest submits their application.
@@ -679,6 +718,10 @@ model GuestUpload {
   fileSize   Int
   rawText    String?
   parsedData Json?
+  // Build plan P9: { [jobId]: { jobUpdatedAt, match } } — the /recq match
+  // computed at upload time, reused at apply so the score never changes
+  // between what the candidate saw and what is stored.
+  recqMatches Json?
   consumedAt DateTime?
   expiresAt  DateTime
   createdAt  DateTime  @default(now())

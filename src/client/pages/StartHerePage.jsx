@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Copy, Check, LogIn, ExternalLink, ArrowRight, ShieldCheck, Building2, Users, Briefcase, UserRound, GraduationCap } from 'lucide-react';
+import { Copy, Check, LogIn, ExternalLink, ArrowRight, ShieldCheck, Building2, Users, Briefcase, UserRound, GraduationCap, Download } from 'lucide-react';
 import { configApi } from '../services/config.js';
 import LoadingState from '../components/ui/LoadingState.jsx';
 import ErrorState from '../components/ui/ErrorState.jsx';
@@ -8,7 +8,7 @@ import ErrorState from '../components/ui/ErrorState.jsx';
 // "Start here" demo page (/live-demo; /start redirects): every role, its demo login and the public
 // links in one place. Credentials appear only while DEMO_PAGE is on.
 
-const ICONS = { admin: ShieldCheck, agency: Building2, recruiter: Users, hr: Briefcase, candidate: GraduationCap };
+const ICONS = { admin: ShieldCheck, agency: Building2, recruiter: Users, hr: Briefcase, candidate: GraduationCap, agencyB: Building2 };
 
 function CopyButton({ value, label }) {
   const [done, setDone] = useState(false);
@@ -80,14 +80,16 @@ export default function StartHerePage() {
   if (!demo) return <LoadingState />;
 
   const slug = demo.agencySlug;
+  // Build plan P9: the agency-link flow — no screen → shortlist → schedule gate.
   const steps = [
-    ['Portal Admin', `sees "${demo.agencyName}" under Agencies (and can add a new agency).`],
-    ['Agency owner', `opens Companies → "${demo.companyName}" → Company HR, then Jobs → "${demo.jobTitle}".`],
-    ['Candidate', 'applies on the careers page (or logs in and applies from Find Jobs).'],
-    ['Agency owner', 'opens the job → Applications: AI match score → Shortlist.'],
-    ['Agency owner', 'sends an instant AI interview link (candidate page) — the candidate takes the voice interview.'],
-    ['Agency owner', 'reads the interview report and final score → Submit to company.'],
-    ['Company HR', 'logs in → Candidates → opens the candidate and the CV.'],
+    ['Portal Admin', `sees "${demo.agencyName}" under Agencies (and can add or suspend an agency).`],
+    ['Agency owner', `opens Jobs → "${demo.jobTitle}" → Interviews: the AI interviewer, the interview window and the candidate links to share.`],
+    ['Candidate', `opens /recq/${slug} on a phone, taps "Find my matches" and uploads a sample resume — the AI scores it against every open role.`],
+    ['Candidate', 'picks one or more eligible roles, verifies the email found on the resume with a 6-digit code, and gets one interview link per role.'],
+    ['Candidate', 'starts the interview and answers the AI interviewer by voice (Chrome or Edge, microphone on).'],
+    ['Agency owner', 'opens the job → Applications: resume match, interview status and final score; “Run AI Screening · Interviewed”; opens the report and transcript.'],
+    ['Agency owner', 'submits the selected candidate to the company (or rejects).'],
+    ['Company HR', 'logs in → Candidates → sees only what was sent to them, with the CV.'],
   ];
 
   return (
@@ -116,13 +118,12 @@ export default function StartHerePage() {
 
         {/* How it fits together */}
         <div className="mt-6 flex flex-wrap items-center gap-2 text-sm">
-          {['Portal Admin', 'Agency', 'Company', 'Company HR'].map((r, i) => (
+          {['Agency link', 'Resume match', 'Email verification', 'AI interview', 'Recruiter review', 'Company HR'].map((r, i) => (
             <span key={r} className="flex items-center gap-2">
               {i > 0 && <ArrowRight className="h-4 w-4 text-slate-400" />}
               <span className="rounded-full bg-brand-50 px-3 py-1 font-medium text-brand-700">{r}</span>
             </span>
           ))}
-          <span className="text-slate-500">· Candidates apply to the agency's jobs</span>
         </div>
 
         {demo.enabled ? (
@@ -177,20 +178,48 @@ export default function StartHerePage() {
         </div>
 
         {/* No-login links */}
-        <h2 className="mt-10 text-lg font-semibold text-slate-900">Without login</h2>
+        <h2 className="mt-10 text-lg font-semibold text-slate-900">Candidate links — no login</h2>
+        <p className="mt-1 text-sm text-slate-500">Candidates never browse a global job board — only the links an agency shares with them.</p>
         <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <LinkRow to={`/careers/${slug}`} title="Careers page" description={`${demo.agencyName}'s public jobs — apply as a guest`} />
-          <LinkRow to={`/careers/${slug}/submit-cv`} title="Submit a CV only" description="RecruitIQ places it on the best-matching job" />
-          <LinkRow to="/careers/track" title="Track an application" description="With the phone number used to apply" />
-          <LinkRow to="/auth/register" title="Create a new account" description="Register as a candidate or a new agency" />
+          <LinkRow to={`/recq/${slug}`} title="Agency link" description={`Open roles at ${demo.agencyName} + “Find my matches” from one resume`} />
+          <LinkRow to={`/recq/${slug}/${demo.jobSlug}`} title="Job link" description={`Only “${demo.jobTitle}” — upload a resume and check the match`} />
+          <LinkRow to={`/recq/${slug}/${demo.closedJobSlug}`} title="Closed job" description="An old link to a closed role — the server refuses it" />
+          <LinkRow to={`/recq/${demo.agencyB.slug}`} title="Another agency" description={`${demo.agencyB.name} — its own jobs only, never Nexora's`} />
+          <LinkRow
+            to={`/recq/${demo.agencyB.slug}/${demo.jobSlug}`}
+            title="Wrong agency + job"
+            description={`A ${demo.agencyName} job through ${demo.agencyB.name}'s link — rejected`}
+          />
         </div>
+
+        {demo.sampleResumes?.length > 0 && (
+          <>
+            <h3 className="mt-6 text-sm font-semibold text-slate-900">Sample resumes to upload</h3>
+            <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-2">
+              {demo.sampleResumes.map((r) => (
+                <a
+                  key={r.file}
+                  href={`/sample-resumes/${r.file}`}
+                  download
+                  className="flex min-h-[56px] items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 hover:border-brand-300 hover:bg-brand-50/40"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-slate-900">{r.title}</p>
+                    <p className="text-sm text-slate-500">{r.description}</p>
+                  </div>
+                  <Download className="h-4 w-4 shrink-0 text-slate-400" />
+                </a>
+              ))}
+            </div>
+          </>
+        )}
         <p className="mt-3 text-sm text-slate-500">
-          The <strong>interview link</strong> and the <strong>candidate package link</strong> for Company HR arrive by email. Demo accounts use
-          the {`@${'recruitiq.demo'}`} domain, which has no real inbox — in a demo, copy the interview link from the candidate's page on the
-          agency side instead.
+          The <strong>verification code</strong>, the <strong>interview link</strong> and the <strong>candidate package link</strong> for
+          Company HR arrive by email. The demo resumes and accounts use <code>.demo</code> addresses, which have no real inbox — outside
+          production the verification screen shows the code instead.
         </p>
-        {!demo.features.guestApply && (
-          <p className="mt-2 text-sm text-amber-700">Guest apply is switched off right now, so the careers page only lists jobs.</p>
+        {!demo.features.recq && (
+          <p className="mt-2 text-sm text-amber-700">The candidate link flow is switched off right now (FEATURE_RECQ).</p>
         )}
 
         {/* Suggested flow */}

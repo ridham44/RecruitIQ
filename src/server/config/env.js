@@ -46,6 +46,27 @@ export const env = {
   nodeEnv,
   port: Number(process.env.PORT || 3001),
   clientUrl: process.env.CLIENT_URL || deployedOrigin || 'http://localhost:5173',
+  // Build plan P9: the public address of the live product, e.g.
+  // https://recruitiq-eta.vercel.app — every link that leaves the app uses it:
+  // emailed links (interview, set password, status, login, application,
+  // Company HR submission) and the /recq links recruiters copy and share.
+  // Falls back to CLIENT_URL (which stays the CORS origin list). Point it at
+  // the instance that holds the data (local dev/demo → http://localhost:5173).
+  // On Vercel without PUBLIC_APP_URL, the project's production domain
+  // (VERCEL_PROJECT_PRODUCTION_URL, e.g. recruitiq-eta.vercel.app) is used —
+  // never a localhost CLIENT_URL left over from local development.
+  publicAppUrl: (
+    process.env.PUBLIC_APP_URL ||
+    (process.env.VERCEL
+      ? (process.env.VERCEL_PROJECT_PRODUCTION_URL && `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`) || deployedOrigin
+      : null) ||
+    process.env.CLIENT_URL ||
+    deployedOrigin ||
+    'http://localhost:5173'
+  )
+    .split(',')[0]
+    .trim()
+    .replace(/\/+$/, ''),
 
   databaseUrl: required('DATABASE_URL'),
 
@@ -104,14 +125,27 @@ export const env = {
   // explicitly turned on per environment.
   features: {
     // P1 — when false, POST /auth/register/company returns 403 and only a
-    // Platform Admin can onboard companies. Turn off only after an admin exists.
-    allowCompanySelfRegister: flag('ALLOW_COMPANY_SELF_REGISTER', true),
+    // Platform Admin can onboard companies. Off by default: agencies are added
+    // by the Portal Admin (there is no sign-up page). Create the first admin
+    // with scripts/create-admin.mjs.
+    allowCompanySelfRegister: flag('ALLOW_COMPANY_SELF_REGISTER', false),
     // P4 — public careers portal, guest apply with phone OTP, CV-only submit.
     guestApply: flag('FEATURE_GUEST_APPLY', false),
     // P5 — instant interview link (attend now or later) instead of slot booking.
     instantInterview: flag('FEATURE_INSTANT_INTERVIEW', false),
     // P8 — client HR / hiring person portal.
     clientPortal: flag('FEATURE_CLIENT_PORTAL', false),
+    // P9 — /recq agency-link candidate flow (resume match → email OTP →
+    // interview access). The new canonical public candidate journey, so it
+    // defaults ON; /careers/* redirects into it. Turn off to hide every
+    // /recq route (they answer 404, and the careers redirect goes nowhere).
+    recq: flag('FEATURE_RECQ', true),
+    // P9 (§1/§19) — the old cross-agency candidate job board: GET /jobs
+    // (every agency's open jobs), public GET /jobs/:id and logged-in
+    // POST /applications to any job. OFF by default — candidates only reach
+    // an agency's jobs through its /recq link. Legacy test scripts that
+    // exercise the old flow need it on.
+    candidateJobBoard: flag('FEATURE_CANDIDATE_JOB_BOARD', false),
     // "Start here" demo page: when on, /start shows the demo accounts'
     // password (DEMO_PASSWORD). Off → the page still lists roles and links.
     demoPage: flag('DEMO_PAGE', false),

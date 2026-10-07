@@ -17,7 +17,7 @@ import { inviteHiringPerson } from '../clientPortal/clientPortal.service.js';
 const SUBMITTABLE = [APPLICATION_STATUS.INTERVIEW_COMPLETED, APPLICATION_STATUS.QUALIFIED, APPLICATION_STATUS.SUBMITTED_TO_CLIENT];
 
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
-const origin = () => env.clientUrl.split(',')[0].trim();
+const origin = () => env.publicAppUrl; // live product address for emailed links
 export const submissionLink = (token) => `${origin()}/submission/${token}`;
 
 const APPLICATION_INCLUDE = {

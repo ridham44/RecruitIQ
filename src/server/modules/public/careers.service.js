@@ -29,8 +29,10 @@ const PUBLIC_COMPANY_SELECT = { id: true, name: true, logoUrl: true, description
 
 const RESERVED = new Set(['track', 'admin', 'api', 'new', 'jobs', 'submit-cv', 'login']);
 
+// Build plan P9: the shareable candidate link is the /recq agency page on the
+// live product's address (/careers/:slug only redirects there now).
 export function careersUrl(slug) {
-  return `${env.clientUrl.split(',')[0].trim()}/careers/${slug}`;
+  return `${env.publicAppUrl}/recq/${slug}`;
 }
 
 export async function loadPortalCompany(slug) {
